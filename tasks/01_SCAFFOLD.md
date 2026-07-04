@@ -1,12 +1,21 @@
-# Task 01 — Scaffold
+# Scaffold
 
-See `JULES_TASK_0.md`.
+## Goal
 
-Definition of done:
+Implement this area in a small, reviewable change.
 
-- monorepo exists
-- apps compile
-- packages compile
-- tests pass
-- risk guard rejects live by default
-- Nuxt SEO pages exist
+## Safety
+
+- No futures.
+- No leverage.
+- No martingale.
+- No withdrawals.
+- No meme coins.
+- No live trading unless the task explicitly allows it.
+
+## Done
+
+- Typecheck passes.
+- Lint passes.
+- Tests pass.
+- Docs updated if behavior changed.

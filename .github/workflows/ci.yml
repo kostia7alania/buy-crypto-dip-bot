@@ -1,29 +1,19 @@
-name: CI
+name: ci
 
 on:
   pull_request:
   push:
-    branches:
-      - main
+    branches: [main]
 
 jobs:
-  ci:
+  check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Use Node from .node-version
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version-file: ".node-version"
-      - name: Enable corepack
-        run: corepack enable
-      - name: Prepare pnpm
-        run: corepack prepare pnpm@latest-11 --activate
-      - name: Install
-        run: pnpm install
-      - name: Typecheck
-        run: pnpm typecheck
-      - name: Lint
-        run: pnpm lint
-      - name: Test
-        run: pnpm test
+          node-version: '26.4.0'
+      - run: corepack enable
+      - run: corepack use pnpm@latest-11
+      - run: pnpm install --frozen-lockfile=false
+      - run: pnpm check

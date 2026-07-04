@@ -1,6 +1,7 @@
 {
   "typescript.tsdk": "node_modules/typescript/lib",
   "editor.formatOnSave": true,
+  "editor.defaultFormatter": "biomejs.biome",
   "files.exclude": {
     "**/node_modules": true,
     "**/dist": true,

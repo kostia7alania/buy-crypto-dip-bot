@@ -1,0 +1,28 @@
+{
+  "name": "@buy-crypto-dip-bot/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsdown src/index.ts --format esm --dts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "biome check src && oxlint src"
+  },
+  "dependencies": {
+    "@hono/node-server": "catalog:",
+    "hono": "catalog:",
+    "valibot": "catalog:",
+    "@buy-crypto-dip-bot/shared-types": "workspace:*",
+    "@buy-crypto-dip-bot/risk-engine": "workspace:*",
+    "@buy-crypto-dip-bot/strategy-engine": "workspace:*",
+    "@buy-crypto-dip-bot/exchange-bybit": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "tsdown": "catalog:"
+  }
+}

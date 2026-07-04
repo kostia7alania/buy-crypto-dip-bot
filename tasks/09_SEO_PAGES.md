@@ -1,12 +1,21 @@
-# Task 09 — SEO Pages
+# SEO pages
 
-Implement keyword pages using `packages/seo-keywords`.
+## Goal
 
-Each page must have:
+Implement this area in a small, reviewable change.
 
-- title
-- H1
-- meta description
-- canonical URL
-- structured section layout
-- internal links
+## Safety
+
+- No futures.
+- No leverage.
+- No martingale.
+- No withdrawals.
+- No meme coins.
+- No live trading unless the task explicitly allows it.
+
+## Done
+
+- Typecheck passes.
+- Lint passes.
+- Tests pass.
+- Docs updated if behavior changed.

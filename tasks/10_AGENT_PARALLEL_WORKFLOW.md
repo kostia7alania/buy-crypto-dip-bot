@@ -1,11 +1,21 @@
-# Task 10 — Parallel Agent Workflow
+# Agent parallel workflow
 
-Set up issue templates and ownership boundaries.
+## Goal
 
-Rules:
+Implement this area in a small, reviewable change.
 
-- one task per branch
-- one agent per bounded area
-- no root config edits outside infra tasks
-- no live trading
-- all checks pass
+## Safety
+
+- No futures.
+- No leverage.
+- No martingale.
+- No withdrawals.
+- No meme coins.
+- No live trading unless the task explicitly allows it.
+
+## Done
+
+- Typecheck passes.
+- Lint passes.
+- Tests pass.
+- Docs updated if behavior changed.

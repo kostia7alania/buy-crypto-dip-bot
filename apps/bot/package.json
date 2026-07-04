@@ -1,0 +1,23 @@
+{
+  "name": "@buy-crypto-dip-bot/bot",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsdown src/index.ts --format esm --dts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "biome check src && oxlint src"
+  },
+  "dependencies": {
+    "grammy": "catalog:",
+    "@buy-crypto-dip-bot/shared-types": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "tsdown": "catalog:"
+  }
+}

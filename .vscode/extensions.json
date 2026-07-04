@@ -3,9 +3,8 @@
     "vue.volar",
     "vitest.explorer",
     "biomejs.biome",
+    "oxc.oxc-vscode",
     "bradlc.vscode-tailwindcss",
-    "streetsidesoftware.code-spell-checker",
-    "usernamehw.errorlens",
-    "oven.bun-vscode"
+    "usernamehw.errorlens"
   ]
 }

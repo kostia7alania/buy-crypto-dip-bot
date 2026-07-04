@@ -1,18 +1,21 @@
-# Task 03 — Strategy Engine
+# Strategy engine
 
-Implement pure dip strategy logic.
+## Goal
 
-Rules:
+Implement this area in a small, reviewable change.
 
-- DROP_FROM_24H_HIGH
-- DROP_FROM_PREVIOUS_DAILY_CLOSE
-- DROP_FROM_ROLLING_HIGH
-- FLASH_CRASH later
+## Safety
 
-Tests:
+- No futures.
+- No leverage.
+- No martingale.
+- No withdrawals.
+- No meme coins.
+- No live trading unless the task explicitly allows it.
 
-- no signal below threshold
-- signal above threshold
-- exact threshold
-- multiple rules
-- invalid config
+## Done
+
+- Typecheck passes.
+- Lint passes.
+- Tests pass.
+- Docs updated if behavior changed.

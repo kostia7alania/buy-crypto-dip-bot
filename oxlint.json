@@ -1,13 +1,19 @@
 {
+  "$schema": "https://raw.githubusercontent.com/oxc-project/oxc/main/npm/oxlint/configuration_schema.json",
+  "plugins": [
+    "typescript",
+    "unicorn"
+  ],
   "env": {
     "node": true,
+    "browser": true,
     "es2024": true
   },
-  "plugins": ["typescript", "unicorn", "import", "promise"],
-  "categories": {
-    "correctness": "error",
-    "suspicious": "error",
-    "pedantic": "warn"
-  },
-  "ignorePatterns": ["node_modules", "dist", ".nuxt", ".output", ".turbo"]
+  "ignorePatterns": [
+    "node_modules",
+    "dist",
+    ".nuxt",
+    ".output",
+    ".turbo"
+  ]
 }

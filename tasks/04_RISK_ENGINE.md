@@ -1,16 +1,21 @@
-# Task 04 — Risk Engine
+# Risk engine
 
-Implement RiskGuard.
+## Goal
 
-Checks:
+Implement this area in a small, reviewable change.
 
-- live disabled
-- symbol allowlist
-- daily spend
-- weekly spend
-- cooldown
-- max open orders
-- min/max order size
-- duplicate signal
+## Safety
 
-Tests for each rejection reason.
+- No futures.
+- No leverage.
+- No martingale.
+- No withdrawals.
+- No meme coins.
+- No live trading unless the task explicitly allows it.
+
+## Done
+
+- Typecheck passes.
+- Lint passes.
+- Tests pass.
+- Docs updated if behavior changed.

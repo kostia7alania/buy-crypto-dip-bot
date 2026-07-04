@@ -1,26 +1,21 @@
-# Task 02 — Market Data
+# Market data
 
-Implement Bybit public market data.
+## Goal
 
-Scope:
+Implement this area in a small, reviewable change.
 
-- no keys
-- no orders
-- no private API
+## Safety
 
-Methods:
+- No futures.
+- No leverage.
+- No martingale.
+- No withdrawals.
+- No meme coins.
+- No live trading unless the task explicitly allows it.
 
-- `getTicker(symbol)`
-- `getKline(symbol, interval, limit)`
+## Done
 
-Endpoints:
-
-- `GET /market/:symbol/ticker`
-- `GET /market/:symbol/klines`
-
-Tests:
-
-- valid symbol
-- invalid symbol
-- invalid interval
-- mocked Bybit response
+- Typecheck passes.
+- Lint passes.
+- Tests pass.
+- Docs updated if behavior changed.

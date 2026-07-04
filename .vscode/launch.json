@@ -6,15 +6,11 @@
       "type": "node",
       "request": "launch",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@buy-crypto-dip-bot/api", "dev"],
-      "console": "integratedTerminal"
-    },
-    {
-      "name": "Web dev",
-      "type": "node",
-      "request": "launch",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@buy-crypto-dip-bot/web", "dev"],
+      "runtimeArgs": [
+        "--filter",
+        "@buy-crypto-dip-bot/api",
+        "dev"
+      ],
       "console": "integratedTerminal"
     },
     {
@@ -22,7 +18,11 @@
       "type": "node",
       "request": "launch",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@buy-crypto-dip-bot/bot", "dev"],
+      "runtimeArgs": [
+        "--filter",
+        "@buy-crypto-dip-bot/bot",
+        "dev"
+      ],
       "console": "integratedTerminal"
     }
   ]

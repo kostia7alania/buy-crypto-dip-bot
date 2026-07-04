@@ -1,11 +1,21 @@
-# Task 05 — Dry-run Orders
+# Dry-run orders
 
-Create dry-run order ledger.
+## Goal
 
-Flow:
+Implement this area in a small, reviewable change.
 
-```txt
-signal -> RiskGuard -> dry-run order -> audit log -> Telegram alert
-```
+## Safety
 
-No real orders.
+- No futures.
+- No leverage.
+- No martingale.
+- No withdrawals.
+- No meme coins.
+- No live trading unless the task explicitly allows it.
+
+## Done
+
+- Typecheck passes.
+- Lint passes.
+- Tests pass.
+- Docs updated if behavior changed.

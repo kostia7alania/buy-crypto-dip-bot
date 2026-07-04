@@ -1,41 +1,8 @@
-# Telegram Bot
+# Telegram bot
 
-## MVP commands
+Initial commands:
 
-```txt
-/start
-/status
-/risk
-/strategies
-/orders
-/audit
-/help
-```
+- `/start`
+- `/status`
 
-## Later commands
-
-```txt
-/pause
-/resume
-```
-
-## Notifications
-
-```txt
-🟡 Signal detected
-🔴 Risk rejected signal
-🟢 Dry-run order created
-⚠️ Live mode attempt rejected
-🚨 Market data error
-```
-
-## Forbidden in MVP
-
-- Buy Now button
-- live trading button
-- withdrawal commands
-- leverage/futures commands
-
-## Bot framework
-
-grammY.
+No trading buttons in MVP.

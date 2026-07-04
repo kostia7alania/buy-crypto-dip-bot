@@ -1,44 +1,31 @@
-# Что это
+# buy-crypto-dip-bot — быстрый старт
 
-Bootstrap-архив для Codex / Codex / Claude / Antigravity.
+Это чистый Codex-only bootstrap. Внутри уже есть реальные `apps/` и `packages/`, а не только md-молитвенник для роботов.
 
-Репа: `buy-crypto-dip-bot`  
-Продукт: `DCA Guard`  
-Фокус: crypto-only, buy-the-dip / DCA bot, risk-first, dry-run first.
-
-## Как использовать
-
-1. Создай private GitHub repo: `buy-crypto-dip-bot`.
-2. Распакуй содержимое этого архива в корень репы.
-3. Закоммить:
+## Что делать
 
 ```bash
-git add .
-git commit -m "chore: add AI-first project bootstrap"
-git push
+cd buy-crypto-dip-bot
+corepack enable
+corepack use pnpm@latest-11
+pnpm install
+pnpm check
+pnpm dev
 ```
 
-4. Открой Codex.
-5. Выбери репу `buy-crypto-dip-bot`.
-6. Вставь содержимое `CODEX_TASK_0.md`.
-7. В Initial Setup Codex добавь команды из `SETUP_SCRIPT.sh`.
-8. Нажми `Give me a plan`.
-9. Проверь план Codex перед запуском кода.
+## Первый prompt для Codex
 
-## Красные флаги при review плана Codex
+Открой `CODEX_TASK_0.md` и дай его Codex как первый локальный task.
 
-Отклоняй план, если Codex предлагает:
+## Жёсткие правила
 
-- futures
-- leverage
-- martingale
-- withdrawals
-- live trading by default
-- meme coins
-- seed phrase storage
-- private Bybit API в первом task
-- global `controllers/services/models/utils`
-- plain Vue SPA вместо Nuxt SSR/SSG
-- Express/NestJS/Jest/axios/ts-node
+- Только crypto spot.
+- По умолчанию только dry-run.
+- Нет futures.
+- Нет leverage.
+- Нет martingale.
+- Нет withdrawals.
+- Нет meme coins.
+- Нет live trading без явного env-флага и RiskGuard.
 
-Да, приходится объяснять роботу, что не надо строить казино с withdraw permissions. Прогресс цивилизации, как он есть.
+Если агент предлагает папки `controllers/services/models/utils` в корне — бей по рукам. Это не 2017.

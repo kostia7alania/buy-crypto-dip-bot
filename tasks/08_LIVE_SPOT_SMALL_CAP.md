@@ -1,13 +1,21 @@
-# Task 08 — Live Spot Small Cap
+# Live spot small cap
 
-Do not implement until dry-run is stable.
+## Goal
 
-Requirements:
+Implement this area in a small, reviewable change.
 
-- explicit approval
-- separate subaccount
-- spot-only key
-- no withdrawal permission
-- tiny cap
-- hard env gate
-- more tests
+## Safety
+
+- No futures.
+- No leverage.
+- No martingale.
+- No withdrawals.
+- No meme coins.
+- No live trading unless the task explicitly allows it.
+
+## Done
+
+- Typecheck passes.
+- Lint passes.
+- Tests pass.
+- Docs updated if behavior changed.

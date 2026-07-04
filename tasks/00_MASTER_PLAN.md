@@ -1,34 +1,21 @@
-# Master Plan
+# Master plan
 
-## Phase 0: Bootstrap
+## Goal
 
-- scaffold monorepo
-- add docs
-- add safety defaults
-- make commands pass
+Implement this area in a small, reviewable change.
 
-## Phase 1: Public market data
+## Safety
 
-- Bybit public ticker
-- Bybit klines
-- allowlist BTCUSDT
+- No futures.
+- No leverage.
+- No martingale.
+- No withdrawals.
+- No meme coins.
+- No live trading unless the task explicitly allows it.
 
-## Phase 2: Strategy + Risk
+## Done
 
-- dip rules
-- RiskGuard
-- dry-run order ledger
-- audit log
-
-## Phase 3: UX
-
-- Telegram alerts
-- Nuxt dashboard
-- SEO route cluster
-
-## Phase 4: Safe live spot
-
-- separate task only
-- tiny cap
-- spot only
-- no withdrawals
+- Typecheck passes.
+- Lint passes.
+- Tests pass.
+- Docs updated if behavior changed.

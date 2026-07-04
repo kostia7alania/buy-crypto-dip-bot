@@ -1,43 +1,16 @@
 name: Feature
-description: Scoped feature task for an AI coding agent
-title: "feat: "
-labels: ["feature"]
 body:
   - type: textarea
     id: scope
     attributes:
       label: Scope
-      description: What should be changed?
+      description: Which bounded path should this change touch?
     validations:
       required: true
   - type: textarea
-    id: paths
-    attributes:
-      label: Allowed paths
-      description: Which paths may this task edit?
-      placeholder: |
-        apps/api/**
-        packages/exchange-bybit/**
-    validations:
-      required: true
-  - type: textarea
-    id: acceptance
-    attributes:
-      label: Acceptance criteria
-    validations:
-      required: true
-  - type: checkboxes
     id: safety
     attributes:
-      label: Safety
-      options:
-        - label: No live trading
-          required: true
-        - label: No futures
-          required: true
-        - label: No leverage
-          required: true
-        - label: No withdrawals
-          required: true
-        - label: Tests required
-          required: true
+      label: Safety constraints
+      description: Confirm no live trading, futures, leverage, withdrawals, or meme coins.
+    validations:
+      required: true
