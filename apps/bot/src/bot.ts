@@ -306,13 +306,16 @@ export const createBot = (token: string) => {
     }
   });
 
-  bot.command("add_pair", async (ctx) => {
-    const symbol = ctx.match?.trim().toUpperCase();
-    if (!symbol) {
-      return ctx.reply(
-        "❌ Usage: `/add_pair <symbol>`\nExample: `/add_pair LTCUSDT`",
-        { parse_mode: "Markdown" },
+  const handleAddPair = async (ctx: any, symbol: string) => {
+    let loadingMsg: any;
+    try {
+      loadingMsg = await ctx.reply(
+        `⏳ Validating <b>${symbol}</b> on Bybit Spot server...`,
+        { parse_mode: "HTML" },
       );
+      await ctx.replyWithChatAction("typing");
+    } catch (err) {
+      console.error("Failed to send loading status:", err);
     }
 
     try {
@@ -324,6 +327,12 @@ export const createBot = (token: string) => {
         body: JSON.stringify({ symbol }),
       });
 
+      if (loadingMsg) {
+        await ctx.api
+          .deleteMessage(ctx.chat.id, loadingMsg.message_id)
+          .catch(() => {});
+      }
+
       if (!response.ok) {
         const errData = (await response.json()) as { error?: string };
         const errCode = errData.error ?? "UNKNOWN_ERROR";
@@ -334,13 +343,16 @@ export const createBot = (token: string) => {
               "❌ Invalid symbol format. Please use uppercase letters and numbers (e.g. LTCUSDT).",
             );
           case "STRATEGY_ALREADY_EXISTS":
-            return ctx.reply(`❌ Strategy for *${symbol}* already exists.`, {
-              parse_mode: "Markdown",
-            });
+            return ctx.reply(
+              `❌ Strategy for <b>${symbol}</b> already exists.`,
+              {
+                parse_mode: "HTML",
+              },
+            );
           case "SYMBOL_NOT_FOUND_ON_EXCHANGE":
             return ctx.reply(
-              `❌ Symbol *${symbol}* was not found on Bybit Spot market.`,
-              { parse_mode: "Markdown" },
+              `❌ Symbol <b>${symbol}</b> was not found on Bybit Spot market.`,
+              { parse_mode: "HTML" },
             );
           default:
             return ctx.reply(`❌ Failed to add strategy. Error: ${errCode}`);
@@ -358,19 +370,38 @@ export const createBot = (token: string) => {
       };
 
       return ctx.reply(
-        `✅ *Strategy Added Successfully*\n\n` +
-          `• *Name:* ${data.strategy.name}\n` +
-          `• *Symbol:* ${data.strategy.symbol}\n` +
-          `• *Mode:* ${data.strategy.mode}\n\n` +
+        `<b>✅ Strategy Added Successfully</b>\n\n` +
+          `• <b>Name:</b> ${data.strategy.name}\n` +
+          `• <b>Symbol:</b> ${data.strategy.symbol}\n` +
+          `• <b>Mode:</b> ${data.strategy.mode}\n\n` +
           `Default parameters configured: threshold 1.0%, buy amount 20 USDT, daily limit 300 USDT.`,
-        { parse_mode: "Markdown" },
+        { parse_mode: "HTML" },
       );
     } catch (error) {
       console.error("Failed to add strategy via API:", error);
+      if (loadingMsg) {
+        await ctx.api
+          .deleteMessage(ctx.chat.id, loadingMsg.message_id)
+          .catch(() => {});
+      }
       return ctx.reply(
         "❌ Failed to contact the API server to validate the symbol.",
       );
     }
+  };
+
+  bot.command("add_pair", async (ctx) => {
+    const symbol = ctx.match?.trim().toUpperCase();
+    if (!symbol) {
+      return ctx.reply(
+        "Please reply to this message with the ticker symbol you want to add (e.g. LTCUSDT):",
+        {
+          reply_markup: { force_reply: true },
+        },
+      );
+    }
+
+    return handleAddPair(ctx, symbol);
   });
 
   bot.callbackQuery(/^cancel_order:(.+)$/, async (ctx) => {
@@ -477,7 +508,17 @@ export const createBot = (token: string) => {
     }
   });
 
-  bot.on("message", (ctx) => {
+  bot.on("message", async (ctx) => {
+    const replyTo = ctx.message.reply_to_message;
+    if (
+      replyTo?.text &&
+      replyTo.text.includes("reply to this message with the ticker symbol")
+    ) {
+      const symbol = ctx.message.text?.trim().toUpperCase();
+      if (!symbol) return ctx.reply("❌ Please enter a valid symbol.");
+      return handleAddPair(ctx, symbol);
+    }
+
     return ctx.reply(
       `👋 Hello! I am the DCA Guard Bot.\n\n` +
         `I only respond to commands. Please use:\n` +
