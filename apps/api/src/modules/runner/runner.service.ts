@@ -282,7 +282,7 @@ export async function startRunner() {
             continue;
           }
 
-          // 5. Place Dry-Run Order
+          // 5. Place Pending Order
           const insertedOrders = await db
             .insert(schema.orders)
             .values({
@@ -292,33 +292,74 @@ export async function startRunner() {
               side: "BUY",
               quoteAmount: String(config.suggestedQuoteAmount),
               price: String(ticker.lastPrice),
-              status: "COMPLETED", // directly completed since it is a dry run simulation
+              status: "PENDING",
             })
             .returning();
 
           const [order] = insertedOrders;
           if (order) {
-            await db.insert(schema.auditEvents).values({
-              entityType: "order",
-              entityId: order.id,
-              action: "DRY_RUN_ORDER_COMPLETED",
-              payload: { order },
-            });
+            const warningText =
+              `🚨 *Pending Buy Alert*\n\n` +
+              `• *Strategy:* ${strategy.name}\n` +
+              `• *Symbol:* ${strategy.symbol}\n` +
+              `• *Price:* $${ticker.lastPrice.toLocaleString()}\n` +
+              `• *Amount:* ${config.suggestedQuoteAmount} USDT\n` +
+              `• *Status:* Executing in 15 seconds...`;
 
-            console.log(
-              `🎉 [Dry-Run] Purchased ${config.suggestedQuoteAmount} USDT of ${strategy.symbol} at ${ticker.lastPrice} (Strategy: ${strategy.name})`,
+            const alert = await sendTelegramAlertWithCancel(
+              warningText,
+              order.id,
             );
 
-            sendTelegramAlert(
-              `🎉 *Dry-Run Order Executed*\n\n` +
-                `• *Strategy:* ${strategy.name}\n` +
-                `• *Symbol:* ${strategy.symbol}\n` +
-                `• *Price:* $${ticker.lastPrice.toLocaleString()}\n` +
-                `• *Amount:* ${config.suggestedQuoteAmount} USDT\n` +
-                `• *Status:* Simulated Purchase`,
-            ).catch((err) =>
-              console.error("Failed to send telegram alert:", err),
-            );
+            // Asynchronously wait 15 seconds before execution
+            setTimeout(async () => {
+              try {
+                // Fetch latest order status
+                const [currentOrder] = await db
+                  .select()
+                  .from(schema.orders)
+                  .where(eq(schema.orders.id, order.id))
+                  .limit(1);
+
+                if (!currentOrder || currentOrder.status === "CANCELLED") {
+                  console.log(
+                    `[Runner] Order ${order.id} was cancelled by user.`,
+                  );
+                  return;
+                }
+
+                // Finalize order to COMPLETED
+                await db
+                  .update(schema.orders)
+                  .set({ status: "COMPLETED" })
+                  .where(eq(schema.orders.id, order.id));
+
+                await db.insert(schema.auditEvents).values({
+                  entityType: "order",
+                  entityId: order.id,
+                  action: "DRY_RUN_ORDER_COMPLETED",
+                  payload: { order: { ...order, status: "COMPLETED" } },
+                });
+
+                console.log(
+                  `🎉 [Dry-Run] Purchased ${config.suggestedQuoteAmount} USDT of ${strategy.symbol} at ${ticker.lastPrice} (Strategy: ${strategy.name})`,
+                );
+
+                if (alert?.messageId) {
+                  const successText =
+                    `🎉 *Dry-Run Order Executed*\n\n` +
+                    `• *Strategy:* ${strategy.name}\n` +
+                    `• *Symbol:* ${strategy.symbol}\n` +
+                    `• *Price:* $${ticker.lastPrice.toLocaleString()}\n` +
+                    `• *Amount:* ${config.suggestedQuoteAmount} USDT\n` +
+                    `• *Status:* Simulated Purchase`;
+
+                  await editTelegramMessage(alert.messageId, successText);
+                }
+              } catch (err) {
+                console.error("Error executing pending order:", err);
+              }
+            }, 15000);
           }
         }
       }
@@ -360,5 +401,70 @@ async function sendTelegramAlert(message: string): Promise<void> {
     }
   } catch (error) {
     console.error("Failed to send Telegram alert:", error);
+  }
+}
+
+async function sendTelegramAlertWithCancel(
+  message: string,
+  orderId: string,
+): Promise<{ messageId: number } | null> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return null;
+
+  const url = `https://api.telegram.org/bot${token}/sendMessage`;
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: message,
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "Отменить ❌", callback_data: `cancel_order:${orderId}` }],
+          ],
+        },
+      }),
+    });
+    if (response.ok) {
+      const data = (await response.json()) as {
+        result?: { message_id: number };
+      };
+      return { messageId: data.result?.message_id ?? 0 };
+    }
+    console.error(`Telegram cancel alert failed: ${response.statusText}`);
+  } catch (error) {
+    console.error("Failed to send Telegram cancel alert:", error);
+  }
+  return null;
+}
+
+async function editTelegramMessage(
+  messageId: number,
+  newText: string,
+): Promise<void> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId || !messageId) return;
+
+  const url = `https://api.telegram.org/bot${token}/editMessageText`;
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        message_id: messageId,
+        text: newText,
+        parse_mode: "Markdown",
+      }),
+    });
+    if (!response.ok) {
+      console.error(`Telegram message edit failed: ${response.statusText}`);
+    }
+  } catch (error) {
+    console.error("Failed to edit Telegram message:", error);
   }
 }

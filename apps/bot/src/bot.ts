@@ -306,6 +306,49 @@ export const createBot = (token: string) => {
     }
   });
 
+  bot.callbackQuery(/^cancel_order:(.+)$/, async (ctx) => {
+    const orderId = ctx.match[1];
+    if (!orderId) return ctx.answerCallbackQuery("❌ Order ID missing.");
+
+    try {
+      const db = getDb();
+      const [order] = await db
+        .select()
+        .from(schema.orders)
+        .where(eq(schema.orders.id, orderId))
+        .limit(1);
+
+      if (!order) {
+        return ctx.answerCallbackQuery("❌ Order not found.");
+      }
+
+      if (order.status === "COMPLETED") {
+        return ctx.answerCallbackQuery("⚠️ Too late! Order already executed.");
+      }
+      if (order.status === "CANCELLED") {
+        return ctx.answerCallbackQuery("ℹ️ Order already cancelled.");
+      }
+
+      // Update order status to CANCELLED
+      await db
+        .update(schema.orders)
+        .set({ status: "CANCELLED" })
+        .where(eq(schema.orders.id, orderId));
+
+      await ctx.answerCallbackQuery("❌ Order cancelled successfully!");
+      return ctx.editMessageText(
+        `❌ *Dry-Run Order Cancelled*\n\n` +
+          `• *Symbol:* ${order.symbol}\n` +
+          `• *Amount:* ${order.quoteAmount} USDT\n` +
+          `• *Status:* Cancelled by user`,
+        { parse_mode: "Markdown" },
+      );
+    } catch (err) {
+      console.error("Failed to cancel order:", err);
+      return ctx.answerCallbackQuery("❌ Failed to cancel order.");
+    }
+  });
+
   bot.on("message", (ctx) => {
     return ctx.reply(
       `👋 Hello! I am the DCA Guard Bot.\n\n` +
