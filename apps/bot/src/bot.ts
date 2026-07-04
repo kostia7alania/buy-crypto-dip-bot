@@ -349,6 +349,67 @@ export const createBot = (token: string) => {
     }
   });
 
+  bot.callbackQuery(/^buy_now:(.+)$/, async (ctx) => {
+    const orderId = ctx.match[1];
+    if (!orderId) return ctx.answerCallbackQuery("❌ Order ID missing.");
+
+    try {
+      const db = getDb();
+      const [order] = await db
+        .select()
+        .from(schema.orders)
+        .where(eq(schema.orders.id, orderId))
+        .limit(1);
+
+      if (!order) {
+        return ctx.answerCallbackQuery("❌ Order not found.");
+      }
+
+      if (order.status === "COMPLETED") {
+        return ctx.answerCallbackQuery("ℹ️ Order already executed.");
+      }
+      if (order.status === "CANCELLED") {
+        return ctx.answerCallbackQuery("⚠️ Too late! Order already cancelled.");
+      }
+
+      // Update order status to COMPLETED
+      await db
+        .update(schema.orders)
+        .set({ status: "COMPLETED" })
+        .where(eq(schema.orders.id, orderId));
+
+      // Fetch strategy details for the text
+      const [strategy] = await db
+        .select()
+        .from(schema.strategies)
+        .where(eq(schema.strategies.id, order.strategyId ?? ""))
+        .limit(1);
+
+      const strategyName = strategy?.name ?? "Dip Buying Strategy";
+
+      await db.insert(schema.auditEvents).values({
+        entityType: "order",
+        entityId: order.id,
+        action: "DRY_RUN_ORDER_COMPLETED",
+        payload: { order: { ...order, status: "COMPLETED" } },
+      });
+
+      await ctx.answerCallbackQuery("⚡ Order executed now!");
+      return ctx.editMessageText(
+        `🎉 *Dry-Run Order Executed*\n\n` +
+          `• *Strategy:* ${strategyName}\n` +
+          `• *Symbol:* ${order.symbol}\n` +
+          `• *Price:* $${Number(order.price).toLocaleString()}\n` +
+          `• *Amount:* ${order.quoteAmount} USDT\n` +
+          `• *Status:* Simulated Purchase (Force Executed)`,
+        { parse_mode: "Markdown" },
+      );
+    } catch (err) {
+      console.error("Failed to execute order:", err);
+      return ctx.answerCallbackQuery("❌ Failed to execute order.");
+    }
+  });
+
   bot.on("message", (ctx) => {
     return ctx.reply(
       `👋 Hello! I am the DCA Guard Bot.\n\n` +

@@ -321,10 +321,8 @@ export async function startRunner() {
                   .where(eq(schema.orders.id, order.id))
                   .limit(1);
 
-                if (!currentOrder || currentOrder.status === "CANCELLED") {
-                  console.log(
-                    `[Runner] Order ${order.id} was cancelled by user.`,
-                  );
+                if (!currentOrder || currentOrder.status !== "PENDING") {
+                  // Skip if order was cancelled or already executed via "Buy Now"
                   return;
                 }
 
@@ -423,7 +421,10 @@ async function sendTelegramAlertWithCancel(
         parse_mode: "Markdown",
         reply_markup: {
           inline_keyboard: [
-            [{ text: "Отменить ❌", callback_data: `cancel_order:${orderId}` }],
+            [
+              { text: "Cancel ❌", callback_data: `cancel_order:${orderId}` },
+              { text: "Buy Now ⚡", callback_data: `buy_now:${orderId}` },
+            ],
           ],
         },
       }),
