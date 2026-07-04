@@ -73,25 +73,28 @@ export const createBot = (token: string) => {
   bot.command("settings", async (ctx) => {
     try {
       const db = getDb();
-      const existing = await db.select().from(schema.strategies).limit(1);
-      const [strategy] = existing;
-      if (!strategy) {
+      const strategiesList = await db.select().from(schema.strategies);
+      if (strategiesList.length === 0) {
         return ctx.reply("❌ No strategies found in database.");
       }
 
-      const config = strategy.config as any;
-      const msg =
-        `⚙️ *DCA Guard Settings*\n\n` +
-        `• *Symbol:* \`${strategy.symbol}\`\n` +
-        `• *Status:* ${strategy.enabled ? "🟢 *Enabled*" : "🔴 *Disabled*"}\n` +
-        `• *Dip Threshold:* \`${config.thresholdPercent}%\`\n` +
-        `• *Buy Amount:* \`${config.suggestedQuoteAmount} USDT\`\n` +
-        `• *Daily Spend Limit:* \`${config.maxDailySpendUsdt} USDT\`\n\n` +
+      let msg = `⚙️ *DCA Guard Settings*\n\n`;
+      for (const strategy of strategiesList) {
+        const config = strategy.config as any;
+        msg +=
+          `• *${strategy.symbol}* (${strategy.name})\n` +
+          `  └ Status: ${strategy.enabled ? "🟢 *Enabled*" : "🔴 *Disabled*"}\n` +
+          `  └ Dip Threshold: \`${config.thresholdPercent}%\`\n` +
+          `  └ Buy Amount: \`${config.suggestedQuoteAmount} USDT\`\n` +
+          `  └ Daily Spend Limit: \`${config.maxDailySpendUsdt} USDT\`\n\n`;
+      }
+
+      msg +=
         `*How to update settings:*\n` +
-        `• \`/set_threshold <percent>\` - e.g. \`/set_threshold 1.5\`\n` +
-        `• \`/set_amount <usdt>\` - e.g. \`/set_amount 50\`\n` +
-        `• \`/set_limit <usdt>\` - e.g. \`/set_limit 100\`\n` +
-        `• \`/toggle\` - Toggle strategy status`;
+        `• \`/set_threshold <symbol> <percent>\` - e.g. \`/set_threshold ETHUSDT 1.5\`\n` +
+        `• \`/set_amount <symbol> <usdt>\` - e.g. \`/set_amount SOLUSDT 50\`\n` +
+        `• \`/set_limit <symbol> <usdt>\` - e.g. \`/set_limit BTCUSDT 100\`\n` +
+        `• \`/toggle <symbol>\` - Toggle strategy status`;
 
       return ctx.reply(msg, { parse_mode: "Markdown" });
     } catch (error) {
@@ -101,18 +104,37 @@ export const createBot = (token: string) => {
   });
 
   bot.command("set_threshold", async (ctx) => {
-    const val = parseFloat(ctx.match?.trim() ?? "");
+    const parts = ctx.match?.trim().split(/\s+/) ?? [];
+    const firstPart = parts[0];
+    const secondPart = parts[1];
+    if (!firstPart || !secondPart) {
+      return ctx.reply(
+        "❌ Usage: `/set_threshold <symbol> <percent>`\nExample: `/set_threshold ETHUSDT 1.5`",
+        { parse_mode: "Markdown" },
+      );
+    }
+    const symbol = firstPart.toUpperCase();
+    const val = parseFloat(secondPart);
+
     if (isNaN(val) || val < 0 || val > 100) {
       return ctx.reply(
-        "❌ Please provide a valid percentage (e.g. `/set_threshold 1.5`) between 0 and 100.",
+        "❌ Please provide a valid percentage between 0 and 100.",
       );
     }
 
     try {
       const db = getDb();
-      const existing = await db.select().from(schema.strategies).limit(1);
+      const existing = await db
+        .select()
+        .from(schema.strategies)
+        .where(eq(schema.strategies.symbol, symbol))
+        .limit(1);
       const [strategy] = existing;
-      if (!strategy) return ctx.reply("❌ No strategies found.");
+      if (!strategy) {
+        return ctx.reply(`❌ Strategy for symbol *${symbol}* not found.`, {
+          parse_mode: "Markdown",
+        });
+      }
 
       const newConfig = {
         ...(strategy.config as any),
@@ -124,9 +146,12 @@ export const createBot = (token: string) => {
         .set({ config: newConfig })
         .where(eq(schema.strategies.id, strategy.id));
 
-      return ctx.reply(`✅ Dip threshold updated to *${val}%*`, {
-        parse_mode: "Markdown",
-      });
+      return ctx.reply(
+        `✅ Dip threshold for *${symbol}* updated to *${val}%*`,
+        {
+          parse_mode: "Markdown",
+        },
+      );
     } catch (error) {
       console.error(error);
       return ctx.reply("❌ Failed to update threshold.");
@@ -134,18 +159,35 @@ export const createBot = (token: string) => {
   });
 
   bot.command("set_amount", async (ctx) => {
-    const val = parseFloat(ctx.match?.trim() ?? "");
-    if (isNaN(val) || val < 1) {
+    const parts = ctx.match?.trim().split(/\s+/) ?? [];
+    const firstPart = parts[0];
+    const secondPart = parts[1];
+    if (!firstPart || !secondPart) {
       return ctx.reply(
-        "❌ Please provide a valid amount (e.g. `/set_amount 50`) greater than 1.",
+        "❌ Usage: `/set_amount <symbol> <usdt>`\nExample: `/set_amount SOLUSDT 50`",
+        { parse_mode: "Markdown" },
       );
+    }
+    const symbol = firstPart.toUpperCase();
+    const val = parseFloat(secondPart);
+
+    if (isNaN(val) || val < 1) {
+      return ctx.reply("❌ Please provide a valid amount greater than 1.");
     }
 
     try {
       const db = getDb();
-      const existing = await db.select().from(schema.strategies).limit(1);
+      const existing = await db
+        .select()
+        .from(schema.strategies)
+        .where(eq(schema.strategies.symbol, symbol))
+        .limit(1);
       const [strategy] = existing;
-      if (!strategy) return ctx.reply("❌ No strategies found.");
+      if (!strategy) {
+        return ctx.reply(`❌ Strategy for symbol *${symbol}* not found.`, {
+          parse_mode: "Markdown",
+        });
+      }
 
       const newConfig = {
         ...(strategy.config as any),
@@ -157,9 +199,12 @@ export const createBot = (token: string) => {
         .set({ config: newConfig })
         .where(eq(schema.strategies.id, strategy.id));
 
-      return ctx.reply(`✅ Buy amount updated to *${val} USDT*`, {
-        parse_mode: "Markdown",
-      });
+      return ctx.reply(
+        `✅ Buy amount for *${symbol}* updated to *${val} USDT*`,
+        {
+          parse_mode: "Markdown",
+        },
+      );
     } catch (error) {
       console.error(error);
       return ctx.reply("❌ Failed to update buy amount.");
@@ -167,18 +212,35 @@ export const createBot = (token: string) => {
   });
 
   bot.command("set_limit", async (ctx) => {
-    const val = parseFloat(ctx.match?.trim() ?? "");
-    if (isNaN(val) || val < 1) {
+    const parts = ctx.match?.trim().split(/\s+/) ?? [];
+    const firstPart = parts[0];
+    const secondPart = parts[1];
+    if (!firstPart || !secondPart) {
       return ctx.reply(
-        "❌ Please provide a valid limit (e.g. `/set_limit 100`) greater than 1.",
+        "❌ Usage: `/set_limit <symbol> <usdt>`\nExample: `/set_limit BTCUSDT 100`",
+        { parse_mode: "Markdown" },
       );
+    }
+    const symbol = firstPart.toUpperCase();
+    const val = parseFloat(secondPart);
+
+    if (isNaN(val) || val < 1) {
+      return ctx.reply("❌ Please provide a valid limit greater than 1.");
     }
 
     try {
       const db = getDb();
-      const existing = await db.select().from(schema.strategies).limit(1);
+      const existing = await db
+        .select()
+        .from(schema.strategies)
+        .where(eq(schema.strategies.symbol, symbol))
+        .limit(1);
       const [strategy] = existing;
-      if (!strategy) return ctx.reply("❌ No strategies found.");
+      if (!strategy) {
+        return ctx.reply(`❌ Strategy for symbol *${symbol}* not found.`, {
+          parse_mode: "Markdown",
+        });
+      }
 
       const newConfig = {
         ...(strategy.config as any),
@@ -190,9 +252,12 @@ export const createBot = (token: string) => {
         .set({ config: newConfig })
         .where(eq(schema.strategies.id, strategy.id));
 
-      return ctx.reply(`✅ Daily spend limit updated to *${val} USDT*`, {
-        parse_mode: "Markdown",
-      });
+      return ctx.reply(
+        `✅ Daily spend limit for *${symbol}* updated to *${val} USDT*`,
+        {
+          parse_mode: "Markdown",
+        },
+      );
     } catch (error) {
       console.error(error);
       return ctx.reply("❌ Failed to update daily limit.");
@@ -200,11 +265,27 @@ export const createBot = (token: string) => {
   });
 
   bot.command("toggle", async (ctx) => {
+    const symbol = ctx.match?.trim().toUpperCase();
+    if (!symbol) {
+      return ctx.reply(
+        "❌ Usage: `/toggle <symbol>`\nExample: `/toggle ETHUSDT`",
+        { parse_mode: "Markdown" },
+      );
+    }
+
     try {
       const db = getDb();
-      const existing = await db.select().from(schema.strategies).limit(1);
+      const existing = await db
+        .select()
+        .from(schema.strategies)
+        .where(eq(schema.strategies.symbol, symbol))
+        .limit(1);
       const [strategy] = existing;
-      if (!strategy) return ctx.reply("❌ No strategies found.");
+      if (!strategy) {
+        return ctx.reply(`❌ Strategy for symbol *${symbol}* not found.`, {
+          parse_mode: "Markdown",
+        });
+      }
 
       const nextStatus = !strategy.enabled;
 
@@ -214,7 +295,7 @@ export const createBot = (token: string) => {
         .where(eq(schema.strategies.id, strategy.id));
 
       return ctx.reply(
-        `✅ Strategy status updated to: ${nextStatus ? "🟢 *Enabled*" : "🔴 *Disabled*"}`,
+        `✅ Strategy for *${symbol}* updated to: ${nextStatus ? "🟢 *Enabled*" : "🔴 *Disabled*"}`,
         {
           parse_mode: "Markdown",
         },

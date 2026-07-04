@@ -15,38 +15,66 @@ const RUN_INTERVAL_MS = 30000; // 30 seconds
 async function seedDefaultStrategyIfNeeded(
   db: ReturnType<typeof createPostgresConnection>["db"],
 ) {
-  const existing = await db.select().from(schema.strategies).limit(1);
-  if (existing.length === 0) {
-    console.log("Seeding default BTCUSDT dry-run strategy...");
-    await db.insert(schema.strategies).values({
+  const defaultStrategies = [
+    {
       name: "BTC Dip Buying Strategy",
       symbol: "BTCUSDT",
-      mode: "DRY_RUN",
-      enabled: true,
-      config: {
-        thresholdPercent: 0.0, // 0% to trigger immediately for testing
-        maxDailySpendUsdt: 100.0,
-        maxWeeklySpendUsdt: 500.0,
-        cooldownMinutes: 1, // small cooldown for testing
-        suggestedQuoteAmount: 20.0,
-      },
-    });
-  } else {
-    // Update existing strategy threshold to 0.0% so it triggers immediately
-    const [firstStrategy] = existing;
-    if (firstStrategy) {
-      await db
-        .update(schema.strategies)
-        .set({
-          config: {
-            thresholdPercent: 0.0,
-            maxDailySpendUsdt: 100.0,
-            maxWeeklySpendUsdt: 500.0,
-            cooldownMinutes: 1,
-            suggestedQuoteAmount: 20.0,
-          },
-        })
-        .where(eq(schema.strategies.id, firstStrategy.id));
+      thresholdPercent: 0.0,
+      suggestedQuoteAmount: 20.0,
+    },
+    {
+      name: "ETH Dip Buying Strategy",
+      symbol: "ETHUSDT",
+      thresholdPercent: 0.0,
+      suggestedQuoteAmount: 20.0,
+    },
+    {
+      name: "SOL Dip Buying Strategy",
+      symbol: "SOLUSDT",
+      thresholdPercent: 0.0,
+      suggestedQuoteAmount: 20.0,
+    },
+  ];
+
+  for (const def of defaultStrategies) {
+    const existing = await db
+      .select()
+      .from(schema.strategies)
+      .where(eq(schema.strategies.symbol, def.symbol))
+      .limit(1);
+
+    if (existing.length === 0) {
+      console.log(`Seeding default ${def.symbol} dry-run strategy...`);
+      await db.insert(schema.strategies).values({
+        name: def.name,
+        symbol: def.symbol,
+        mode: "DRY_RUN",
+        enabled: true,
+        config: {
+          thresholdPercent: def.thresholdPercent,
+          maxDailySpendUsdt: 100.0,
+          maxWeeklySpendUsdt: 500.0,
+          cooldownMinutes: 1,
+          suggestedQuoteAmount: def.suggestedQuoteAmount,
+        },
+      });
+    } else {
+      // Force update threshold to 0.0 for testing on startup
+      const [firstStrategy] = existing;
+      if (firstStrategy) {
+        await db
+          .update(schema.strategies)
+          .set({
+            config: {
+              thresholdPercent: 0.0,
+              maxDailySpendUsdt: 100.0,
+              maxWeeklySpendUsdt: 500.0,
+              cooldownMinutes: 1,
+              suggestedQuoteAmount: 20.0,
+            },
+          })
+          .where(eq(schema.strategies.id, firstStrategy.id));
+      }
     }
   }
 }
