@@ -70,6 +70,15 @@ export const createBot = (token: string) => {
     }
   });
 
+  bot.on("message", (ctx) => {
+    return ctx.reply(
+      `👋 Hello! I am the DCA Guard Bot.\n\n` +
+        `I only respond to commands. Please use:\n` +
+        `• /start - Get your Chat ID and start instructions\n` +
+        `• /status - View real-time DCA trading stats`,
+    );
+  });
+
   // Register command hints with Telegram
   bot.api
     .setMyCommands([
