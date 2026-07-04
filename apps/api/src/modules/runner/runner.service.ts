@@ -250,37 +250,77 @@ export async function startRunner() {
             },
           );
 
-          // Save Audit Event
+          if (decision.status === "REJECTED") {
+            console.warn(
+              `[RiskGuard] Signal REJECTED for strategy ${strategy.name}: ${decision.reasonCodes.join(", ")}`,
+            );
+
+            // Cooldown/Throttle RiskGuard alerts to Telegram (once per 1 hour per strategy/reason combination)
+            const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+            const recentAlerts = await db
+              .select()
+              .from(schema.auditEvents)
+              .where(
+                and(
+                  eq(schema.auditEvents.entityType, "strategy"),
+                  eq(schema.auditEvents.entityId, strategy.id),
+                  eq(schema.auditEvents.action, "SIGNAL_REJECTED"),
+                  gte(schema.auditEvents.createdAt, oneHourAgo),
+                ),
+              );
+
+            const hasRecentSimilarAlert = recentAlerts.some((alert) => {
+              const payload = alert.payload as any;
+              const prevReasons = payload?.decision?.reasonCodes as string[];
+              if (!prevReasons) return false;
+              return (
+                prevReasons.length === decision.reasonCodes.length &&
+                prevReasons.every((r) => decision.reasonCodes.includes(r))
+              );
+            });
+
+            // Save Audit Event
+            await db.insert(schema.auditEvents).values({
+              entityType: "strategy",
+              entityId: strategy.id,
+              action: "SIGNAL_REJECTED",
+              payload: {
+                price: ticker.lastPrice,
+                dropPercent: signal.dropPercent,
+                decision,
+              },
+            });
+
+            if (!hasRecentSimilarAlert) {
+              sendTelegramAlert(
+                `⚠️ *RiskGuard Alert*\n\n` +
+                  `• *Strategy:* ${strategy.name}\n` +
+                  `• *Symbol:* ${strategy.symbol}\n` +
+                  `• *Price:* $${ticker.lastPrice.toLocaleString()}\n` +
+                  `• *Action:* REJECTED\n` +
+                  `• *Reasons:* ${decision.reasonCodes.join(", ")}`,
+              ).catch((err) =>
+                console.error("Failed to send telegram alert:", err),
+              );
+            } else {
+              console.log(
+                `[Runner] Suppressed duplicate Telegram risk alert for strategy ${strategy.name} (${decision.reasonCodes.join(", ")})`,
+              );
+            }
+            continue;
+          }
+
+          // Save SIGNAL_APPROVED Audit Event
           await db.insert(schema.auditEvents).values({
             entityType: "strategy",
             entityId: strategy.id,
-            action:
-              decision.status === "APPROVED"
-                ? "SIGNAL_APPROVED"
-                : "SIGNAL_REJECTED",
+            action: "SIGNAL_APPROVED",
             payload: {
               price: ticker.lastPrice,
               dropPercent: signal.dropPercent,
               decision,
             },
           });
-
-          if (decision.status === "REJECTED") {
-            console.warn(
-              `[RiskGuard] Signal REJECTED for strategy ${strategy.name}: ${decision.reasonCodes.join(", ")}`,
-            );
-            sendTelegramAlert(
-              `⚠️ *RiskGuard Alert*\n\n` +
-                `• *Strategy:* ${strategy.name}\n` +
-                `• *Symbol:* ${strategy.symbol}\n` +
-                `• *Price:* $${ticker.lastPrice.toLocaleString()}\n` +
-                `• *Action:* REJECTED\n` +
-                `• *Reasons:* ${decision.reasonCodes.join(", ")}`,
-            ).catch((err) =>
-              console.error("Failed to send telegram alert:", err),
-            );
-            continue;
-          }
 
           // 5. Place Pending Order
           const insertedOrders = await db
