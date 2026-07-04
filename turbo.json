@@ -2,8 +2,11 @@
   "$schema": "https://turbo.build/schema.json",
   "tasks": {
     "dev": { "cache": false, "persistent": true },
-    "build": { "dependsOn": ["^build"], "outputs": ["dist/**", ".nuxt/**", ".output/**"] },
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".nuxt/**", ".output/**"]
+    },
     "typecheck": { "dependsOn": ["^build"], "outputs": [] },
-    "test": { "outputs": ["coverage/**"] }
+    "test": { "outputs": [] }
   }
 }

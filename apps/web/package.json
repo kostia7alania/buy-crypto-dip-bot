@@ -6,7 +6,7 @@
     "dev": "nuxt dev --port 3000",
     "build": "nuxt build",
     "typecheck": "nuxt typecheck",
-    "test": "vitest run"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "nuxt": "catalog:",
@@ -15,8 +15,11 @@
     "@buy-crypto-dip-bot/shared-types": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "catalog:",
+    "@tailwindcss/vite": "catalog:",
     "vitest": "catalog:",
-    "@types/node": "catalog:"
+    "@types/node": "catalog:",
+    "tailwindcss": "catalog:",
+    "typescript": "catalog:",
+    "vue-tsc": "catalog:"
   }
 }

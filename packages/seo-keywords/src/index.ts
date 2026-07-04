@@ -1,1 +1,10 @@
-export const seoRoutes = ['/', '/crypto-dca-bot', '/buy-crypto-dip-bot', '/bitcoin-dca-bot', '/crypto-dip-buying-bot', '/bybit-dca-bot', '/flash-crash-crypto-bot', '/crypto-risk-management-bot'] as const;
+export const seoRoutes = [
+  "/",
+  "/crypto-dca-bot",
+  "/buy-crypto-dip-bot",
+  "/bitcoin-dca-bot",
+  "/crypto-dip-buying-bot",
+  "/bybit-dca-bot",
+  "/flash-crash-crypto-bot",
+  "/crypto-risk-management-bot",
+] as const;

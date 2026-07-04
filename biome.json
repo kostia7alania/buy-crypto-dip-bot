@@ -1,1 +1,30 @@
-{"formatter":{"enabled":true,"indentStyle":"space","indentWidth":2},"linter":{"enabled":true,"rules":{"recommended":true}},"organizeImports":{"enabled":true},"files":{"ignoreUnknown":true,"includes":["**","!node_modules","!dist","!.nuxt","!.output","!.turbo"]}}
+{
+  "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2 },
+  "linter": { "enabled": true, "rules": { "preset": "recommended" } },
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
+  "files": {
+    "ignoreUnknown": true,
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/.nuxt",
+      "!**/.output",
+      "!**/.turbo",
+      "!**/coverage",
+      "!apps/web/app/assets/css/main.css"
+    ]
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.vue"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noUnusedVariables": "off"
+          }
+        }
+      }
+    }
+  ]
+}

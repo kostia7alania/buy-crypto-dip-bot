@@ -1,3 +1,38 @@
-import type { Signal, StrategyConfig } from '@buy-crypto-dip-bot/shared-types';
-export interface DipInput { strategy: StrategyConfig; currentPrice: number; high24h: number; thresholdPercent: number; suggestedQuoteAmount: number; now: string; }
-export const evaluateDipStrategy = (input: DipInput): Signal => { const dropPercent = ((input.high24h - input.currentPrice) / input.high24h) * 100; const isBuy = dropPercent >= input.thresholdPercent; return { id: `signal-${input.now}`, strategyId: input.strategy.id, symbol: input.strategy.symbol, type: isBuy ? 'BUY_SIGNAL' : 'NO_SIGNAL', reason: isBuy ? 'DROP_FROM_24H_HIGH_THRESHOLD_MET' : 'DROP_FROM_24H_HIGH_THRESHOLD_NOT_MET', price: input.currentPrice, dropPercent, suggestedQuoteAmount: isBuy ? input.suggestedQuoteAmount : 0, createdAt: input.now }; };
+import type { Signal, StrategyConfig } from "@buy-crypto-dip-bot/shared-types";
+
+export interface DipInput {
+  strategy: StrategyConfig;
+  currentPrice: number;
+  high24h: number;
+  thresholdPercent: number;
+  suggestedQuoteAmount: number;
+  now: string;
+}
+
+export const evaluateDipStrategy = (input: DipInput): Signal => {
+  if (input.currentPrice <= 0) {
+    throw new Error("CURRENT_PRICE_MUST_BE_POSITIVE");
+  }
+
+  if (input.high24h <= 0) {
+    throw new Error("HIGH_24H_MUST_BE_POSITIVE");
+  }
+
+  const dropPercent =
+    ((input.high24h - input.currentPrice) / input.high24h) * 100;
+  const isBuy = dropPercent >= input.thresholdPercent;
+
+  return {
+    id: `signal-${input.now}`,
+    strategyId: input.strategy.id,
+    symbol: input.strategy.symbol,
+    type: isBuy ? "BUY_SIGNAL" : "NO_SIGNAL",
+    reason: isBuy
+      ? "DROP_FROM_24H_HIGH_THRESHOLD_MET"
+      : "DROP_FROM_24H_HIGH_THRESHOLD_NOT_MET",
+    price: input.currentPrice,
+    dropPercent,
+    suggestedQuoteAmount: isBuy ? input.suggestedQuoteAmount : 0,
+    createdAt: input.now,
+  };
+};

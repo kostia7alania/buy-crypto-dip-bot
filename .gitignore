@@ -6,6 +6,7 @@ dist
 .nuxt
 .output
 .turbo
+.pnpm-store
 coverage
 .DS_Store
 *.log

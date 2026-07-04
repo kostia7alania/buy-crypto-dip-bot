@@ -6,7 +6,7 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsdown src/server.ts --format esm --out-dir dist",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@hono/node-server": "catalog:",

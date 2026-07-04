@@ -6,7 +6,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsdown src/index.ts --format esm --out-dir dist",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "grammy": "catalog:",

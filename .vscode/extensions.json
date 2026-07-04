@@ -1,1 +1,10 @@
-{"recommendations":["Vue.volar","biomejs.biome","vitest.explorer","streetsidesoftware.code-spell-checker","usernamehw.errorlens","bradlc.vscode-tailwindcss"]}
+{
+  "recommendations": [
+    "Vue.volar",
+    "biomejs.biome",
+    "vitest.explorer",
+    "streetsidesoftware.code-spell-checker",
+    "usernamehw.errorlens",
+    "bradlc.vscode-tailwindcss"
+  ]
+}
