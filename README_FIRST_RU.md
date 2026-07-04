@@ -1,6 +1,6 @@
 # Что это
 
-Bootstrap-архив для Jules / Codex / Claude / Antigravity.
+Bootstrap-архив для Codex / Codex / Claude / Antigravity.
 
 Репа: `buy-crypto-dip-bot`  
 Продукт: `DCA Guard`  
@@ -18,16 +18,16 @@ git commit -m "chore: add AI-first project bootstrap"
 git push
 ```
 
-4. Открой Jules.
+4. Открой Codex.
 5. Выбери репу `buy-crypto-dip-bot`.
-6. Вставь содержимое `JULES_TASK_0.md`.
-7. В Initial Setup Jules добавь команды из `JULES_SETUP_SCRIPT.sh`.
+6. Вставь содержимое `CODEX_TASK_0.md`.
+7. В Initial Setup Codex добавь команды из `SETUP_SCRIPT.sh`.
 8. Нажми `Give me a plan`.
-9. Проверь план Jules перед запуском кода.
+9. Проверь план Codex перед запуском кода.
 
-## Красные флаги при review плана Jules
+## Красные флаги при review плана Codex
 
-Отклоняй план, если Jules предлагает:
+Отклоняй план, если Codex предлагает:
 
 - futures
 - leverage

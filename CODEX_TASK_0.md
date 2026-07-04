@@ -1,4 +1,4 @@
-Build a modern 2026 AI-first TypeScript monorepo from scratch.
+You are Codex running locally in this repository. Build a modern 2026 AI-first TypeScript monorepo from scratch.
 
 Repository name:
 `buy-crypto-dip-bot`
@@ -15,7 +15,7 @@ AI Crypto DCA Bot for Buying the Dip.
 Important:
 This is not a profit-maximizing trading bot. It is a safety-first automation tool. Default mode is DRY_RUN. No real money should be touched in this task.
 
-Use the latest checked Node Current version:
+Use the latest checked Node Current version already fixed by this bootstrap:
 - Node.js 26.4.0
 - Do not downgrade Node.
 - Do not add production downgrade notes.
@@ -112,7 +112,7 @@ Trading hard rules:
 - RiskGuard must approve every order-like action.
 - LIVE_TRADING_ENABLED must default to false.
 
-What to implement in this task:
+What to implement in this local Codex task:
 1. Create the monorepo scaffold.
 2. Add root package.json with Node 26.4.0 engine and pnpm 11 packageManager.
 3. Add `.node-version` and `.nvmrc` with `26.4.0`.
@@ -201,7 +201,7 @@ What to implement in this task:
    - adr/ADR_005_REPO_NAME.md
 23. Add README.md with setup and commands.
 
-Required commands:
+Run these commands before finishing:
 - pnpm install
 - pnpm dev
 - pnpm build
@@ -222,3 +222,13 @@ Acceptance criteria:
 - Nuxt SSR/SSG SEO pages exist.
 - Docs explain next tasks.
 - No legacy folder structure.
+
+
+Local Codex workflow notes:
+- Inspect the repository first.
+- Read AGENTS.md, CODEX.md, docs/00_CONTEXT.md, docs/01_PRODUCT_SPEC.md, docs/02_ARCHITECTURE.md, docs/04_RISK_POLICY.md, and docs/11_AGENT_WORKFLOW.md.
+- Produce a short plan before editing.
+- Keep the first implementation scoped to scaffold + compile + tests.
+- Do not touch real exchange APIs beyond public placeholder interfaces.
+- Do not add secrets.
+- Do not enable live trading.
