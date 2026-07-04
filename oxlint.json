@@ -1,0 +1,13 @@
+{
+  "env": {
+    "node": true,
+    "es2024": true
+  },
+  "plugins": ["typescript", "unicorn", "import", "promise"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "pedantic": "warn"
+  },
+  "ignorePatterns": ["node_modules", "dist", ".nuxt", ".output", ".turbo"]
+}

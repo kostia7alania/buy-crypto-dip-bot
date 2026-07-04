@@ -1,0 +1,11 @@
+{
+  "recommendations": [
+    "vue.volar",
+    "vitest.explorer",
+    "biomejs.biome",
+    "bradlc.vscode-tailwindcss",
+    "streetsidesoftware.code-spell-checker",
+    "usernamehw.errorlens",
+    "oven.bun-vscode"
+  ]
+}
