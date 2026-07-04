@@ -1,0 +1,22 @@
+{
+  "name": "@buy-crypto-dip-bot/db",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "build": "tsdown src/index.ts --format esm --out-dir dist",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "drizzle-orm": "catalog:",
+    "pg": "catalog:",
+    "@buy-crypto-dip-bot/shared-types": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "tsdown": "catalog:",
+    "@types/node": "catalog:"
+  }
+}

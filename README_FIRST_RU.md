@@ -1,31 +1,29 @@
-# buy-crypto-dip-bot — быстрый старт
+# buy-crypto-dip-bot — production-first старт
 
-Это чистый Codex-only bootstrap. Внутри уже есть реальные `apps/` и `packages/`, а не только md-молитвенник для роботов.
+Crypto-only SaaS **DCA Guard** для risk-first покупки просадок.
 
-## Что делать
+## Стек
+
+- Node.js 26+ как production runtime.
+- pnpm 11 без Corepack, через `mise` или глобальную установку.
+- PostgreSQL как production DB.
+- SQLite только local/dev/test adapter.
+- Nuxt 4 SSR/SSG + маленький BFF.
+- Hono API.
+- Valibot.
+- Drizzle.
+- FSD-lite для web.
+- Vertical slices для API.
+- Ports/adapters для бирж.
+- Audit-first.
+- `.codex/skills/*` для AI-агентов.
+- `PLANS.md` + `plans/*` для больших задач.
+
+## Запуск
 
 ```bash
-cd buy-crypto-dip-bot
-corepack enable
-corepack use pnpm@latest-11
-pnpm install
-pnpm check
+./SETUP_SCRIPT.sh
 pnpm dev
 ```
 
-## Первый prompt для Codex
-
-Открой `CODEX_TASK_0.md` и дай его Codex как первый локальный task.
-
-## Жёсткие правила
-
-- Только crypto spot.
-- По умолчанию только dry-run.
-- Нет futures.
-- Нет leverage.
-- Нет martingale.
-- Нет withdrawals.
-- Нет meme coins.
-- Нет live trading без явного env-флага и RiskGuard.
-
-Если агент предлагает папки `controllers/services/models/utils` в корне — бей по рукам. Это не 2017.
+Первый task для Codex: `CODEX_TASK_0.md`.

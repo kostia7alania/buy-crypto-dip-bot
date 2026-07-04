@@ -1,66 +1,35 @@
 # buy-crypto-dip-bot
 
-Risk-first crypto dip buying automation system.
+**DCA Guard** — production-first crypto dip buying automation SaaS.
 
-**Product name:** DCA Guard  
-**SEO focus:** AI Crypto DCA Bot for Buying the Dip  
-**Default mode:** DRY_RUN
-
-This repo is intentionally boring: it is designed to prevent unsafe trading before it tries to automate anything.
-
-## Stack
-
-- Node.js 26.4.0 Current
-- pnpm 11
-- TypeScript strict
-- Turborepo
-- Hono API
-- Nuxt 4 SSR/SSG web app
-- grammY Telegram bot
-- Valibot validation
-- node:sqlite for MVP persistence
-- Vitest 4
-- Biome + Oxlint
-- tsdown for packages
+Risk-first system for detecting crypto dips, validating every action through RiskGuard, creating dry-run orders by default, and notifying through Telegram and a Nuxt dashboard.
 
 ## Apps
 
-```txt
-apps/
-  api/   Hono core API
-  web/   Nuxt SEO site + dashboard + small BFF
-  bot/   Telegram bot
-```
+- `apps/api` — Hono API, trading core, market data, signals, orders, audit.
+- `apps/web` — Nuxt 4 SEO pages, dashboard, small BFF.
+- `apps/bot` — Telegram bot with safe commands and alerts.
 
 ## Packages
 
-```txt
-packages/
-  shared-types/
-  strategy-engine/
-  risk-engine/
-  exchange-bybit/
-  seo-keywords/
-  config/
-  test-utils/
-```
+- `packages/shared-types`
+- `packages/strategy-engine`
+- `packages/risk-engine`
+- `packages/exchange-core`
+- `packages/exchange-bybit`
+- `packages/db`
+- `packages/seo-keywords`
+- `packages/config`
+- `packages/test-utils`
 
 ## Commands
 
 ```bash
-corepack enable
-corepack use pnpm@latest-11
 pnpm install
-pnpm check
 pnpm dev
+pnpm build
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm check
 ```
-
-## Safety rules
-
-- No futures.
-- No leverage.
-- No martingale.
-- No withdrawals.
-- No meme coins.
-- No live trading by default.
-- Every signal, risk decision, and order-like action must be auditable.

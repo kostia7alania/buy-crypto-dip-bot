@@ -3,20 +3,22 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx src/index.ts",
-    "build": "tsdown src/index.ts --format esm --dts",
+    "dev": "tsx watch src/server.ts",
+    "build": "tsdown src/server.ts --format esm --out-dir dist",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "lint": "biome check src && oxlint src"
+    "test": "vitest run"
   },
   "dependencies": {
     "@hono/node-server": "catalog:",
     "hono": "catalog:",
     "valibot": "catalog:",
+    "pino": "catalog:",
     "@buy-crypto-dip-bot/shared-types": "workspace:*",
     "@buy-crypto-dip-bot/risk-engine": "workspace:*",
     "@buy-crypto-dip-bot/strategy-engine": "workspace:*",
-    "@buy-crypto-dip-bot/exchange-bybit": "workspace:*"
+    "@buy-crypto-dip-bot/exchange-core": "workspace:*",
+    "@buy-crypto-dip-bot/exchange-bybit": "workspace:*",
+    "@buy-crypto-dip-bot/db": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

@@ -2,21 +2,20 @@
   "name": "buy-crypto-dip-bot",
   "private": true,
   "type": "module",
-  "version": "0.0.0",
-  "packageManager": "pnpm@11.5.3",
   "engines": {
-    "node": ">=26.4.0",
-    "pnpm": ">=11.5.3"
+    "node": ">=26.0.0",
+    "pnpm": ">=11.0.0"
   },
+  "packageManager": "pnpm@11.0.0",
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
     "typecheck": "turbo typecheck",
-    "test": "turbo test",
     "lint": "oxlint . && biome check .",
     "format": "biome format --write .",
+    "test": "turbo test",
     "check": "pnpm typecheck && pnpm lint && pnpm test",
-    "clean": "turbo clean && find . -name 'node_modules' -type d -prune -exec rm -rf '{}' +"
+    "clean": "turbo clean && rm -rf node_modules .turbo"
   },
   "devDependencies": {
     "@biomejs/biome": "catalog:",

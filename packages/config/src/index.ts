@@ -1,6 +1,1 @@
-export const defaultConfig = {
-  productName: 'DCA Guard',
-  repositoryName: 'buy-crypto-dip-bot',
-  defaultMode: 'DRY_RUN',
-  allowlistSymbols: ['BTCUSDT'],
-} as const;
+export const defaultConfig = { liveTradingEnabled: false, allowlistSymbols: ['BTCUSDT'], maxDailySpendUsdt: 20, maxWeeklySpendUsdt: 100 } as const;

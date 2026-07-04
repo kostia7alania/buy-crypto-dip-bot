@@ -4,11 +4,11 @@
   "type": "module",
   "exports": "./src/index.ts",
   "scripts": {
-    "build": "tsdown src/index.ts --format esm --dts",
+    "build": "tsdown src/index.ts --format esm --out-dir dist",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "lint": "biome check src && oxlint src"
+    "test": "vitest run"
   },
+  "dependencies": {},
   "devDependencies": {
     "typescript": "catalog:",
     "vitest": "catalog:",

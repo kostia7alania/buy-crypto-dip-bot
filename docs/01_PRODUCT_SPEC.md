@@ -1,19 +1,3 @@
-# Product spec
+# Product Spec
 
-## MVP
-
-- Watch BTCUSDT market data.
-- Detect dip conditions.
-- Run RiskGuard.
-- Create dry-run order records.
-- Show dashboard.
-- Send Telegram alerts.
-
-## Non-goals
-
-- No futures.
-- No leverage.
-- No martingale.
-- No withdrawals.
-- No meme coins.
-- No live trading in MVP.
+Detect dips, evaluate strategy, enforce RiskGuard, create dry-run orders, audit everything, notify through Telegram and dashboard.

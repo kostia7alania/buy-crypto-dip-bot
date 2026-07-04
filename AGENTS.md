@@ -1,113 +1,48 @@
 # AGENTS.md
 
-## Mission
+## Non-negotiable rules
 
-Build a risk-first crypto dip buying automation product.
+- Risk-first crypto automation SaaS.
+- Default mode is `DRY_RUN`.
+- Never implement futures, leverage, martingale, withdrawals, or meme-coin trading.
+- Never enable live trading by default.
+- Every signal/order/risk decision must be auditable.
+- Do not log secrets or commit `.env`.
+- Do not create global `controllers`, `services`, `models`, `helpers`, or `utils` folders.
+- Use Node.js 26+.
+- Use pnpm 11.
+- Use PostgreSQL for production DB.
+- Use SQLite only for local/dev/test adapters.
+- Use Nuxt 4 for web.
+- Use Hono for API.
+- Use Valibot for runtime validation.
+- Use Drizzle for database schema and migrations.
 
-The system watches crypto market data, detects configured dip conditions, validates every action through RiskGuard, creates dry-run orders by default, and alerts the user through Telegram and the dashboard.
+## Commands
 
-## Repository name
+- Install: `pnpm install`
+- Dev: `pnpm dev`
+- Build: `pnpm build`
+- Check: `pnpm check`
+- Typecheck: `pnpm typecheck`
+- Test: `pnpm test`
+- Lint: `pnpm lint`
 
-`buy-crypto-dip-bot`
+## Architecture
 
-## Product name
+- API uses vertical slices in `apps/api/src/modules`.
+- Web uses FSD-lite in `apps/web/app`.
+- Nuxt server routes are only a small BFF, not the trading core.
+- Exchange integration goes through ports/adapters.
+- Risk logic lives in `packages/risk-engine`.
+- Strategy logic lives in `packages/strategy-engine`.
+- Shared contracts live in `packages/shared-types`.
+- Database schema lives in `packages/db`.
 
-`DCA Guard`
+## Before changing code
 
-## SEO focus
-
-`AI Crypto DCA Bot for Buying the Dip`
-
-## Hard safety rules
-
-- Default mode is DRY_RUN.
-- Never enable live trading unless the task explicitly says so.
-- No futures.
-- No leverage.
-- No martingale.
-- No meme coins.
-- No withdrawals through API.
-- No API keys in source code.
-- No secrets in logs.
-- Every signal must go through RiskGuard.
-- Every order-like action must be logged.
-- Every trading-related change must include tests.
-
-## Stack
-
-- Node.js 26.4.0 Current
-- pnpm 11
-- TypeScript strict
-- Turborepo
-- Hono for API
-- Nuxt 4 for SSR/SSG SEO and dashboard
-- Nuxt server routes as small BFF
-- grammY for Telegram bot
-- Valibot for runtime validation
-- node:sqlite for MVP persistence
-- Vitest 4
-- Biome + Oxlint
-- tsdown for packages
-
-## Folder rules
-
-Use this structure:
-
-```txt
-apps/
-  api/
-  web/
-  bot/
-
-packages/
-  shared-types/
-  strategy-engine/
-  risk-engine/
-  exchange-bybit/
-  seo-keywords/
-  config/
-  test-utils/
-```
-
-Do not create global legacy folders:
-
-```txt
-controllers/
-services/
-models/
-utils/
-```
-
-Inside each app, prefer vertical slices and feature modules.
-
-## Backend rules
-
-- Route files live in `apps/api/src/routes`.
-- Domain logic lives in `apps/api/src/features` or packages.
-- Route handlers must not call exchanges directly.
-- Exchange calls go through `packages/exchange-bybit`.
-- Strategy decisions go through `packages/strategy-engine`.
-- Risk decisions go through `packages/risk-engine`.
-
-## Web rules
-
-`apps/web` is Nuxt 4.
-
-Responsibilities:
-
-- SSR/SSG SEO pages.
-- Dashboard shell.
-- Small BFF via Nuxt server routes.
-- Risk-first UI.
-
-No casino UI. No huge green buy button. No PnL flexing as the main screen.
-
-## Required checks
-
-Before finishing any task, run:
-
-```bash
-pnpm typecheck
-pnpm lint
-pnpm test
-```
+1. Read the closest task/doc file.
+2. For changes touching more than two packages/apps, create or update an ExecPlan in `plans/` first.
+3. Keep changes scoped.
+4. Add tests for risk, strategy, orders, auth, DB, security-sensitive logic, and BFF contracts.
+5. Update docs when behavior changes.

@@ -1,37 +1,9 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "tasks": {
-    "dev": {
-      "cache": false,
-      "persistent": true
-    },
-    "build": {
-      "dependsOn": [
-        "^build"
-      ],
-      "outputs": [
-        "dist/**",
-        ".output/**",
-        ".nuxt/**"
-      ]
-    },
-    "typecheck": {
-      "dependsOn": [
-        "^typecheck"
-      ],
-      "outputs": []
-    },
-    "test": {
-      "dependsOn": [
-        "^build"
-      ],
-      "outputs": []
-    },
-    "lint": {
-      "outputs": []
-    },
-    "clean": {
-      "cache": false
-    }
+    "dev": { "cache": false, "persistent": true },
+    "build": { "dependsOn": ["^build"], "outputs": ["dist/**", ".nuxt/**", ".output/**"] },
+    "typecheck": { "dependsOn": ["^build"], "outputs": [] },
+    "test": { "outputs": ["coverage/**"] }
   }
 }

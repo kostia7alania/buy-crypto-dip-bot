@@ -1,70 +1,62 @@
-# CODEX TASK 0 — verify and complete scaffold
-
-You are working locally in the `buy-crypto-dip-bot` repo.
+# Codex Task 0 — Production-first scaffold completion
 
 ## Goal
 
-Verify and complete the modern Codex-first TypeScript monorepo scaffold.
+Inspect this repository and complete the production-first scaffold without breaking architecture rules.
 
-This repo must already contain real app folders:
+## Runtime and tools
 
-```txt
-apps/api
-apps/web
-apps/bot
-packages/shared-types
-packages/strategy-engine
-packages/risk-engine
-packages/exchange-bybit
-packages/seo-keywords
-packages/config
-packages/test-utils
-```
+- Node.js 26+
+- pnpm 11
+- no Corepack dependency
+- mise for local runtime management
+- Turborepo
+- TypeScript strict
+- Hono API
+- Nuxt 4 SSR/SSG + BFF
+- PostgreSQL production DB
+- SQLite only for local/dev/test adapter
+- Drizzle
+- Valibot
+- grammY
+- Vitest
+- Biome
+- Oxlint
+- tsdown
 
-If any required folder is missing, create it.
+## Hard safety rules
 
-## Product
-
-Risk-first crypto dip buying automation system.
-
-Product name: DCA Guard  
-SEO focus: AI Crypto DCA Bot for Buying the Dip
-
-## Hard constraints
-
-- Node.js 26.4.0 Current.
-- pnpm 11.
 - No futures.
 - No leverage.
 - No martingale.
 - No withdrawals.
 - No meme coins.
 - No live trading by default.
-- No private exchange calls in this task.
-- No secrets required.
-- No global legacy `controllers/services/models/utils` folders.
+- No secrets in source code.
+- Every signal/order/risk decision must be auditable.
+- RiskGuard must approve every order-like action.
 
-## Tasks
+## Scope
 
-1. Inspect the repo and confirm all required `apps/` and `packages/` exist.
-2. Make `pnpm install` work.
-3. Make `pnpm typecheck` work.
-4. Make `pnpm lint` work.
-5. Make `pnpm test` work.
-6. Keep `apps/api` as Hono API with `/health` and `/version`.
-7. Keep `apps/web` as Nuxt 4 with SEO pages and dashboard shell.
-8. Keep `apps/bot` as grammY bot skeleton with `/start` and `/status`.
-9. Keep `packages/strategy-engine` as pure tested logic.
-10. Keep `packages/risk-engine` rejecting live trading by default, with tests.
-11. Keep `packages/exchange-bybit` public-only placeholder, no secrets.
-12. Update docs only if behavior changed.
+1. Verify all packages/apps compile.
+2. Fix package scripts if needed.
+3. Ensure `pnpm check` runs typecheck, lint, and tests.
+4. Ensure `apps/api` has Hono health/version routes.
+5. Ensure `apps/web` has Nuxt SEO pages and dashboard shell.
+6. Ensure `apps/bot` has grammY skeleton commands `/start` and `/status`.
+7. Ensure `packages/risk-engine` rejects live trading by default with tests.
+8. Ensure `packages/strategy-engine` has deterministic dip strategy placeholder with tests.
+9. Ensure `packages/db` has Postgres-first Drizzle schema and SQLite dev adapter placeholders.
+10. Update docs if implementation differs.
 
 ## Acceptance criteria
 
-- `apps/` exists with `api`, `web`, `bot`.
-- `packages/` exists with all listed packages.
-- No live trading.
-- No private Bybit integration.
-- RiskGuard rejects live trading by default.
-- Tests pass.
-- The repo is ready for the next task: public Bybit market data.
+- `pnpm install` works.
+- `pnpm typecheck` works.
+- `pnpm lint` works.
+- `pnpm test` works.
+- `pnpm check` works.
+- No live trading is possible by default.
+- No private exchange integration yet.
+- No secrets required to run local dev.
+- No legacy global folders.

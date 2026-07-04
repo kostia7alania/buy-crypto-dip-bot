@@ -1,25 +1,3 @@
-import type { Signal } from '@buy-crypto-dip-bot/shared-types';
-
-export type DipStrategyInput = {
-  symbol: 'BTCUSDT';
-  currentPrice: number;
-  referenceHigh: number;
-  thresholdPercent: number;
-  quoteAmount: number;
-  now?: Date;
-};
-
-export function evaluateDipStrategy(input: DipStrategyInput): Signal {
-  const dropPercent = ((input.referenceHigh - input.currentPrice) / input.referenceHigh) * 100;
-  const isBuy = dropPercent >= input.thresholdPercent;
-
-  return {
-    type: isBuy ? 'BUY_SIGNAL' : 'NO_SIGNAL',
-    symbol: input.symbol,
-    reason: isBuy ? 'DROP_THRESHOLD_REACHED' : 'DROP_BELOW_THRESHOLD',
-    currentPrice: input.currentPrice,
-    dropPercent,
-    suggestedQuoteAmount: isBuy ? input.quoteAmount : 0,
-    createdAt: (input.now ?? new Date()).toISOString(),
-  };
-}
+import type { Signal, StrategyConfig } from '@buy-crypto-dip-bot/shared-types';
+export interface DipInput { strategy: StrategyConfig; currentPrice: number; high24h: number; thresholdPercent: number; suggestedQuoteAmount: number; now: string; }
+export const evaluateDipStrategy = (input: DipInput): Signal => { const dropPercent = ((input.high24h - input.currentPrice) / input.high24h) * 100; const isBuy = dropPercent >= input.thresholdPercent; return { id: `signal-${input.now}`, strategyId: input.strategy.id, symbol: input.strategy.symbol, type: isBuy ? 'BUY_SIGNAL' : 'NO_SIGNAL', reason: isBuy ? 'DROP_FROM_24H_HIGH_THRESHOLD_MET' : 'DROP_FROM_24H_HIGH_THRESHOLD_NOT_MET', price: input.currentPrice, dropPercent, suggestedQuoteAmount: isBuy ? input.suggestedQuoteAmount : 0, createdAt: input.now }; };
