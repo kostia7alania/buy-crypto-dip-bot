@@ -70,5 +70,19 @@ export const createBot = (token: string) => {
     }
   });
 
+  // Register command hints with Telegram
+  bot.api
+    .setMyCommands([
+      { command: "start", description: "Start the bot & get chat ID" },
+      { command: "status", description: "Show current trading statistics" },
+    ])
+    .catch((err) => {
+      // Quietly log command registration failure (e.g. in tests or invalid token)
+      console.warn(
+        "Telegram command registration skipped/failed:",
+        err.message,
+      );
+    });
+
   return bot;
 };
