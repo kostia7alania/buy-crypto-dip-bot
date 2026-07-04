@@ -6,7 +6,9 @@
   "scripts": {
     "build": "tsdown src/index.ts --format esm --out-dir dist",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
     "drizzle-orm": "catalog:",
@@ -17,6 +19,8 @@
     "typescript": "catalog:",
     "vitest": "catalog:",
     "tsdown": "catalog:",
-    "@types/node": "catalog:"
+    "@types/node": "catalog:",
+    "drizzle-kit": "catalog:",
+    "@types/pg": "^8.11.10"
   }
 }

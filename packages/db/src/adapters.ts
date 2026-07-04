@@ -1,52 +1,39 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
+import pg from "pg";
+import { schema } from "./schema.js";
+
 export type DatabaseRuntime = "production" | "local" | "test";
-export type DatabaseDialect = "postgresql" | "sqlite";
+export type DatabaseDialect = "postgresql";
 
-export interface DatabaseAdapterDescriptor {
-  dialect: DatabaseDialect;
-  runtime: DatabaseRuntime;
-  connectionTarget: string;
-  ready: false;
-  note: string;
+export interface DatabaseConnection {
+  db: ReturnType<typeof drizzle<typeof schema>>;
+  pool: pg.Pool;
 }
 
-export interface PostgresAdapterOptions {
-  runtime: DatabaseRuntime;
-  connectionString?: string;
-}
-
-export interface SqliteDevAdapterOptions {
-  runtime: DatabaseRuntime;
-  filename?: string;
-}
-
-export const createPostgresAdapterPlaceholder = (
-  options: PostgresAdapterOptions,
-): DatabaseAdapterDescriptor => {
-  if (!options.connectionString) {
+export const createPostgresConnection = (
+  connectionString: string,
+): DatabaseConnection => {
+  if (!connectionString) {
     throw new Error("POSTGRES_CONNECTION_STRING_REQUIRED");
   }
 
-  return {
-    dialect: "postgresql",
-    runtime: options.runtime,
-    connectionTarget: options.connectionString,
-    ready: false,
-    note: "Postgres is the production database target; wire the concrete Drizzle adapter in the next DB task.",
-  };
+  const pool = new pg.Pool({
+    connectionString,
+  });
+
+  const db = drizzle(pool, { schema });
+
+  return { db, pool };
 };
 
-export const createSqliteDevAdapterPlaceholder = (
-  options: SqliteDevAdapterOptions,
-): DatabaseAdapterDescriptor => {
-  if (options.runtime === "production") {
-    throw new Error("SQLITE_IS_LOCAL_DEV_TEST_ONLY");
-  }
-
-  return {
-    dialect: "sqlite",
-    runtime: options.runtime,
-    connectionTarget: options.filename ?? ":memory:",
-    ready: false,
-    note: "SQLite is a local/dev/test placeholder only and must not be used for production.",
-  };
+export const runMigrations = async (
+  db: ReturnType<typeof drizzle<typeof schema>>,
+): Promise<void> => {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  const migrationsFolder = path.resolve(__dirname, "../migrations");
+  await migrate(db, { migrationsFolder });
 };

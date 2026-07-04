@@ -3,14 +3,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "node --import tsx --env-file=../../.env --watch src/index.ts",
     "build": "tsdown src/index.ts --format esm --out-dir dist",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "grammy": "catalog:",
-    "@buy-crypto-dip-bot/shared-types": "workspace:*"
+    "@buy-crypto-dip-bot/shared-types": "workspace:*",
+    "@buy-crypto-dip-bot/db": "workspace:*",
+    "drizzle-orm": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",

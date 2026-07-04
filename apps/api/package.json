@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "node --import tsx --env-file=../../.env --watch src/server.ts",
     "build": "tsdown src/server.ts --format esm --out-dir dist",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
@@ -18,7 +18,8 @@
     "@buy-crypto-dip-bot/strategy-engine": "workspace:*",
     "@buy-crypto-dip-bot/exchange-core": "workspace:*",
     "@buy-crypto-dip-bot/exchange-bybit": "workspace:*",
-    "@buy-crypto-dip-bot/db": "workspace:*"
+    "@buy-crypto-dip-bot/db": "workspace:*",
+    "drizzle-orm": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
