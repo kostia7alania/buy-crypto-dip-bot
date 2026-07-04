@@ -239,7 +239,12 @@ export async function startRunner() {
             },
             {
               liveTradingEnabled: false, // always false for dry-run only safety
-              allowedSymbols: ["BTCUSDT"],
+              allowedSymbols: (
+                process.env.ALLOWLIST_SYMBOLS ?? "BTCUSDT,ETHUSDT,SOLUSDT"
+              )
+                .split(",")
+                .map((s) => s.trim().toUpperCase())
+                .filter(Boolean),
               dailySpentUsdt,
               weeklySpentUsdt,
             },
