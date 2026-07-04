@@ -239,12 +239,17 @@ export async function startRunner() {
             },
             {
               liveTradingEnabled: false, // always false for dry-run only safety
-              allowedSymbols: (
-                process.env.ALLOWLIST_SYMBOLS ?? "BTCUSDT,ETHUSDT,SOLUSDT"
-              )
-                .split(",")
-                .map((s) => s.trim().toUpperCase())
-                .filter(Boolean),
+              allowedSymbols: Array.from(
+                new Set([
+                  ...(
+                    process.env.ALLOWLIST_SYMBOLS ?? "BTCUSDT,ETHUSDT,SOLUSDT"
+                  )
+                    .split(",")
+                    .map((s) => s.trim().toUpperCase())
+                    .filter(Boolean),
+                  ...activeStrategies.map((s) => s.symbol.toUpperCase()),
+                ]),
+              ),
               dailySpentUsdt,
               weeklySpentUsdt,
             },
@@ -361,7 +366,7 @@ export async function startRunner() {
                   .where(eq(schema.orders.id, order.id))
                   .limit(1);
 
-                if (!currentOrder || currentOrder.status !== "PENDING") {
+                if (currentOrder?.status !== "PENDING") {
                   // Skip if order was cancelled or already executed via "Buy Now"
                   return;
                 }

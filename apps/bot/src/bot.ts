@@ -116,7 +116,7 @@ export const createBot = (token: string) => {
     const symbol = firstPart.toUpperCase();
     const val = parseFloat(secondPart);
 
-    if (isNaN(val) || val < 0 || val > 100) {
+    if (Number.isNaN(val) || val < 0 || val > 100) {
       return ctx.reply(
         "❌ Please provide a valid percentage between 0 and 100.",
       );
@@ -171,7 +171,7 @@ export const createBot = (token: string) => {
     const symbol = firstPart.toUpperCase();
     const val = parseFloat(secondPart);
 
-    if (isNaN(val) || val < 1) {
+    if (Number.isNaN(val) || val < 1) {
       return ctx.reply("❌ Please provide a valid amount greater than 1.");
     }
 
@@ -224,7 +224,7 @@ export const createBot = (token: string) => {
     const symbol = firstPart.toUpperCase();
     const val = parseFloat(secondPart);
 
-    if (isNaN(val) || val < 1) {
+    if (Number.isNaN(val) || val < 1) {
       return ctx.reply("❌ Please provide a valid limit greater than 1.");
     }
 
@@ -303,6 +303,73 @@ export const createBot = (token: string) => {
     } catch (error) {
       console.error(error);
       return ctx.reply("❌ Failed to toggle strategy status.");
+    }
+  });
+
+  bot.command("add_pair", async (ctx) => {
+    const symbol = ctx.match?.trim().toUpperCase();
+    if (!symbol) {
+      return ctx.reply(
+        "❌ Usage: `/add_pair <symbol>`\nExample: `/add_pair LTCUSDT`",
+        { parse_mode: "Markdown" },
+      );
+    }
+
+    try {
+      // Call Hono API server
+      const apiUrl = process.env.API_URL ?? "http://localhost:8787";
+      const response = await fetch(`${apiUrl}/strategies`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol }),
+      });
+
+      if (!response.ok) {
+        const errData = (await response.json()) as { error?: string };
+        const errCode = errData.error ?? "UNKNOWN_ERROR";
+
+        switch (errCode) {
+          case "INVALID_SYMBOL_FORMAT":
+            return ctx.reply(
+              "❌ Invalid symbol format. Please use uppercase letters and numbers (e.g. LTCUSDT).",
+            );
+          case "STRATEGY_ALREADY_EXISTS":
+            return ctx.reply(`❌ Strategy for *${symbol}* already exists.`, {
+              parse_mode: "Markdown",
+            });
+          case "SYMBOL_NOT_FOUND_ON_EXCHANGE":
+            return ctx.reply(
+              `❌ Symbol *${symbol}* was not found on Bybit Spot market.`,
+              { parse_mode: "Markdown" },
+            );
+          default:
+            return ctx.reply(`❌ Failed to add strategy. Error: ${errCode}`);
+        }
+      }
+
+      const data = (await response.json()) as {
+        success: boolean;
+        strategy: {
+          id: string;
+          name: string;
+          symbol: string;
+          mode: string;
+        };
+      };
+
+      return ctx.reply(
+        `✅ *Strategy Added Successfully*\n\n` +
+          `• *Name:* ${data.strategy.name}\n` +
+          `• *Symbol:* ${data.strategy.symbol}\n` +
+          `• *Mode:* ${data.strategy.mode}\n\n` +
+          `Default parameters configured: threshold 1.0%, buy amount 20 USDT, daily limit 300 USDT.`,
+        { parse_mode: "Markdown" },
+      );
+    } catch (error) {
+      console.error("Failed to add strategy via API:", error);
+      return ctx.reply(
+        "❌ Failed to contact the API server to validate the symbol.",
+      );
     }
   });
 
@@ -416,7 +483,8 @@ export const createBot = (token: string) => {
         `I only respond to commands. Please use:\n` +
         `• /start - Get your Chat ID and start instructions\n` +
         `• /status - View real-time DCA trading stats\n` +
-        `• /settings - Show and edit configurations`,
+        `• /settings - Show and edit configurations\n` +
+        `• /add_pair - Add a custom coin (e.g. LTCUSDT)`,
     );
   });
 
@@ -427,6 +495,7 @@ export const createBot = (token: string) => {
       { command: "status", description: "Show current trading statistics" },
       { command: "settings", description: "Show and edit configurations" },
       { command: "toggle", description: "Enable/disable strategy execution" },
+      { command: "add_pair", description: "Add a custom coin (e.g. LTCUSDT)" },
     ])
     .catch((err) => {
       // Quietly log command registration failure (e.g. in tests or invalid token)
