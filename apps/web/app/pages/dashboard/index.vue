@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from "vue";
+import { onMounted, onUnmounted, ref } from "vue";
 
 interface RiskStatus {
   mode: string;
@@ -26,6 +26,23 @@ interface AuditLog {
   createdAt: string;
 }
 
+interface StrategyConfigData {
+  thresholdPercent: number;
+  suggestedQuoteAmount: number;
+  maxDailySpendUsdt: number;
+  maxWeeklySpendUsdt: number;
+  cooldownMinutes: number;
+}
+
+interface Strategy {
+  id: string;
+  name: string;
+  symbol: string;
+  enabled: boolean;
+  mode: string;
+  config: StrategyConfigData;
+}
+
 useSeoMeta({ title: "Dashboard", robots: "noindex,nofollow" });
 
 // Fetch data using useFetch with refresh capabilities
@@ -35,6 +52,8 @@ const { data: orders, refresh: refreshOrders } =
   await useFetch<Order[]>("/api/orders");
 const { data: audit, refresh: refreshAudit } =
   await useFetch<AuditLog[]>("/api/audit");
+const { data: strategies, refresh: refreshStrategies } =
+  await useFetch<Strategy[]>("/api/strategies");
 
 let pollingInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -44,12 +63,95 @@ onMounted(() => {
     refreshRisk();
     refreshOrders();
     refreshAudit();
+    // Only refresh strategies if the user is not actively editing
+    if (editingId.value === null) {
+      refreshStrategies();
+    }
   }, 5000);
 });
 
 onUnmounted(() => {
   if (pollingInterval) clearInterval(pollingInterval);
 });
+
+// Editing state for strategy config
+const editingId = ref<string | null>(null);
+const editForm = ref<StrategyConfigData | null>(null);
+
+const startEdit = (strategy: Strategy) => {
+  editingId.value = strategy.id;
+  editForm.value = { ...strategy.config };
+};
+
+const cancelEdit = () => {
+  editingId.value = null;
+  editForm.value = null;
+};
+
+const saveEdit = async (strategyId: string) => {
+  if (!editForm.value) return;
+  try {
+    await $fetch("/api/strategies", {
+      method: "PATCH",
+      body: {
+        id: strategyId,
+        config: {
+          thresholdPercent: Number(editForm.value.thresholdPercent),
+          suggestedQuoteAmount: Number(editForm.value.suggestedQuoteAmount),
+          maxDailySpendUsdt: Number(editForm.value.maxDailySpendUsdt),
+          maxWeeklySpendUsdt: Number(editForm.value.maxWeeklySpendUsdt),
+          cooldownMinutes: Number(editForm.value.cooldownMinutes),
+        },
+      },
+    });
+    editingId.value = null;
+    editForm.value = null;
+    await refreshStrategies();
+  } catch (error: any) {
+    alert(`Failed to save strategy: ${error.statusMessage || error.message}`);
+  }
+};
+
+const toggleStrategy = async (strategy: Strategy) => {
+  try {
+    await $fetch("/api/strategies", {
+      method: "PATCH",
+      body: {
+        id: strategy.id,
+        enabled: !strategy.enabled,
+      },
+    });
+    await refreshStrategies();
+  } catch (error: any) {
+    alert(`Failed to toggle strategy: ${error.statusMessage || error.message}`);
+  }
+};
+
+// Add custom trading pair state
+const newSymbol = ref("");
+const addError = ref("");
+const isAdding = ref(false);
+
+const addCustomPair = async () => {
+  addError.value = "";
+  const symbol = newSymbol.value.trim().toUpperCase();
+  if (!symbol) return;
+
+  isAdding.value = true;
+  try {
+    await $fetch("/api/strategies", {
+      method: "POST",
+      body: { symbol },
+    });
+    newSymbol.value = "";
+    await refreshStrategies();
+  } catch (error: any) {
+    addError.value =
+      error.statusMessage || error.message || "Failed to add strategy";
+  } finally {
+    isAdding.value = false;
+  }
+};
 
 const formatTime = (isoString: string) => {
   try {
@@ -97,14 +199,148 @@ const formatTime = (isoString: string) => {
           </dd>
         </div>
         <div class="risk-card">
-          <dt>Allowed Symbols</dt>
-          <dd>BTCUSDT</dd>
+          <dt>Active Strategies</dt>
+          <dd class="highlight-cyan">{{ strategies?.length ?? 0 }} Loaded</dd>
         </div>
         <div class="risk-card">
           <dt>Daily Max Spend Limit</dt>
           <dd>{{ risk?.maxDailySpendUsdt ?? 20 }} USDT</dd>
         </div>
       </dl>
+    </section>
+
+    <!-- Strategy Control Center Panel -->
+    <section class="data-panel full-width-panel">
+      <div class="panel-header-actions">
+        <h2 class="panel-title">Active Trading Strategies</h2>
+        <!-- Add Custom Pair Form inline -->
+        <form @submit.prevent="addCustomPair" class="add-pair-form">
+          <input
+            v-model="newSymbol"
+            type="text"
+            placeholder="e.g. LTCUSDT"
+            class="ops-input add-input"
+            required
+            :disabled="isAdding"
+          />
+          <button type="submit" class="btn btn-primary" :disabled="isAdding">
+            {{ isAdding ? 'Adding...' : 'Add Coin ➕' }}
+          </button>
+          <span v-if="addError" class="error-badge">{{ addError }}</span>
+        </form>
+      </div>
+
+      <div class="strategies-grid">
+        <div v-for="strategy in strategies" :key="strategy.id" class="strategy-card">
+          <div class="strategy-card-header">
+            <div>
+              <h3>{{ strategy.symbol }}</h3>
+              <span class="strategy-subtitle">{{ strategy.name }}</span>
+            </div>
+            <div class="toggle-container">
+              <span class="toggle-label">{{ strategy.enabled ? 'Active' : 'Paused' }}</span>
+              <label class="switch">
+                <input
+                  type="checkbox"
+                  :checked="strategy.enabled"
+                  @change="toggleStrategy(strategy)"
+                />
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Configuration Fields -->
+          <div class="strategy-config-form">
+            <div class="config-row">
+              <span class="config-label">Dip Threshold</span>
+              <div v-if="editingId === strategy.id && editForm" class="input-with-suffix">
+                <input
+                  v-model="editForm.thresholdPercent"
+                  type="number"
+                  step="0.1"
+                  class="ops-input edit-input"
+                />
+                <span class="suffix">%</span>
+              </div>
+              <span v-else class="config-value highlight-cyan">
+                {{ strategy.config.thresholdPercent }}%
+              </span>
+            </div>
+
+            <div class="config-row">
+              <span class="config-label">Buy Amount</span>
+              <div v-if="editingId === strategy.id && editForm" class="input-with-suffix">
+                <input
+                  v-model="editForm.suggestedQuoteAmount"
+                  type="number"
+                  class="ops-input edit-input"
+                />
+                <span class="suffix">USDT</span>
+              </div>
+              <span v-else class="config-value">
+                {{ strategy.config.suggestedQuoteAmount }} USDT
+              </span>
+            </div>
+
+            <div class="config-row">
+              <span class="config-label">Daily Limit</span>
+              <div v-if="editingId === strategy.id && editForm" class="input-with-suffix">
+                <input
+                  v-model="editForm.maxDailySpendUsdt"
+                  type="number"
+                  class="ops-input edit-input"
+                />
+                <span class="suffix">USDT</span>
+              </div>
+              <span v-else class="config-value">
+                {{ strategy.config.maxDailySpendUsdt }} USDT
+              </span>
+            </div>
+
+            <div class="config-row">
+              <span class="config-label">Weekly Limit</span>
+              <div v-if="editingId === strategy.id && editForm" class="input-with-suffix">
+                <input
+                  v-model="editForm.maxWeeklySpendUsdt"
+                  type="number"
+                  class="ops-input edit-input"
+                />
+                <span class="suffix">USDT</span>
+              </div>
+              <span v-else class="config-value">
+                {{ strategy.config.maxWeeklySpendUsdt }} USDT
+              </span>
+            </div>
+
+            <div class="config-row">
+              <span class="config-label">Cooldown</span>
+              <div v-if="editingId === strategy.id && editForm" class="input-with-suffix">
+                <input
+                  v-model="editForm.cooldownMinutes"
+                  type="number"
+                  class="ops-input edit-input"
+                />
+                <span class="suffix">min</span>
+              </div>
+              <span v-else class="config-value">
+                {{ strategy.config.cooldownMinutes }} min
+              </span>
+            </div>
+          </div>
+
+          <!-- Edit Actions -->
+          <div class="strategy-actions">
+            <div v-if="editingId === strategy.id" class="edit-buttons">
+              <button @click="saveEdit(strategy.id)" class="btn btn-primary btn-sm">Save 💾</button>
+              <button @click="cancelEdit" class="btn btn-secondary btn-sm">Cancel</button>
+            </div>
+            <button v-else @click="startEdit(strategy)" class="btn btn-secondary btn-sm btn-block">
+              Configure ⚙️
+            </button>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- Orders & Audits Layout -->
@@ -338,10 +574,248 @@ h1 {
   border-radius: 1rem;
 }
 
+.panel-header-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.add-pair-form {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.add-input {
+  max-width: 12rem;
+}
+
+.error-badge {
+  color: #f87171;
+  font-size: 0.8125rem;
+  margin-left: 0.5rem;
+}
+
 .panel-title {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 700;
+  color: #f1f5f9;
+}
+
+/* Strategy Grid */
+.strategies-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.strategy-card {
+  padding: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(30, 41, 59, 0.25);
+  border-radius: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  transition: border-color 0.25s;
+}
+
+.strategy-card:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.strategy-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.strategy-card-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #f8fafc;
+}
+
+.strategy-subtitle {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.toggle-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.toggle-label {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+/* Toggle Switch Styling */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 38px;
+  height: 20px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.08);
+  transition: 0.25s;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 12px;
+  width: 12px;
+  left: 3px;
+  bottom: 3px;
+  background-color: #64748b;
+  transition: 0.25s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: rgba(74, 222, 128, 0.15);
+  border-color: rgba(74, 222, 128, 0.3);
+}
+
+input:checked + .slider:before {
+  transform: translateX(18px);
+  background-color: #4ade80;
+}
+
+/* Strategy Config Form */
+.strategy-config-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.config-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.875rem;
+}
+
+.config-label {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.config-value {
+  color: #cbd5e1;
+  font-weight: 600;
+}
+
+.input-with-suffix {
+  display: flex;
+  align-items: center;
+  position: relative;
+  max-width: 6.5rem;
+}
+
+.edit-input {
+  text-align: right;
+  padding-right: 2.25rem !important;
+}
+
+.suffix {
+  position: absolute;
+  right: 0.5rem;
+  font-size: 0.75rem;
+  color: #64748b;
+  pointer-events: none;
+}
+
+.ops-input {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  color: #f1f5f9;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.875rem;
+  width: 100%;
+}
+
+.ops-input:focus {
+  outline: none;
+  border-color: #67e8f9;
+}
+
+/* Strategy Actions */
+.strategy-actions {
+  margin-top: 0.5rem;
+}
+
+.edit-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.btn {
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+  text-align: center;
+}
+
+.btn-sm {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.75rem;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+.btn-primary {
+  background: rgba(103, 232, 249, 0.1);
+  color: #67e8f9;
+  border-color: rgba(103, 232, 249, 0.25);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: rgba(103, 232, 249, 0.2);
+  border-color: rgba(103, 232, 249, 0.4);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.04);
+  color: #94a3b8;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.08);
   color: #f1f5f9;
 }
 

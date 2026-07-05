@@ -511,8 +511,7 @@ export const createBot = (token: string) => {
   bot.on("message", async (ctx) => {
     const replyTo = ctx.message.reply_to_message;
     if (
-      replyTo?.text &&
-      replyTo.text.includes("reply to this message with the ticker symbol")
+      replyTo?.text?.includes("reply to this message with the ticker symbol")
     ) {
       const symbol = ctx.message.text?.trim().toUpperCase();
       if (!symbol) return ctx.reply("❌ Please enter a valid symbol.");
