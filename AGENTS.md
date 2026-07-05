@@ -17,6 +17,7 @@
 - Use Hono for API.
 - Use Valibot for runtime validation.
 - Use Drizzle for database schema and migrations.
+- Vue components must always declare props using `const props = defineProps<...>()`. Implicit props usage is prohibited; in both `<script>` and `<template>`, props must always be accessed explicitly via `props.propName` (e.g. `props.checked`).
 
 ## Commands
 

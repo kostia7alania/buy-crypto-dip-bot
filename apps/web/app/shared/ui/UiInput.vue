@@ -1,5 +1,5 @@
 <script setup lang="ts">
-defineProps<{
+const props = defineProps<{
   modelValue: string | number;
   type?: string;
   step?: string | number;
@@ -17,16 +17,16 @@ defineEmits<{
 <template>
   <div class="ui-input-container">
     <input
-      :type="type || 'text'"
-      :step="step"
-      :placeholder="placeholder"
-      :disabled="disabled"
-      :value="modelValue"
+      :type="props.type || 'text'"
+      :step="props.step"
+      :placeholder="props.placeholder"
+      :disabled="props.disabled"
+      :value="props.modelValue"
       @input="$emit('update:modelValue', ($event.target as HTMLInputElement).value)"
       class="ui-input"
-      :class="{ 'ui-input--with-suffix': suffix }"
+      :class="{ 'ui-input--with-suffix': props.suffix }"
     />
-    <span v-if="suffix" class="ui-input__suffix">{{ suffix }}</span>
+    <span v-if="props.suffix" class="ui-input__suffix">{{ props.suffix }}</span>
   </div>
 </template>
 

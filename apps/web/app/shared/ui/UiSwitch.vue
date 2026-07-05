@@ -1,9 +1,11 @@
 <script setup lang="ts">
-defineProps<{
+const props = defineProps<{
   checked: boolean;
 }>();
 
-defineEmits<(e: "change", value: boolean) => void>();
+defineEmits<{
+  (e: "change", value: boolean): void;
+}>();
 </script>
 
 <template>
@@ -11,7 +13,7 @@ defineEmits<(e: "change", value: boolean) => void>();
     <input
       type="checkbox"
       class="ui-switch__input"
-      :checked="checked"
+      :checked="props.checked"
       @change="$emit('change', ($event.target as HTMLInputElement).checked)"
     />
     <span class="ui-switch__slider"></span>

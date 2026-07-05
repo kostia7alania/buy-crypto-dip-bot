@@ -16,7 +16,7 @@ interface Strategy {
   config: StrategyConfigData;
 }
 
-defineProps<{
+const props = defineProps<{
   strategy: Strategy;
   isEditing: boolean;
   editForm: StrategyConfigData | null;
@@ -34,15 +34,15 @@ defineEmits<{
   <div class="strategy-card">
     <div class="strategy-card__header">
       <div>
-        <h3 class="strategy-card__symbol">{{ strategy.symbol }}</h3>
-        <span class="strategy-card__subtitle">{{ strategy.name }}</span>
+        <h3 class="strategy-card__symbol">{{ props.strategy.symbol }}</h3>
+        <span class="strategy-card__subtitle">{{ props.strategy.name }}</span>
       </div>
       <div class="strategy-card__toggle-container">
         <span class="strategy-card__toggle-label">
-          {{ strategy.enabled ? 'Active' : 'Paused' }}
+          {{ props.strategy.enabled ? 'Active' : 'Paused' }}
         </span>
         <UiSwitch
-          :checked="strategy.enabled"
+          :checked="props.strategy.enabled"
           @change="$emit('toggle')"
         />
       </div>
@@ -52,83 +52,83 @@ defineEmits<{
     <div class="strategy-card__config-form">
       <div class="strategy-card__config-row">
         <span class="strategy-card__config-label">Dip Threshold</span>
-        <div v-if="isEditing && editForm" class="strategy-card__input-wrapper">
+        <div v-if="props.isEditing && props.editForm" class="strategy-card__input-wrapper">
           <UiInput
-            v-model="editForm.thresholdPercent"
+            v-model="props.editForm.thresholdPercent"
             type="number"
             step="0.1"
             suffix="%"
           />
         </div>
         <span v-else class="strategy-card__config-value strategy-card__config-value--cyan">
-          {{ strategy.config.thresholdPercent }}%
+          {{ props.strategy.config.thresholdPercent }}%
         </span>
       </div>
 
       <div class="strategy-card__config-row">
         <span class="strategy-card__config-label">Buy Amount</span>
-        <div v-if="isEditing && editForm" class="strategy-card__input-wrapper">
+        <div v-if="props.isEditing && props.editForm" class="strategy-card__input-wrapper">
           <UiInput
-            v-model="editForm.suggestedQuoteAmount"
+            v-model="props.editForm.suggestedQuoteAmount"
             type="number"
             suffix="USDT"
           />
         </div>
         <span v-else class="strategy-card__config-value">
-          {{ strategy.config.suggestedQuoteAmount }} USDT
+          {{ props.strategy.config.suggestedQuoteAmount }} USDT
         </span>
       </div>
 
       <div class="strategy-card__config-row">
         <span class="strategy-card__config-label">Daily Limit</span>
-        <div v-if="isEditing && editForm" class="strategy-card__input-wrapper">
+        <div v-if="props.isEditing && props.editForm" class="strategy-card__input-wrapper">
           <UiInput
-            v-model="editForm.maxDailySpendUsdt"
+            v-model="props.editForm.maxDailySpendUsdt"
             type="number"
             suffix="USDT"
           />
         </div>
         <span v-else class="strategy-card__config-value">
-          {{ strategy.config.maxDailySpendUsdt }} USDT
+          {{ props.strategy.config.maxDailySpendUsdt }} USDT
         </span>
       </div>
 
       <div class="strategy-card__config-row">
         <span class="strategy-card__config-label">Weekly Limit</span>
-        <div v-if="isEditing && editForm" class="strategy-card__input-wrapper">
+        <div v-if="props.isEditing && props.editForm" class="strategy-card__input-wrapper">
           <UiInput
-            v-model="editForm.maxWeeklySpendUsdt"
+            v-model="props.editForm.maxWeeklySpendUsdt"
             type="number"
             suffix="USDT"
           />
         </div>
         <span v-else class="strategy-card__config-value">
-          {{ strategy.config.maxWeeklySpendUsdt }} USDT
+          {{ props.strategy.config.maxWeeklySpendUsdt }} USDT
         </span>
       </div>
 
       <div class="strategy-card__config-row">
         <span class="strategy-card__config-label">Cooldown</span>
-        <div v-if="isEditing && editForm" class="strategy-card__input-wrapper">
+        <div v-if="props.isEditing && props.editForm" class="strategy-card__input-wrapper">
           <UiInput
-            v-model="editForm.cooldownMinutes"
+            v-model="props.editForm.cooldownMinutes"
             type="number"
             suffix="min"
           />
         </div>
         <span v-else class="strategy-card__config-value">
-          {{ strategy.config.cooldownMinutes }} min
+          {{ props.strategy.config.cooldownMinutes }} min
         </span>
       </div>
     </div>
 
     <!-- Edit Actions -->
     <div class="strategy-card__actions">
-      <div v-if="isEditing" class="strategy-card__edit-buttons">
+      <div v-if="props.isEditing" class="strategy-card__edit-buttons">
         <button @click="$emit('save')" class="ui-button ui-button--primary ui-button--sm">Save 💾</button>
         <button @click="$emit('cancel')" class="ui-button ui-button--secondary ui-button--sm">Cancel</button>
       </div>
-      <button v-else @click="$emit('edit')" class="ui-button ui-button--secondary ui-button--sm ui-button--block">
+      <button @click="$emit('edit')" v-else class="ui-button ui-button--secondary ui-button--sm ui-button--block">
         Configure ⚙️
       </button>
     </div>
