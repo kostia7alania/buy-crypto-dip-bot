@@ -1,17 +1,10 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted } from "vue";
+import { fetchAuditLogs } from "~/entities/audit";
 
-interface AuditLog {
-  id: string;
-  action: string;
-  entityType: string;
-  entityId: string;
-  payload: Record<string, unknown>;
-  createdAt: string;
-}
-
-const { data: audit, refresh: refreshAudit } =
-  await useFetch<AuditLog[]>("/api/audit");
+const { data: audit, refresh: refreshAudit } = await useAsyncData("audit", () =>
+  fetchAuditLogs(),
+);
 
 let pollingInterval: ReturnType<typeof setInterval> | null = null;
 

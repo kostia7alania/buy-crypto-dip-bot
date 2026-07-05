@@ -3,9 +3,7 @@ defineProps<{
   checked: boolean;
 }>();
 
-defineEmits<{
-  (e: "change", value: boolean): void;
-}>();
+defineEmits<(e: "change", value: boolean) => void>();
 </script>
 
 <template>

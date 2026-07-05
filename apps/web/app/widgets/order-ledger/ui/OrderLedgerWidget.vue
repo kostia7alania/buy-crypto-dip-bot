@@ -1,16 +1,11 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted } from "vue";
+import { fetchOrders } from "~/entities/order";
 
-interface Order {
-  id: string;
-  symbol: string;
-  price: string;
-  quoteAmount: string;
-  createdAt: string;
-}
-
-const { data: orders, refresh: refreshOrders } =
-  await useFetch<Order[]>("/api/orders");
+const { data: orders, refresh: refreshOrders } = await useAsyncData(
+  "orders",
+  () => fetchOrders(),
+);
 
 let pollingInterval: ReturnType<typeof setInterval> | null = null;
 

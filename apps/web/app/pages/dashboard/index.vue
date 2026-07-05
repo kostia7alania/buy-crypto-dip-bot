@@ -1,9 +1,4 @@
 <script setup lang="ts">
-import RiskGuardWidget from "../../widgets/risk-guard/ui/RiskGuardWidget.vue";
-import StrategyListWidget from "../../widgets/strategy-list/ui/StrategyListWidget.vue";
-import OrderLedgerWidget from "../../widgets/order-ledger/ui/OrderLedgerWidget.vue";
-import AuditFeedWidget from "../../widgets/audit-feed/ui/AuditFeedWidget.vue";
-
 useSeoMeta({ title: "Dashboard", robots: "noindex,nofollow" });
 </script>
 

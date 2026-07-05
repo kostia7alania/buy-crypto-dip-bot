@@ -1,7 +1,4 @@
 <script setup lang="ts">
-import UiSwitch from "../../../shared/ui/UiSwitch.vue";
-import UiInput from "../../../shared/ui/UiInput.vue";
-
 interface StrategyConfigData {
   thresholdPercent: number;
   suggestedQuoteAmount: number;

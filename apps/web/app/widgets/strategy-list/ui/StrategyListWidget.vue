@@ -1,26 +1,17 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue";
-import StrategyCard from "../../../entities/strategy/ui/StrategyCard.vue";
+import { onMounted, onUnmounted, ref } from "vue";
+import {
+  createStrategy,
+  fetchStrategies,
+  type Strategy,
+  type StrategyConfigData,
+  updateStrategy,
+} from "~/entities/strategy";
 
-interface StrategyConfigData {
-  thresholdPercent: number;
-  suggestedQuoteAmount: number;
-  maxDailySpendUsdt: number;
-  maxWeeklySpendUsdt: number;
-  cooldownMinutes: number;
-}
-
-interface Strategy {
-  id: string;
-  name: string;
-  symbol: string;
-  enabled: boolean;
-  mode: string;
-  config: StrategyConfigData;
-}
-
-const { data: strategies, refresh: refreshStrategies } =
-  await useFetch<Strategy[]>("/api/strategies");
+const { data: strategies, refresh: refreshStrategies } = await useAsyncData(
+  "strategies",
+  () => fetchStrategies(),
+);
 
 let pollingInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -53,17 +44,13 @@ const cancelEdit = () => {
 const saveEdit = async (strategyId: string) => {
   if (!editForm.value) return;
   try {
-    await $fetch("/api/strategies", {
-      method: "PATCH",
-      body: {
-        id: strategyId,
-        config: {
-          thresholdPercent: Number(editForm.value.thresholdPercent),
-          suggestedQuoteAmount: Number(editForm.value.suggestedQuoteAmount),
-          maxDailySpendUsdt: Number(editForm.value.maxDailySpendUsdt),
-          maxWeeklySpendUsdt: Number(editForm.value.maxWeeklySpendUsdt),
-          cooldownMinutes: Number(editForm.value.cooldownMinutes),
-        },
+    await updateStrategy(strategyId, {
+      config: {
+        thresholdPercent: Number(editForm.value.thresholdPercent),
+        suggestedQuoteAmount: Number(editForm.value.suggestedQuoteAmount),
+        maxDailySpendUsdt: Number(editForm.value.maxDailySpendUsdt),
+        maxWeeklySpendUsdt: Number(editForm.value.maxWeeklySpendUsdt),
+        cooldownMinutes: Number(editForm.value.cooldownMinutes),
       },
     });
     editingId.value = null;
@@ -76,12 +63,8 @@ const saveEdit = async (strategyId: string) => {
 
 const toggleStrategy = async (strategy: Strategy) => {
   try {
-    await $fetch("/api/strategies", {
-      method: "PATCH",
-      body: {
-        id: strategy.id,
-        enabled: !strategy.enabled,
-      },
+    await updateStrategy(strategy.id, {
+      enabled: !strategy.enabled,
     });
     await refreshStrategies();
   } catch (error: any) {
@@ -101,10 +84,7 @@ const addCustomPair = async () => {
 
   isAdding.value = true;
   try {
-    await $fetch("/api/strategies", {
-      method: "POST",
-      body: { symbol },
-    });
+    await createStrategy(symbol);
     newSymbol.value = "";
     await refreshStrategies();
   } catch (error: any) {
