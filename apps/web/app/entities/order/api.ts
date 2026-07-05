@@ -1,9 +1,3 @@
-export interface Order {
-  id: string;
-  symbol: string;
-  price: string;
-  quoteAmount: string;
-  createdAt: string;
-}
+import type { Order } from "./types.js";
 
 export const fetchOrders = () => $fetch<Order[]>("/api/orders");
