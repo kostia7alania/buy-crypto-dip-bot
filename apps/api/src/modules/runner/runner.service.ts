@@ -1,4 +1,8 @@
 import {
+  orderExecutionDelaySeconds,
+  strategyDefaults,
+} from "@buy-crypto-dip-bot/config";
+import {
   createPostgresConnection,
   runMigrations,
   schema,
@@ -6,76 +10,170 @@ import {
 import { createBybitPublicClient } from "@buy-crypto-dip-bot/exchange-bybit";
 import { evaluateRisk } from "@buy-crypto-dip-bot/risk-engine";
 import { evaluateDipStrategy } from "@buy-crypto-dip-bot/strategy-engine";
-import { and, eq, gte, sql } from "drizzle-orm";
+import { and, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 
-let intervalId: NodeJS.Timeout | null = null;
-const RUN_INTERVAL_MS = 30000; // 30 seconds
+let tickIntervalId: NodeJS.Timeout | null = null;
+let dueOrdersIntervalId: NodeJS.Timeout | null = null;
 
-// Simple helper to seed a default strategy if none exist
-async function seedDefaultStrategyIfNeeded(
-  db: ReturnType<typeof createPostgresConnection>["db"],
-) {
-  const defaultStrategies = [
-    {
-      name: "BTC Dip Buying Strategy",
-      symbol: "BTCUSDT",
-      thresholdPercent: 0.0,
-      suggestedQuoteAmount: 20.0,
-    },
-    {
-      name: "ETH Dip Buying Strategy",
-      symbol: "ETHUSDT",
-      thresholdPercent: 0.0,
-      suggestedQuoteAmount: 20.0,
-    },
-    {
-      name: "SOL Dip Buying Strategy",
-      symbol: "SOLUSDT",
-      thresholdPercent: 0.0,
-      suggestedQuoteAmount: 20.0,
-    },
-  ];
+const RUN_INTERVAL_MS = 30000; // strategy evaluation cadence
+const DUE_ORDERS_POLL_MS = 3000; // how often due PENDING orders are executed
+const COUNTDOWN_STEP_S = 3; // how often the Telegram countdown message is edited
+const COUNTDOWN_BAR_WIDTH = 10;
 
-  for (const def of defaultStrategies) {
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+type Db = ReturnType<typeof createPostgresConnection>["db"];
+
+interface StrategyConfigJson {
+  thresholdPercent: number;
+  maxDailySpendUsdt: number;
+  maxWeeklySpendUsdt: number;
+  cooldownMinutes: number;
+  suggestedQuoteAmount: number;
+}
+
+// Seed default strategies only when the symbol is missing entirely.
+// Existing rows are never touched: user settings from Telegram or the
+// dashboard must survive restarts.
+async function seedDefaultStrategyIfNeeded(db: Db) {
+  const defaultSymbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT"];
+
+  for (const symbol of defaultSymbols) {
     const existing = await db
       .select()
       .from(schema.strategies)
-      .where(eq(schema.strategies.symbol, def.symbol))
+      .where(eq(schema.strategies.symbol, symbol))
       .limit(1);
 
     if (existing.length === 0) {
-      console.log(`Seeding default ${def.symbol} dry-run strategy...`);
+      console.log(`Seeding default ${symbol} dry-run strategy...`);
       await db.insert(schema.strategies).values({
-        name: def.name,
-        symbol: def.symbol,
+        name: `${symbol.replace("USDT", "")} Dip Buying Strategy`,
+        symbol,
         mode: "DRY_RUN",
         enabled: true,
-        config: {
-          thresholdPercent: def.thresholdPercent,
-          maxDailySpendUsdt: 100.0,
-          maxWeeklySpendUsdt: 500.0,
-          cooldownMinutes: 1,
-          suggestedQuoteAmount: def.suggestedQuoteAmount,
-        },
+        config: { ...strategyDefaults },
       });
-    } else {
-      // Force update threshold to 0.0 for testing on startup
-      const [firstStrategy] = existing;
-      if (firstStrategy) {
-        await db
-          .update(schema.strategies)
-          .set({
-            config: {
-              thresholdPercent: 0.0,
-              maxDailySpendUsdt: 100.0,
-              maxWeeklySpendUsdt: 500.0,
-              cooldownMinutes: 1,
-              suggestedQuoteAmount: 20.0,
-            },
-          })
-          .where(eq(schema.strategies.id, firstStrategy.id));
-      }
     }
+  }
+}
+
+const buildPendingText = (
+  strategyName: string,
+  symbol: string,
+  price: number,
+  quoteAmount: number,
+  secondsLeft: number,
+) => {
+  const total = orderExecutionDelaySeconds;
+  const filled = Math.min(
+    COUNTDOWN_BAR_WIDTH,
+    Math.round(((total - secondsLeft) / total) * COUNTDOWN_BAR_WIDTH),
+  );
+  const bar = "▓".repeat(filled) + "░".repeat(COUNTDOWN_BAR_WIDTH - filled);
+  return (
+    `🚨 *Pending Buy Alert*\n\n` +
+    `• *Strategy:* ${strategyName}\n` +
+    `• *Symbol:* ${symbol}\n` +
+    `• *Price:* $${price.toLocaleString()}\n` +
+    `• *Amount:* ${quoteAmount} USDT\n` +
+    `• *Status:* ⏳ Executing in *${secondsLeft}s*\n` +
+    `\`${bar}\``
+  );
+};
+
+// Executes every PENDING order whose execute_at has passed. DB-driven so
+// orders survive restarts; the atomic status flip below also guards against
+// double execution.
+async function processDueOrders(db: Db) {
+  const dueOrders = await db
+    .select()
+    .from(schema.orders)
+    .where(
+      and(
+        eq(schema.orders.status, "PENDING"),
+        or(
+          lte(schema.orders.executeAt, new Date()),
+          isNull(schema.orders.executeAt),
+        ),
+      ),
+    );
+
+  for (const order of dueOrders) {
+    // Atomic claim: only proceed if we are the ones flipping PENDING -> COMPLETED
+    const claimed = await db
+      .update(schema.orders)
+      .set({ status: "COMPLETED" })
+      .where(
+        and(
+          eq(schema.orders.id, order.id),
+          eq(schema.orders.status, "PENDING"),
+        ),
+      )
+      .returning();
+    if (claimed.length === 0) continue;
+
+    await db.insert(schema.auditEvents).values({
+      entityType: "order",
+      entityId: order.id,
+      action: "DRY_RUN_ORDER_COMPLETED",
+      payload: { order: { ...order, status: "COMPLETED" } },
+    });
+
+    const [strategy] = await db
+      .select()
+      .from(schema.strategies)
+      .where(eq(schema.strategies.id, order.strategyId ?? ""))
+      .limit(1);
+    const strategyName = strategy?.name ?? "Dip Buying Strategy";
+
+    console.log(
+      `🎉 [Dry-Run] Purchased ${order.quoteAmount} USDT of ${order.symbol} at ${order.price} (Strategy: ${strategyName})`,
+    );
+
+    if (order.tgMessageId) {
+      const successText =
+        `🎉 *Dry-Run Order Executed*\n\n` +
+        `• *Strategy:* ${strategyName}\n` +
+        `• *Symbol:* ${order.symbol}\n` +
+        `• *Price:* $${Number(order.price).toLocaleString()}\n` +
+        `• *Amount:* ${order.quoteAmount} USDT\n` +
+        `• *Status:* Simulated Purchase`;
+      await editTelegramMessage(order.tgMessageId, successText);
+    }
+  }
+}
+
+// Cosmetic live countdown in Telegram. Execution itself is DB-driven in
+// processDueOrders — if this loop dies with the process, the order still runs.
+async function runCountdownEdits(
+  db: Db,
+  orderId: string,
+  messageId: number,
+  executeAt: Date,
+  textFor: (secondsLeft: number) => string,
+) {
+  try {
+    while (true) {
+      await sleep(COUNTDOWN_STEP_S * 1000);
+      const secondsLeft = Math.max(
+        0,
+        Math.round((executeAt.getTime() - Date.now()) / 1000),
+      );
+      if (secondsLeft <= 0) return;
+
+      // Stop if the order was cancelled or force-executed meanwhile
+      const [currentOrder] = await db
+        .select()
+        .from(schema.orders)
+        .where(eq(schema.orders.id, orderId))
+        .limit(1);
+      if (currentOrder?.status !== "PENDING") return;
+
+      await editTelegramMessage(messageId, textFor(secondsLeft), orderId);
+    }
+  } catch (err) {
+    console.error("Countdown edit loop failed:", err);
   }
 }
 
@@ -132,25 +230,22 @@ export async function startRunner() {
         );
 
         for (const strategy of strategiesForSymbol) {
-          const config = strategy.config as {
-            thresholdPercent: number;
-            maxDailySpendUsdt: number;
-            maxWeeklySpendUsdt: number;
-            cooldownMinutes: number;
-            suggestedQuoteAmount: number;
+          const config = strategy.config as unknown as StrategyConfigJson;
+          const strategyContract = {
+            id: strategy.id,
+            name: strategy.name,
+            symbol: strategy.symbol,
+            mode: (strategy.mode === "LIVE" ? "LIVE" : "DRY_RUN") as
+              | "LIVE"
+              | "DRY_RUN",
+            maxDailySpendUsdt: config.maxDailySpendUsdt,
+            maxWeeklySpendUsdt: config.maxWeeklySpendUsdt,
+            cooldownMinutes: config.cooldownMinutes,
           };
 
           // 1. Evaluate strategy
           const signal = evaluateDipStrategy({
-            strategy: {
-              id: strategy.id,
-              name: strategy.name,
-              symbol: strategy.symbol as "BTCUSDT",
-              mode: strategy.mode as "DRY_RUN" | "LIVE",
-              maxDailySpendUsdt: config.maxDailySpendUsdt,
-              maxWeeklySpendUsdt: config.maxWeeklySpendUsdt,
-              cooldownMinutes: config.cooldownMinutes,
-            },
+            strategy: strategyContract,
             currentPrice: ticker.lastPrice,
             high24h: ticker.high24h ?? ticker.lastPrice,
             thresholdPercent: config.thresholdPercent,
@@ -199,14 +294,19 @@ export async function startRunner() {
           const dailySpentUsdt = Number(dailySpentResult[0]?.sum ?? "0");
           const weeklySpentUsdt = Number(weeklySpentResult[0]?.sum ?? "0");
 
-          // 3. Check for cooldown to avoid double-buying in the same dip
+          // 3. Check for cooldown to avoid double-buying in the same dip.
+          // PENDING orders count too — otherwise a second signal could
+          // schedule a duplicate while the first is still counting down.
           const lastOrder = await db
             .select()
             .from(schema.orders)
             .where(
               and(
                 eq(schema.orders.strategyId, strategy.id),
-                eq(schema.orders.status, "COMPLETED"),
+                or(
+                  eq(schema.orders.status, "COMPLETED"),
+                  eq(schema.orders.status, "PENDING"),
+                ),
               ),
             )
             .orderBy(sql`${schema.orders.createdAt} DESC`)
@@ -214,6 +314,12 @@ export async function startRunner() {
 
           const [lastOrderRow] = lastOrder;
           if (lastOrderRow) {
+            if (lastOrderRow.status === "PENDING") {
+              console.log(
+                `[Strategy] Pending order already scheduled for strategy ${strategy.name}, skipping.`,
+              );
+              continue;
+            }
             const lastOrderTime = new Date(lastOrderRow.createdAt).getTime();
             const minutesSinceLastOrder =
               (Date.now() - lastOrderTime) / (60 * 1000);
@@ -226,34 +332,20 @@ export async function startRunner() {
           }
 
           // 4. Run through RiskGuard
-          const decision = evaluateRisk(
-            signal,
-            {
-              id: strategy.id,
-              name: strategy.name,
-              symbol: strategy.symbol as "BTCUSDT",
-              mode: strategy.mode as "DRY_RUN" | "LIVE",
-              maxDailySpendUsdt: config.maxDailySpendUsdt,
-              maxWeeklySpendUsdt: config.maxWeeklySpendUsdt,
-              cooldownMinutes: config.cooldownMinutes,
-            },
-            {
-              liveTradingEnabled: false, // always false for dry-run only safety
-              allowedSymbols: Array.from(
-                new Set([
-                  ...(
-                    process.env.ALLOWLIST_SYMBOLS ?? "BTCUSDT,ETHUSDT,SOLUSDT"
-                  )
-                    .split(",")
-                    .map((s) => s.trim().toUpperCase())
-                    .filter(Boolean),
-                  ...activeStrategies.map((s) => s.symbol.toUpperCase()),
-                ]),
-              ),
-              dailySpentUsdt,
-              weeklySpentUsdt,
-            },
-          );
+          const decision = evaluateRisk(signal, strategyContract, {
+            liveTradingEnabled: false, // always false for dry-run only safety
+            allowedSymbols: Array.from(
+              new Set([
+                ...(process.env.ALLOWLIST_SYMBOLS ?? "BTCUSDT,ETHUSDT,SOLUSDT")
+                  .split(",")
+                  .map((s) => s.trim().toUpperCase())
+                  .filter(Boolean),
+                ...activeStrategies.map((s) => s.symbol.toUpperCase()),
+              ]),
+            ),
+            dailySpentUsdt,
+            weeklySpentUsdt,
+          });
 
           if (decision.status === "REJECTED") {
             console.warn(
@@ -275,8 +367,10 @@ export async function startRunner() {
               );
 
             const hasRecentSimilarAlert = recentAlerts.some((alert) => {
-              const payload = alert.payload as any;
-              const prevReasons = payload?.decision?.reasonCodes as string[];
+              const payload = alert.payload as {
+                decision?: { reasonCodes?: string[] };
+              };
+              const prevReasons = payload?.decision?.reasonCodes;
               if (!prevReasons) return false;
               return (
                 prevReasons.length === decision.reasonCodes.length &&
@@ -327,7 +421,11 @@ export async function startRunner() {
             },
           });
 
-          // 5. Place Pending Order
+          // 5. Schedule a PENDING order; processDueOrders executes it once
+          // execute_at passes, even across restarts.
+          const executeAt = new Date(
+            Date.now() + orderExecutionDelaySeconds * 1000,
+          );
           const insertedOrders = await db
             .insert(schema.orders)
             .values({
@@ -338,71 +436,41 @@ export async function startRunner() {
               quoteAmount: String(config.suggestedQuoteAmount),
               price: String(ticker.lastPrice),
               status: "PENDING",
+              executeAt,
             })
             .returning();
 
           const [order] = insertedOrders;
           if (order) {
-            const warningText =
-              `🚨 *Pending Buy Alert*\n\n` +
-              `• *Strategy:* ${strategy.name}\n` +
-              `• *Symbol:* ${strategy.symbol}\n` +
-              `• *Price:* $${ticker.lastPrice.toLocaleString()}\n` +
-              `• *Amount:* ${config.suggestedQuoteAmount} USDT\n` +
-              `• *Status:* Executing in 15 seconds...`;
+            const textFor = (secondsLeft: number) =>
+              buildPendingText(
+                strategy.name,
+                strategy.symbol,
+                ticker.lastPrice,
+                config.suggestedQuoteAmount,
+                secondsLeft,
+              );
 
             const alert = await sendTelegramAlertWithCancel(
-              warningText,
+              textFor(orderExecutionDelaySeconds),
               order.id,
             );
 
-            // Asynchronously wait 15 seconds before execution
-            setTimeout(async () => {
-              try {
-                // Fetch latest order status
-                const [currentOrder] = await db
-                  .select()
-                  .from(schema.orders)
-                  .where(eq(schema.orders.id, order.id))
-                  .limit(1);
+            if (alert?.messageId) {
+              await db
+                .update(schema.orders)
+                .set({ tgMessageId: alert.messageId })
+                .where(eq(schema.orders.id, order.id));
 
-                if (currentOrder?.status !== "PENDING") {
-                  // Skip if order was cancelled or already executed via "Buy Now"
-                  return;
-                }
-
-                // Finalize order to COMPLETED
-                await db
-                  .update(schema.orders)
-                  .set({ status: "COMPLETED" })
-                  .where(eq(schema.orders.id, order.id));
-
-                await db.insert(schema.auditEvents).values({
-                  entityType: "order",
-                  entityId: order.id,
-                  action: "DRY_RUN_ORDER_COMPLETED",
-                  payload: { order: { ...order, status: "COMPLETED" } },
-                });
-
-                console.log(
-                  `🎉 [Dry-Run] Purchased ${config.suggestedQuoteAmount} USDT of ${strategy.symbol} at ${ticker.lastPrice} (Strategy: ${strategy.name})`,
-                );
-
-                if (alert?.messageId) {
-                  const successText =
-                    `🎉 *Dry-Run Order Executed*\n\n` +
-                    `• *Strategy:* ${strategy.name}\n` +
-                    `• *Symbol:* ${strategy.symbol}\n` +
-                    `• *Price:* $${ticker.lastPrice.toLocaleString()}\n` +
-                    `• *Amount:* ${config.suggestedQuoteAmount} USDT\n` +
-                    `• *Status:* Simulated Purchase`;
-
-                  await editTelegramMessage(alert.messageId, successText);
-                }
-              } catch (err) {
-                console.error("Error executing pending order:", err);
-              }
-            }, 15000);
+              // Fire-and-forget: cosmetic countdown edits
+              runCountdownEdits(
+                db,
+                order.id,
+                alert.messageId,
+                executeAt,
+                textFor,
+              );
+            }
           }
         }
       }
@@ -414,11 +482,17 @@ export async function startRunner() {
   console.log(`Starting execution loop. Interval: ${RUN_INTERVAL_MS / 1000}s`);
   // Run first tick immediately
   tick();
-  intervalId = setInterval(tick, RUN_INTERVAL_MS);
+  tickIntervalId = setInterval(tick, RUN_INTERVAL_MS);
+  dueOrdersIntervalId = setInterval(() => {
+    processDueOrders(db).catch((err) =>
+      console.error("Error processing due orders:", err),
+    );
+  }, DUE_ORDERS_POLL_MS);
 
   // Close connection pool on process exit
   process.on("SIGTERM", async () => {
-    if (intervalId) clearInterval(intervalId);
+    if (tickIntervalId) clearInterval(tickIntervalId);
+    if (dueOrdersIntervalId) clearInterval(dueOrdersIntervalId);
     await pool.end();
   });
 }
@@ -447,6 +521,15 @@ async function sendTelegramAlert(message: string): Promise<void> {
   }
 }
 
+const orderKeyboard = (orderId: string) => ({
+  inline_keyboard: [
+    [
+      { text: "Cancel ❌", callback_data: `cancel_order:${orderId}` },
+      { text: "Buy Now ⚡", callback_data: `buy_now:${orderId}` },
+    ],
+  ],
+});
+
 async function sendTelegramAlertWithCancel(
   message: string,
   orderId: string,
@@ -464,14 +547,7 @@ async function sendTelegramAlertWithCancel(
         chat_id: chatId,
         text: message,
         parse_mode: "Markdown",
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: "Cancel ❌", callback_data: `cancel_order:${orderId}` },
-              { text: "Buy Now ⚡", callback_data: `buy_now:${orderId}` },
-            ],
-          ],
-        },
+        reply_markup: orderKeyboard(orderId),
       }),
     });
     if (response.ok) {
@@ -490,6 +566,9 @@ async function sendTelegramAlertWithCancel(
 async function editTelegramMessage(
   messageId: number,
   newText: string,
+  // When provided, keeps the Cancel/Buy Now buttons attached — Telegram
+  // drops reply_markup on every edit unless it is sent again.
+  keepButtonsForOrderId?: string,
 ): Promise<void> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
@@ -505,6 +584,9 @@ async function editTelegramMessage(
         message_id: messageId,
         text: newText,
         parse_mode: "Markdown",
+        ...(keepButtonsForOrderId
+          ? { reply_markup: orderKeyboard(keepButtonsForOrderId) }
+          : {}),
       }),
     });
     if (!response.ok) {
