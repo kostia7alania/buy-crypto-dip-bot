@@ -129,6 +129,101 @@ export const createBot = (token: string) => {
     }
   });
 
+  // Kill switch: instantly pause every strategy (audited).
+  bot.command("pause_all", async (ctx) => {
+    try {
+      const db = getDb();
+      const updated = await db
+        .update(schema.strategies)
+        .set({ enabled: false })
+        .returning();
+      await db.insert(schema.auditEvents).values({
+        entityType: "strategy",
+        entityId: "ALL",
+        action: "ALL_STRATEGIES_PAUSED",
+        payload: { count: updated.length, via: "telegram" },
+      });
+      return ctx.reply(
+        `⏸ *All strategies paused* (${updated.length}).\nNo new orders will be created. Resume with /resume_all`,
+        { parse_mode: "Markdown" },
+      );
+    } catch (error) {
+      console.error("Failed to pause all strategies:", error);
+      return ctx.reply("❌ Failed to pause strategies.");
+    }
+  });
+
+  bot.command("resume_all", async (ctx) => {
+    try {
+      const db = getDb();
+      const updated = await db
+        .update(schema.strategies)
+        .set({ enabled: true })
+        .returning();
+      await db.insert(schema.auditEvents).values({
+        entityType: "strategy",
+        entityId: "ALL",
+        action: "ALL_STRATEGIES_RESUMED",
+        payload: { count: updated.length, via: "telegram" },
+      });
+      return ctx.reply(`▶️ *All strategies resumed* (${updated.length}).`, {
+        parse_mode: "Markdown",
+      });
+    } catch (error) {
+      console.error("Failed to resume strategies:", error);
+      return ctx.reply("❌ Failed to resume strategies.");
+    }
+  });
+
+  bot.command("pnl", async (ctx) => {
+    try {
+      const apiUrl = process.env.API_URL ?? "http://localhost:8787";
+      const apiKey = process.env.API_KEY;
+      const response = await fetch(`${apiUrl}/pnl`, {
+        headers: apiKey ? { "x-api-key": apiKey } : {},
+      });
+      if (!response.ok) throw new Error(`API ${response.status}`);
+      const data = (await response.json()) as {
+        positions: Array<{
+          symbol: string;
+          orders: number;
+          spentUsdt: number;
+          avgBuyPrice: number;
+          currentPrice: number;
+          pnlUsdt: number;
+          pnlPercent: number;
+        }>;
+        totals: {
+          spentUsdt: number;
+          pnlUsdt: number;
+          pnlPercent: number;
+        } | null;
+      };
+
+      if (!data.totals || data.positions.length === 0) {
+        return ctx.reply(
+          "📭 No simulated purchases yet — PnL appears after the first executed dry-run order.",
+        );
+      }
+
+      const sign = (n: number) => (n >= 0 ? "+" : "");
+      let msg = `💼 *Simulated Portfolio PnL*\n\n`;
+      for (const p of data.positions) {
+        msg +=
+          `• *${p.symbol}* (${p.orders} buys)\n` +
+          `  └ Invested: \`${p.spentUsdt.toFixed(2)} USDT\`\n` +
+          `  └ Avg buy: \`$${p.avgBuyPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}\` → now \`$${p.currentPrice.toLocaleString()}\`\n` +
+          `  └ PnL: \`${sign(p.pnlUsdt)}${p.pnlUsdt.toFixed(2)} USDT (${sign(p.pnlPercent)}${p.pnlPercent.toFixed(2)}%)\`\n\n`;
+      }
+      msg += `*Total:* \`${sign(data.totals.pnlUsdt)}${data.totals.pnlUsdt.toFixed(2)} USDT (${sign(data.totals.pnlPercent)}${data.totals.pnlPercent.toFixed(2)}%)\` on \`${data.totals.spentUsdt.toFixed(2)} USDT\``;
+
+      return ctx.reply(msg, { parse_mode: "Markdown" });
+    } catch (error) {
+      console.error("Failed to fetch PnL:", error);
+      return ctx.reply("❌ Failed to fetch PnL from the API.");
+    }
+  });
+
   bot.command("price", async (ctx) => {
     const symbol = ctx.match?.trim().toUpperCase() || "BTCUSDT";
     try {
@@ -599,6 +694,12 @@ export const createBot = (token: string) => {
   bot.api
     .setMyCommands([
       { command: "start", description: "Start the bot & get chat ID" },
+      { command: "pnl", description: "Simulated portfolio PnL" },
+      {
+        command: "pause_all",
+        description: "Kill switch: pause all strategies",
+      },
+      { command: "resume_all", description: "Resume all strategies" },
       {
         command: "price",
         description: "Current price & dip % (e.g. /price ETHUSDT)",
