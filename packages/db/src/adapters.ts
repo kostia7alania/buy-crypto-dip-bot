@@ -34,6 +34,10 @@ export const runMigrations = async (
 ): Promise<void> => {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
-  const migrationsFolder = path.resolve(__dirname, "../migrations");
+  // In production the app is bundled, so the relative path from this file no
+  // longer points at packages/db/migrations — the image sets
+  // DB_MIGRATIONS_DIR to the copied migrations folder instead.
+  const migrationsFolder =
+    process.env.DB_MIGRATIONS_DIR ?? path.resolve(__dirname, "../migrations");
   await migrate(db, { migrationsFolder });
 };

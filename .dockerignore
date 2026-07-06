@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+**/dist
+**/.nuxt
+**/.output
+**/.turbo
+.git
+.env
+*.log
+docs
+adr
+plans
+tasks
+old
