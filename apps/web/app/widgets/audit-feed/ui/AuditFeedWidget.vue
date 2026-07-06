@@ -17,19 +17,6 @@ onMounted(() => {
 onUnmounted(() => {
   if (pollingInterval) clearInterval(pollingInterval);
 });
-
-const formatTime = (isoString: string) => {
-  try {
-    const d = new Date(isoString);
-    return d.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-  } catch {
-    return isoString;
-  }
-};
 </script>
 
 <template>
@@ -42,7 +29,9 @@ const formatTime = (isoString: string) => {
           <span class="audit-feed__action" :class="`audit-feed__action--${log.action.toLowerCase()}`">
             {{ log.action }}
           </span>
-          <span class="audit-feed__time">{{ formatTime(log.createdAt) }}</span>
+          <span class="audit-feed__time">
+            <NuxtTime :datetime="log.createdAt" hour="2-digit" minute="2-digit" second="2-digit" />
+          </span>
         </header>
         <div class="audit-feed__payload">
           <span class="audit-feed__payload-text">Entity: {{ log.entityType }} ({{ log.entityId.slice(0, 8) }}...)</span>

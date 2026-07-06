@@ -18,19 +18,6 @@ onMounted(() => {
 onUnmounted(() => {
   if (pollingInterval) clearInterval(pollingInterval);
 });
-
-const formatTime = (isoString: string) => {
-  try {
-    const d = new Date(isoString);
-    return d.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-  } catch {
-    return isoString;
-  }
-};
 </script>
 
 <template>
@@ -57,7 +44,9 @@ const formatTime = (isoString: string) => {
             <td class="order-ledger__side order-ledger__side--buy">BUY</td>
             <td>${{ Number(order.price).toLocaleString(undefined, { minimumFractionDigits: 2 }) }}</td>
             <td>{{ Number(order.quoteAmount).toFixed(2) }} USDT</td>
-            <td class="order-ledger__time">{{ formatTime(order.createdAt) }}</td>
+            <td class="order-ledger__time">
+              <NuxtTime :datetime="order.createdAt" hour="2-digit" minute="2-digit" second="2-digit" />
+            </td>
             <td>
               <span class="order-ledger__badge">SIMULATED</span>
             </td>
