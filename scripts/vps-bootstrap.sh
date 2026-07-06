@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# One-time (idempotent) VPS setup for DCA Guard.
+# One-time (idempotent) VPS setup for Buy Crypto Dip Bot.
 # Usage: bash vps-bootstrap.sh  (as root, on the VPS)
 set -euo pipefail
 
-APP_DIR=/opt/dca-guard
+APP_DIR=/opt/buy-crypto-dip-bot
 
 echo "=== 1. Base packages ==="
 export DEBIAN_FRONTEND=noninteractive
@@ -30,7 +30,19 @@ ufw allow 80/tcp
 ufw allow 443/tcp
 ufw --force enable
 
-echo "=== 5. App directory ==="
+echo "=== 5. Deploy user (never deploy as root) ==="
+if ! id deploy >/dev/null 2>&1; then
+  useradd -m -s /bin/bash deploy
+fi
+usermod -aG docker deploy
+mkdir -p /home/deploy/.ssh
+chmod 700 /home/deploy/.ssh
+touch /home/deploy/.ssh/authorized_keys
+chmod 600 /home/deploy/.ssh/authorized_keys
+chown -R deploy:deploy /home/deploy/.ssh
+echo ">>> Add your public key to /home/deploy/.ssh/authorized_keys"
+
+echo "=== 6. App directory ==="
 mkdir -p "$APP_DIR"
 if [ ! -f "$APP_DIR/.env" ]; then
   API_KEY=$(openssl rand -hex 32)
@@ -45,9 +57,10 @@ EOF
   chmod 600 "$APP_DIR/.env"
   echo ">>> Generated $APP_DIR/.env — fill TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID"
 fi
+chown -R deploy:deploy "$APP_DIR"
 
-echo "=== 6. Nginx: proxy 80 -> nuxt (3000) ==="
-cat > /etc/nginx/sites-available/dca-guard <<'EOF'
+echo "=== 7. Nginx: proxy 80 -> nuxt (3000) ==="
+cat > /etc/nginx/sites-available/buy-crypto-dip-bot <<'EOF'
 server {
     listen 80 default_server;
     server_name _;
@@ -65,7 +78,7 @@ server {
     }
 }
 EOF
-ln -sf /etc/nginx/sites-available/dca-guard /etc/nginx/sites-enabled/dca-guard
+ln -sf /etc/nginx/sites-available/buy-crypto-dip-bot /etc/nginx/sites-enabled/buy-crypto-dip-bot
 rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
 

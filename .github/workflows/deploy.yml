@@ -40,17 +40,18 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     # Flip the repo variable DEPLOY_ENABLED to 'true' once the VPS secrets
-    # (VPS_HOST, VPS_USER, VPS_PASSWORD) are configured.
+    # (VPS_HOST, VPS_USER, VPS_SSH_KEY) are configured. Key-only auth —
+    # passwords never travel through CI.
     if: ${{ vars.DEPLOY_ENABLED == 'true' }}
     steps:
       - uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
-          password: ${{ secrets.VPS_PASSWORD }}
+          key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             set -e
-            cd /opt/dca-guard
+            cd /opt/buy-crypto-dip-bot
             docker compose pull
             docker compose up -d
             docker image prune -f
