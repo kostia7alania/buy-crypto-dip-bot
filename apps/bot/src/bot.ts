@@ -1,4 +1,5 @@
 import { schema } from "@buy-crypto-dip-bot/db";
+import { createBybitPublicClient } from "@buy-crypto-dip-bot/exchange-bybit";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { Bot } from "grammy";
 import { getDb } from "./db.js";
@@ -125,6 +126,36 @@ export const createBot = (token: string) => {
     } catch (error) {
       console.error("Failed to fetch settings:", error);
       return ctx.reply("❌ Failed to read settings from database.");
+    }
+  });
+
+  bot.command("price", async (ctx) => {
+    const symbol = ctx.match?.trim().toUpperCase() || "BTCUSDT";
+    try {
+      const client = createBybitPublicClient({
+        baseUrl: "https://api.bybit.com",
+      });
+      const ticker = await client.getTicker(symbol);
+      const dropPercent = ticker.high24h
+        ? ((ticker.high24h - ticker.lastPrice) / ticker.high24h) * 100
+        : null;
+
+      const msg =
+        `💲 *${symbol}*\n\n` +
+        `• *Price:* \`$${ticker.lastPrice.toLocaleString()}\`\n` +
+        `• *24h High:* \`$${(ticker.high24h ?? ticker.lastPrice).toLocaleString()}\`\n` +
+        `• *24h Low:* \`$${(ticker.low24h ?? ticker.lastPrice).toLocaleString()}\`\n` +
+        (dropPercent !== null
+          ? `• *Drop from 24h high:* \`${dropPercent.toFixed(2)}%\``
+          : "");
+
+      return ctx.reply(msg, { parse_mode: "Markdown" });
+    } catch (error) {
+      console.error(`Failed to fetch price for ${symbol}:`, error);
+      return ctx.reply(
+        `❌ Could not fetch price for *${symbol}*. Is the symbol correct? (e.g. /price ETHUSDT)`,
+        { parse_mode: "Markdown" },
+      );
     }
   });
 
@@ -568,6 +599,7 @@ export const createBot = (token: string) => {
   bot.api
     .setMyCommands([
       { command: "start", description: "Start the bot & get chat ID" },
+      { command: "price", description: "Current price & dip % (e.g. /price ETHUSDT)" },
       { command: "status", description: "Show current trading statistics" },
       { command: "settings", description: "Show and edit configurations" },
       { command: "toggle", description: "Enable/disable strategy execution" },

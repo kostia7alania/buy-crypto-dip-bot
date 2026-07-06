@@ -153,6 +153,9 @@ importers:
       '@buy-crypto-dip-bot/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@buy-crypto-dip-bot/exchange-bybit':
+        specifier: workspace:*
+        version: link:../../packages/exchange-bybit
       '@buy-crypto-dip-bot/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types

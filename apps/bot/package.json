@@ -12,7 +12,8 @@
     "grammy": "catalog:",
     "@buy-crypto-dip-bot/shared-types": "workspace:*",
     "@buy-crypto-dip-bot/db": "workspace:*",
-    "drizzle-orm": "catalog:"
+    "drizzle-orm": "catalog:",
+    "@buy-crypto-dip-bot/exchange-bybit": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",
