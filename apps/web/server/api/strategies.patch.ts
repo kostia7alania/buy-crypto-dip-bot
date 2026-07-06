@@ -1,5 +1,4 @@
 export default defineEventHandler(async (event) => {
-  const apiUrl = process.env.API_URL ?? "http://localhost:8787";
   const body = (await readBody(event)) as {
     id: string;
     enabled?: boolean;
@@ -14,11 +13,10 @@ export default defineEventHandler(async (event) => {
 
   const { id, ...updates } = body;
   try {
-    const result = await $fetch(`${apiUrl}/strategies/${id}`, {
+    return await apiFetch(`/strategies/${id}`, {
       method: "PATCH",
       body: updates,
     });
-    return result;
   } catch (error: any) {
     console.error(`Failed to update strategy ${id} via API:`, error);
     throw createError({

@@ -7,7 +7,9 @@ interface RiskStatus {
   orderLikeActionsRequireApproval: boolean;
 }
 
-const { data: risk } = await useFetch<RiskStatus>("/api/risk-status");
+const { data: risk } = await useFetch<RiskStatus>("/api/risk-status", {
+  key: "risk-status",
+});
 </script>
 
 <template>

@@ -1,5 +1,13 @@
 <script setup lang="ts">
+import { computed } from "vue";
+
 useSeoMeta({ title: "Dashboard", robots: "noindex,nofollow" });
+
+const { data: risk } = await useFetch<{ apiReachable?: boolean }>(
+  "/api/risk-status",
+  { key: "risk-status" },
+);
+const apiOnline = computed(() => risk.value?.apiReachable === true);
 </script>
 
 <template>
@@ -13,9 +21,15 @@ useSeoMeta({ title: "Dashboard", robots: "noindex,nofollow" });
           Monitoring the safety engine, strategy triggers, and simulated order book in real-time.
         </p>
       </div>
-      <div class="ops-dashboard__status">
-        <div class="ops-dashboard__pulse-dot"></div>
-        <span>Live Connection Active</span>
+      <div
+        class="ops-dashboard__status"
+        :class="{ 'ops-dashboard__status--offline': !apiOnline }"
+      >
+        <div
+          class="ops-dashboard__pulse-dot"
+          :class="{ 'ops-dashboard__pulse-dot--offline': !apiOnline }"
+        ></div>
+        <span>{{ apiOnline ? 'Live Connection Active' : 'API Offline' }}</span>
       </div>
     </header>
 
@@ -102,6 +116,17 @@ useSeoMeta({ title: "Dashboard", robots: "noindex,nofollow" });
   border-radius: 50%;
   box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
   animation: pulse 1.6s infinite;
+}
+
+.ops-dashboard__status--offline {
+  border-color: rgba(248, 113, 113, 0.35);
+  color: #fca5a5;
+}
+
+.ops-dashboard__pulse-dot--offline {
+  background: #f87171;
+  box-shadow: none;
+  animation: none;
 }
 
 @keyframes pulse {
