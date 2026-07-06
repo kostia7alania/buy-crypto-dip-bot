@@ -6,8 +6,33 @@ import { getDb } from "./db.js";
 export const createBot = (token: string) => {
   const bot = new Bot(token);
 
-  bot.command("start", (ctx) => {
+  bot.command("start", async (ctx) => {
     const chatId = ctx.chat.id;
+
+    // Register/refresh the user keyed by Telegram id — the same identity
+    // the web dashboard will authenticate with (Telegram Login / initData).
+    try {
+      const db = getDb();
+      await db
+        .insert(schema.users)
+        .values({
+          telegramUserId: String(ctx.from?.id ?? chatId),
+          telegramChatId: String(chatId),
+          username: ctx.from?.username ?? null,
+          firstName: ctx.from?.first_name ?? null,
+        })
+        .onConflictDoUpdate({
+          target: schema.users.telegramUserId,
+          set: {
+            telegramChatId: String(chatId),
+            username: ctx.from?.username ?? null,
+            firstName: ctx.from?.first_name ?? null,
+          },
+        });
+    } catch (err) {
+      console.error("Failed to register user on /start:", err);
+    }
+
     const msg =
       `🤖 *DCA Guard Dev Bot Started*\n\n` +
       `Your Chat ID: \`${chatId}\`\n\n` +
@@ -321,9 +346,13 @@ export const createBot = (token: string) => {
     try {
       // Call Hono API server
       const apiUrl = process.env.API_URL ?? "http://localhost:8787";
+      const apiKey = process.env.API_KEY;
       const response = await fetch(`${apiUrl}/strategies`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(apiKey ? { "x-api-key": apiKey } : {}),
+        },
         body: JSON.stringify({ symbol }),
       });
 
@@ -432,6 +461,13 @@ export const createBot = (token: string) => {
         .update(schema.orders)
         .set({ status: "CANCELLED" })
         .where(eq(schema.orders.id, orderId));
+
+      await db.insert(schema.auditEvents).values({
+        entityType: "order",
+        entityId: order.id,
+        action: "DRY_RUN_ORDER_CANCELLED",
+        payload: { order: { ...order, status: "CANCELLED" } },
+      });
 
       await ctx.answerCallbackQuery("❌ Order cancelled successfully!");
       return ctx.editMessageText(
