@@ -10,6 +10,12 @@ export default defineNuxtConfig({
     { path: "~/shared/ui", pathPrefix: false },
   ],
   css: ["~/assets/css/main.css"],
+  runtimeConfig: {
+    public: {
+      // Overridable via NUXT_PUBLIC_SITE_URL
+      siteUrl: "https://buy-crypto-dip-bot.com",
+    },
+  },
   app: {
     head: {
       htmlAttrs: { lang: "en" },
