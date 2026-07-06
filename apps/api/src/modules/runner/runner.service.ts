@@ -22,6 +22,15 @@ const COUNTDOWN_BAR_WIDTH = 10;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Heartbeat for /risk/status: lets the dashboard show whether the trading
+// loop is actually alive instead of pretending.
+let lastTickAt: Date | null = null;
+
+export const getRunnerStatus = () => ({
+  lastTickAt: lastTickAt ? lastTickAt.toISOString() : null,
+  tickIntervalMs: RUN_INTERVAL_MS,
+});
+
 type Db = ReturnType<typeof createPostgresConnection>["db"];
 
 interface StrategyConfigJson {
@@ -199,6 +208,7 @@ export async function startRunner() {
   const client = createBybitPublicClient({ baseUrl: "https://api.bybit.com" });
 
   const tick = async () => {
+    lastTickAt = new Date();
     try {
       // Find all active strategies
       const activeStrategies = await db

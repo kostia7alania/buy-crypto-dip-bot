@@ -1,13 +1,33 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted, onUnmounted } from "vue";
 
 useSeoMeta({ title: "Dashboard", robots: "noindex,nofollow" });
 
-const { data: risk } = await useFetch<{ apiReachable?: boolean }>(
-  "/api/risk-status",
-  { key: "risk-status" },
-);
-const apiOnline = computed(() => risk.value?.apiReachable === true);
+const { data: risk, refresh: refreshRisk } = await useFetch<{
+  apiReachable?: boolean;
+  runner?: { lastTickAt: string | null; tickIntervalMs: number };
+}>("/api/risk-status", { key: "risk-status" });
+
+let statusInterval: ReturnType<typeof setInterval> | null = null;
+onMounted(() => {
+  statusInterval = setInterval(() => refreshRisk(), 10000);
+});
+onUnmounted(() => {
+  if (statusInterval) clearInterval(statusInterval);
+});
+
+// Three honest states: API down, API up but trading loop stale, all live.
+const connection = computed(() => {
+  if (risk.value?.apiReachable !== true) {
+    return { state: "offline", label: "API Offline" };
+  }
+  const lastTick = risk.value.runner?.lastTickAt;
+  const interval = risk.value.runner?.tickIntervalMs ?? 30000;
+  if (!lastTick || Date.now() - new Date(lastTick).getTime() > interval * 3) {
+    return { state: "stale", label: "Runner Stale" };
+  }
+  return { state: "live", label: "Live Connection Active" };
+});
 </script>
 
 <template>
@@ -23,13 +43,13 @@ const apiOnline = computed(() => risk.value?.apiReachable === true);
       </div>
       <div
         class="ops-dashboard__status"
-        :class="{ 'ops-dashboard__status--offline': !apiOnline }"
+        :class="`ops-dashboard__status--${connection.state}`"
       >
         <div
           class="ops-dashboard__pulse-dot"
-          :class="{ 'ops-dashboard__pulse-dot--offline': !apiOnline }"
+          :class="`ops-dashboard__pulse-dot--${connection.state}`"
         ></div>
-        <span>{{ apiOnline ? 'Live Connection Active' : 'API Offline' }}</span>
+        <span>{{ connection.label }}</span>
       </div>
     </header>
 
@@ -125,6 +145,17 @@ const apiOnline = computed(() => risk.value?.apiReachable === true);
 
 .ops-dashboard__pulse-dot--offline {
   background: #f87171;
+  box-shadow: none;
+  animation: none;
+}
+
+.ops-dashboard__status--stale {
+  border-color: rgba(250, 204, 21, 0.35);
+  color: #fde68a;
+}
+
+.ops-dashboard__pulse-dot--stale {
+  background: #facc15;
   box-shadow: none;
   animation: none;
 }
