@@ -11,8 +11,10 @@
 - Do not create global `controllers`, `services`, `models`, `helpers`, or `utils` folders.
 - Use Node.js 26+.
 - Use pnpm 11.
-- Use PostgreSQL for production DB.
-- Use SQLite only for local/dev/test adapters.
+- Use PostgreSQL everywhere (prod and local dev via docker compose). SQLite was dropped — see ADR 002.
+- Protect the API with `API_KEY` (`x-api-key` header) on any non-local deployment; never expose the key to the browser.
+- Never add HTTP endpoints that delete or truncate audit history.
+- Defaults for strategies/risk live in `packages/config` — never duplicate them inline.
 - Use Nuxt 4 for web.
 - Use Hono for API.
 - Use Valibot for runtime validation.

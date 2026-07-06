@@ -22,6 +22,21 @@ Risk-first system for detecting crypto dips, validating every action through Ris
 - `packages/config`
 - `packages/test-utils`
 
+## Quickstart
+
+```bash
+# Node 26 (repo has .nvmrc / mise.toml)
+nvm use            # or: mise install
+
+cp .env.example .env   # fill TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID
+docker compose up -d   # local PostgreSQL
+pnpm install
+pnpm dev               # api :8787, web :3000, bot
+```
+
+Migrations run automatically when the API starts. Default BTC/ETH/SOL
+dry-run strategies are seeded once and never overwritten afterwards.
+
 ## Commands
 
 ```bash
