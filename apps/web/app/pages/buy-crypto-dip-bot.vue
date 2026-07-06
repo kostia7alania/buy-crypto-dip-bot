@@ -1,7 +1,7 @@
 <script setup lang="ts">
 useSeoMeta({
   title: "Buy Crypto Dip Bot",
-  description: "Risk-first Buy Crypto Dip Bot by DCA Guard.",
+  description: "Risk-first Buy Crypto Dip Bot by Buy Crypto Dip Bot.",
 });
 </script>
 

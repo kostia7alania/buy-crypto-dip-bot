@@ -10,7 +10,12 @@ export default defineNuxtConfig({
     { path: "~/shared/ui", pathPrefix: false },
   ],
   css: ["~/assets/css/main.css"],
-  app: { head: { htmlAttrs: { lang: "en" }, titleTemplate: "%s · DCA Guard" } },
+  app: {
+    head: {
+      htmlAttrs: { lang: "en" },
+      titleTemplate: "%s · Buy Crypto Dip Bot",
+    },
+  },
   vite: {
     plugins: [tailwindcss()],
   },

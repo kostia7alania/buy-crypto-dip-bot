@@ -1,7 +1,7 @@
 <script setup lang="ts">
 useSeoMeta({
   title: "Flash Crash Crypto Bot",
-  description: "Risk-first Flash Crash Crypto Bot by DCA Guard.",
+  description: "Risk-first Flash Crash Crypto Bot by Buy Crypto Dip Bot.",
 });
 </script>
 

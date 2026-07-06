@@ -1,3 +1,3 @@
 # Context
 
-Crypto-only risk-first SaaS. Repo: buy-crypto-dip-bot. Product: DCA Guard.
+Crypto-only risk-first SaaS. Repo: buy-crypto-dip-bot. Product: Buy Crypto Dip Bot.

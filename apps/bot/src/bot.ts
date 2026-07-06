@@ -34,7 +34,7 @@ export const createBot = (token: string) => {
     }
 
     const msg =
-      `🤖 *DCA Guard Dev Bot Started*\n\n` +
+      `🤖 *Buy Crypto Dip Bot Started*\n\n` +
       `Your Chat ID: \`${chatId}\`\n\n` +
       `To receive live notifications, configure this in your \`.env\` file:\n` +
       `\`TELEGRAM_CHAT_ID=${chatId}\``;
@@ -79,7 +79,7 @@ export const createBot = (token: string) => {
       const spentToday = Number(dailySpentResult[0]?.sum ?? "0");
 
       const msg =
-        `📊 *DCA Guard Status (Last 24h)*\n\n` +
+        `📊 *Buy Crypto Dip Bot Status (Last 24h)*\n\n` +
         `• *Mode:* \`DRY_RUN\`\n` +
         `• *Live Trading:* \`Disabled\`\n` +
         `• *Active Strategies:* \`${activeStrategies.length}\`\n` +
@@ -103,7 +103,7 @@ export const createBot = (token: string) => {
         return ctx.reply("❌ No strategies found in database.");
       }
 
-      let msg = `⚙️ *DCA Guard Settings*\n\n`;
+      let msg = `⚙️ *Buy Crypto Dip Bot Settings*\n\n`;
       for (const strategy of strategiesList) {
         const config = strategy.config as any;
         msg +=
@@ -555,7 +555,7 @@ export const createBot = (token: string) => {
     }
 
     return ctx.reply(
-      `👋 Hello! I am the DCA Guard Bot.\n\n` +
+      `👋 Hello! I am the Buy Crypto Dip Bot.\n\n` +
         `I only respond to commands. Please use:\n` +
         `• /start - Get your Chat ID and start instructions\n` +
         `• /status - View real-time DCA trading stats\n` +

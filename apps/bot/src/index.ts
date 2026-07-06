@@ -7,5 +7,7 @@ if (!token) {
   process.exit(0);
 }
 
-console.log("🤖 DCA Guard Telegram Bot successfully started and listening...");
+console.log(
+  "🤖 Buy Crypto Dip Bot Telegram Bot successfully started and listening...",
+);
 await createBot(token).start();

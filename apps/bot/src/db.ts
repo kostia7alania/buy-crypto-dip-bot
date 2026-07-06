@@ -2,7 +2,7 @@ import { createPostgresConnection } from "@buy-crypto-dip-bot/db";
 
 const connectionString =
   process.env.POSTGRES_CONNECTION_STRING ??
-  "postgresql://postgres:local_password@localhost:5432/dcaguard";
+  "postgresql://postgres:local_password@localhost:5432/dipbot";
 
 let dbInstance: ReturnType<typeof createPostgresConnection> | null = null;
 

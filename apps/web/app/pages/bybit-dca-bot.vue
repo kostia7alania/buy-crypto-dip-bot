@@ -1,7 +1,7 @@
 <script setup lang="ts">
 useSeoMeta({
   title: "Bybit DCA Bot",
-  description: "Risk-first Bybit DCA Bot by DCA Guard.",
+  description: "Risk-first Bybit DCA Bot by Buy Crypto Dip Bot.",
 });
 </script>
 

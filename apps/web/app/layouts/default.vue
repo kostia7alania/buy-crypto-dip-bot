@@ -1,7 +1,7 @@
 <template>
   <div class="app-shell">
     <header class="site-header">
-      <NuxtLink class="brand" to="/">DCA Guard</NuxtLink>
+      <NuxtLink class="brand" to="/">Buy Crypto Dip Bot</NuxtLink>
       <nav class="site-nav" aria-label="Primary navigation">
         <NuxtLink to="/buy-crypto-dip-bot">Dip bot</NuxtLink>
         <NuxtLink to="/crypto-risk-management-bot">Risk</NuxtLink>

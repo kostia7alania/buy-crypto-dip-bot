@@ -25,11 +25,11 @@ version: '3.8'
 services:
   db:
     image: postgres:16-alpine
-    container_name: dca-guard-db
+    container_name: dipbot-db
     ports:
       - '5432:5432'
     environment:
-      POSTGRES_DB: dcaguard
+      POSTGRES_DB: dipbot
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: local_password
     volumes:

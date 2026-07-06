@@ -1,6 +1,6 @@
 # buy-crypto-dip-bot
 
-**DCA Guard** — production-first crypto dip buying automation SaaS.
+**Buy Crypto Dip Bot** — production-first crypto dip buying automation SaaS.
 
 Risk-first system for detecting crypto dips, validating every action through RiskGuard, creating dry-run orders by default, and notifying through Telegram and a Nuxt dashboard.
 
@@ -60,4 +60,4 @@ Full procedure, one-time server bootstrap, rollback, and the security
 checklist: [docs/13_VPS_DEPLOYMENT_RUNBOOK.md](docs/13_VPS_DEPLOYMENT_RUNBOOK.md).
 
 ⚠️ This repo is **public**: real tokens live only in GitHub secrets and the
-server's `/opt/dca-guard/.env` — never in code, compose files, or workflows.
+server's `/opt/buy-crypto-dip-bot/.env` — never in code, compose files, or workflows.

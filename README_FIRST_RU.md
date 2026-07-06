@@ -1,6 +1,6 @@
 # buy-crypto-dip-bot — production-first старт
 
-Crypto-only SaaS **DCA Guard** для risk-first покупки просадок.
+Crypto-only SaaS **Buy Crypto Dip Bot** для risk-first покупки просадок.
 
 ## Стек
 

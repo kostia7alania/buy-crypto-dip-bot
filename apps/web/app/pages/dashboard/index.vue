@@ -15,7 +15,7 @@ const apiOnline = computed(() => risk.value?.apiReachable === true);
     <!-- Header -->
     <header class="ops-dashboard__header">
       <div class="ops-dashboard__header-content">
-        <span class="ops-dashboard__eyebrow">DCA Guard Ops</span>
+        <span class="ops-dashboard__eyebrow">Buy Crypto Dip Bot Ops</span>
         <h1 class="ops-dashboard__title">Real-time Operations</h1>
         <p class="ops-dashboard__summary">
           Monitoring the safety engine, strategy triggers, and simulated order book in real-time.

@@ -2,13 +2,13 @@
 useSeoMeta({
   title: "AI Crypto DCA Bot for Buying the Dip",
   description:
-    "DCA Guard automates risk-first Bitcoin dip buying with dry-run mode, strict limits, audit logs, and Telegram alerts.",
+    "Buy Crypto Dip Bot automates risk-first Bitcoin dip buying with dry-run mode, strict limits, audit logs, and Telegram alerts.",
 });
 </script>
 
 <template>
   <section class="home-hero">
-    <p class="eyebrow">DCA Guard</p>
+    <p class="eyebrow">Buy Crypto Dip Bot</p>
     <h1>AI Crypto DCA Bot for Buying the Dip Safely</h1>
     <p class="summary">
       Detect crypto dips, run every signal through RiskGuard, create dry-run orders first,

@@ -7,6 +7,6 @@ export default defineConfig({
   dbCredentials: {
     url:
       process.env.POSTGRES_CONNECTION_STRING ??
-      "postgresql://postgres:local_password@localhost:5432/dcaguard",
+      "postgresql://postgres:local_password@localhost:5432/dipbot",
   },
 });

@@ -180,7 +180,7 @@ async function runCountdownEdits(
 export async function startRunner() {
   const connectionString =
     process.env.POSTGRES_CONNECTION_STRING ??
-    "postgresql://postgres:local_password@localhost:5432/dcaguard";
+    "postgresql://postgres:local_password@localhost:5432/dipbot";
 
   console.log("Initializing database connection for background runner...");
   const { db, pool } = createPostgresConnection(connectionString);
