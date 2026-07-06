@@ -48,3 +48,16 @@ pnpm lint
 pnpm test
 pnpm check
 ```
+
+## Deployment
+
+`git push` to `main` is the deploy. GitHub Actions builds one Docker image
+(api/bot/web) and pushes it to GHCR; the VPS pulls and restarts — it never
+builds. Controlled by GitHub secrets `VPS_HOST` / `VPS_USER` / `VPS_PASSWORD`
+and the `DEPLOY_ENABLED` variable (the safety switch).
+
+Full procedure, one-time server bootstrap, rollback, and the security
+checklist: [docs/13_VPS_DEPLOYMENT_RUNBOOK.md](docs/13_VPS_DEPLOYMENT_RUNBOOK.md).
+
+⚠️ This repo is **public**: real tokens live only in GitHub secrets and the
+server's `/opt/dca-guard/.env` — never in code, compose files, or workflows.

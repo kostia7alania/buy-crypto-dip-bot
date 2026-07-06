@@ -1,220 +1,100 @@
 # Production VPS Deployment Runbook
 
-This runbook describes the step-by-step process of deploying **DCA Guard** to a virtual private server (VPS) running Ubuntu/Debian, using PostgreSQL in Docker and PM2 to manage the Node.js application cluster.
+How **DCA Guard** ships to the VPS. The server never builds anything — a 1GB
+box cannot build Nuxt. GitHub Actions builds a single Docker image; the VPS
+only pulls and restarts.
 
----
-
-## 1. Prerequisites on the VPS
-
-Log into your VPS via SSH:
-```bash
-ssh user@your_vps_ip
+```
+git push main ──▶ CI (typecheck+lint+test)
+              └─▶ Deploy workflow:
+                    build ──▶ ghcr.io/kostia7alania/buy-crypto-dip-bot:latest + :<sha>
+                    deploy ─▶ ssh VPS: docker compose pull && up -d
 ```
 
-Update system packages and install basic build tools:
-```bash
-sudo apt update && sudo apt upgrade -y
-sudo apt install -y curl git build-essential
-```
+- Workflow: `.github/workflows/deploy.yml`
+- Image: single image, three services (api / bot / web) selected by `command:`
+- Server stack: `/opt/dca-guard/docker-compose.yml` (from `docker-compose.prod.yml`)
+- The GHCR package is public — the VPS pulls anonymously, no `docker login`.
 
-### Install Docker and Docker Compose
-Run the official Docker convenience script:
-```bash
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-sudo usermod -aG docker $USER
-newgrp docker # Activate group membership without logging out
-```
+## 1. GitHub configuration (Settings → Secrets and variables → Actions)
 
-### Install Node.js (v26+) and pnpm (v11+)
-We use `fnm` (Fast Node Manager) to install and run Node:
-```bash
-# Install fnm
-curl -fsSL https://fnm.vercel.app/install | bash
-source ~/.bashrc
+| Kind | Name | Value |
+|---|---|---|
+| Secret | `VPS_HOST` | server IP |
+| Secret | `VPS_USER` | `root` (or a deploy user) |
+| Secret | `VPS_PASSWORD` | SSH password for that user |
+| Secret | `VPS_SSH_KEY` | optional; private key if/when password auth is disabled |
+| Variable | `DEPLOY_ENABLED` | `true` — the safety switch; deploy job is skipped otherwise |
 
-# Install Node.js 26
-fnm install 26
-fnm use 26
+Keep `DEPLOY_ENABLED` unset until the server has been bootstrapped (step 2),
+or the deploy job will fail on a missing `/opt/dca-guard`.
 
-# Install pnpm 11 globally
-npm install -g pnpm@11
-```
-
-### Install PM2 (Process Manager)
-PM2 ensures your Hono API, Telegram Bot, and Nuxt Server run 24/7 and automatically restart after code crashes or VPS reboot:
-```bash
-npm install -g pm2
-```
-
----
-
-## 2. Deploying the Code
-
-### Clone the Repository
-Clone your project onto the VPS (recommended folder: `/var/www/buy-crypto-dip-bot` or your home directory):
-```bash
-git clone <YOUR_GIT_REPOSITORY_URL> buy-crypto-dip-bot
-cd buy-crypto-dip-bot
-```
-
-### Create the Production Environment File (`.env`)
-Create a production `.env` file:
-```bash
-nano .env
-```
-Copy and fill in the following configurations:
-```ini
-# Production DB connection string (connecting to local Docker PG container)
-POSTGRES_CONNECTION_STRING=postgresql://postgres:prod_secure_password@localhost:5432/dcaguard
-
-# Ports and API urls
-PORT=8787
-API_URL=http://localhost:8787
-
-# Live Exchange Configuration (Keep disabled or set up spot keys)
-LIVE_TRADING_ENABLED=false
-BYBIT_API_KEY=YOUR_BYBIT_API_KEY
-BYBIT_API_SECRET=YOUR_BYBIT_API_SECRET
-BYBIT_USE_TESTNET=false
-
-# Telegram Bot
-TELEGRAM_BOT_TOKEN=YOUR_PRODUCTION_BOT_TOKEN
-TELEGRAM_CHAT_ID=YOUR_PERSONAL_CHAT_ID
-
-# Production Site URL (Change to your domain or VPS IP)
-WEB_PUBLIC_SITE_URL=http://your_domain_or_vps_ip
-```
-
----
-
-## 3. Launching the Database
-
-To run PostgreSQL securely inside Docker:
-1. Open the `docker-compose.yml` file and modify the database password to match `prod_secure_password` in your `.env`.
-2. Start the database in detached mode:
-   ```bash
-   docker compose up -d
-   ```
-3. Check that the container is healthy:
-   ```bash
-   docker ps
-   ```
-
----
-
-## 4. Building and Running the Application with PM2
-
-### Install dependencies and build build-artifacts
-```bash
-pnpm install
-pnpm build
-```
-
-### Start Services via PM2
-Rather than using `pnpm dev`, we run the production build files using PM2. 
-
-Create a PM2 configuration file `ecosystem.config.cjs` in the root directory:
-```javascript
-module.exports = {
-  apps: [
-    {
-      name: "dcaguard-api",
-      script: "apps/api/dist/server.js",
-      node_args: "--env-file=.env",
-      env: {
-        NODE_ENV: "production"
-      }
-    },
-    {
-      name: "dcaguard-bot",
-      script: "apps/bot/dist/index.js",
-      node_args: "--env-file=.env",
-      env: {
-        NODE_ENV: "production"
-      }
-    },
-    {
-      name: "dcaguard-web",
-      cwd: "apps/web",
-      script: ".output/server/index.mjs",
-      node_args: "--env-file=../../.env",
-      env: {
-        PORT: 3000,
-        NODE_ENV: "production"
-      }
-    }
-  ]
-};
-```
-
-Launch all services:
-```bash
-pm2 start ecosystem.config.cjs
-```
-
-### Configure PM2 to start on system boot
-```bash
-pm2 startup
-# Copy and execute the command generated by pm2 startup, then run:
-pm2 save
-```
-
-### Monitoring PM2
-- View log feed: `pm2 logs`
-- Check service status: `pm2 status`
-- Monitor resource usage: `pm2 monit`
-
----
-
-## 5. Setting Up Nginx Reverse Proxy (SSL)
-
-To expose your web interface on standard HTTP/HTTPS ports (80/443), set up Nginx:
+## 2. One-time server bootstrap
 
 ```bash
-sudo apt install -y nginx
-sudo nano /etc/nginx/sites-available/dcaguard
+ssh root@<VPS_IP>
+# docker, swap, ufw (22/80/443 only), nginx proxy 80→3000, /opt/dca-guard/.env
+curl -fsSL https://raw.githubusercontent.com/kostia7alania/buy-crypto-dip-bot/main/scripts/vps-bootstrap.sh | bash
+
+cd /opt/dca-guard
+curl -fsSL https://raw.githubusercontent.com/kostia7alania/buy-crypto-dip-bot/main/docker-compose.prod.yml -o docker-compose.yml
+nano .env    # fill TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID
+docker compose up -d
+docker compose ps    # db healthy, api/bot/web running
+curl -s localhost:8787/health
 ```
 
-Paste the server block to forward domain traffic to Nuxt (port 3000):
-```nginx
-server {
-    listen 80;
-    server_name your_domain.com;
+The bootstrap generates strong `POSTGRES_PASSWORD` and `API_KEY` in
+`/opt/dca-guard/.env` automatically. Postgres and the API are reachable only
+from the docker network / localhost — nginx exposes just the web app.
 
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-```
+## 3. Every deploy after that
 
-Enable the configuration and reload Nginx:
+`git push` to `main`. That is the whole procedure. Watch it in the repo's
+Actions tab.
+
+Manual redeploy: Actions → Deploy → Run workflow, or on the server
+`cd /opt/dca-guard && docker compose pull && docker compose up -d`.
+
+## 4. Rollback
+
 ```bash
-sudo ln -s /etc/nginx/sites-available/dcaguard /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
+ssh root@<VPS_IP>
+cd /opt/dca-guard
+# pin the image to the previous commit sha shown in the Actions history
+sed -i 's|buy-crypto-dip-bot:latest|buy-crypto-dip-bot:<previous_sha>|' docker-compose.yml
+docker compose up -d
 ```
 
-### Secure with Let's Encrypt (SSL)
-Install Certbot for automated HTTPS:
+Revert the pin at the next normal deploy.
+
+## 5. Migrating off the legacy PM2 deployment
+
+The first deployments ran from `/var/www/buy-crypto-dip-bot` under PM2 with a
+standalone `dca-guard-db` container. To switch a box that still runs it:
+
 ```bash
-sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d your_domain.com
+~/.local/share/fnm/node-versions/v26.4.0/installation/bin/pm2 delete all
+docker stop dca-guard-db      # keep as backup; volume buy-crypto-dip-bot_pgdata stays
+# then follow step 2
 ```
 
----
+## 6. Domain & TLS (when a domain is pointed at the VPS)
 
-## 6. Deployment Update Workflow
-
-Whenever you push new changes to Github, update your VPS by running:
 ```bash
-git pull
-pnpm install
-pnpm build
-pm2 restart all
+apt-get install -y certbot python3-certbot-nginx
+certbot --nginx -d <domain>
 ```
+
+Then register the domain with @BotFather (`/setdomain`) to enable Telegram
+Login on the dashboard. Prefer a non-.ru TLD; put DNS behind Cloudflare to
+hide the origin IP.
+
+## 7. Security checklist
+
+- [ ] `API_KEY` set in `/opt/dca-guard/.env` (bootstrap does this)
+- [ ] Rotate the VPS password after sharing it anywhere; update `VPS_PASSWORD` secret
+- [ ] `ufw status` → only 22/80/443 (+ your own services) allowed
+- [ ] Postgres is NOT published on a host port (`docker compose ps` shows no 5432 mapping)
+- [ ] `.env` files are chmod 600 and never committed
+- [ ] The repo is public: never put real tokens in code, compose files, or workflows — only in GH secrets and the server `.env`
