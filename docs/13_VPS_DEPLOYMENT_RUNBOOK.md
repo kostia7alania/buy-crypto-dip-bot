@@ -57,7 +57,7 @@ or the deploy job will fail on a missing `/opt/buy-crypto-dip-bot`.
 
 ```bash
 ssh root@<VPS_IP>
-# docker, swap, ufw (22/80/443 only), nginx proxy 80→3000, /opt/buy-crypto-dip-bot/.env
+# docker, swap, ufw, deploy user, Traefik edge proxy, /opt/buy-crypto-dip-bot/.env
 curl -fsSL https://raw.githubusercontent.com/kostia7alania/buy-crypto-dip-bot/main/scripts/vps-bootstrap.sh | bash
 
 cd /opt/buy-crypto-dip-bot
@@ -69,8 +69,38 @@ curl -s localhost:8787/health
 ```
 
 The bootstrap generates strong `POSTGRES_PASSWORD` and `API_KEY` in
-`/opt/buy-crypto-dip-bot/.env` automatically. Postgres and the API are reachable only
-from the docker network / localhost — nginx exposes just the web app.
+`/opt/buy-crypto-dip-bot/.env` automatically. Postgres and the API are
+reachable only from the docker network / localhost.
+
+### Edge proxy: Traefik (all projects on this VPS)
+
+Traefik (`/opt/traefik`, from `infra/traefik/docker-compose.yml`) owns ports
+80 and 2053 and terminates TLS with automatic Let's Encrypt certificates.
+Host nginx is retired. Host port 443 is occupied by an unrelated service, so
+HTTPS rides Cloudflare's alternative port 2053; a Cloudflare **Origin Rule**
+(incoming port 443 → destination port 2053) makes standard
+`https://buy-crypto-dip-bot.com` work. Keep Cloudflare SSL mode **Full**.
+
+Adding the next subdomain/SaaS project needs zero central config — in that
+project's compose:
+
+```yaml
+services:
+  myapp:
+    networks: [default, proxy]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+      - traefik.http.routers.myapp.rule=Host(`dev.buy-crypto-dip-bot.com`)
+      - traefik.http.routers.myapp.entrypoints=websecure
+      - traefik.http.routers.myapp.tls.certresolver=le
+      - traefik.http.services.myapp.loadbalancer.server.port=3000
+networks:
+  proxy:
+    external: true
+```
+
+…plus a proxied A/CNAME record for the subdomain in Cloudflare.
 
 ## 4. Every deploy after that
 
