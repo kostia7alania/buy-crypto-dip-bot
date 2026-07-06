@@ -9,6 +9,19 @@ import { versionRoutes } from "./modules/version/version.route.js";
 
 export const createApp = () => {
   const app = new Hono();
+
+  // API-key guard. Enforced only when API_KEY is set (i.e. on a VPS);
+  // local dev without the variable stays open. /health stays public for
+  // uptime probes.
+  app.use("*", async (c, next) => {
+    const apiKey = process.env.API_KEY;
+    if (!apiKey || c.req.path === "/health") return next();
+    if (c.req.header("x-api-key") !== apiKey) {
+      return c.json({ error: "UNAUTHORIZED" }, 401);
+    }
+    return next();
+  });
+
   app.route("/health", healthRoutes);
   app.route("/version", versionRoutes);
   app.route("/market", marketDataRoutes);
