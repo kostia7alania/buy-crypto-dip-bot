@@ -1,3 +1,4 @@
+import { strategyDefaults } from "@buy-crypto-dip-bot/config";
 import { schema } from "@buy-crypto-dip-bot/db";
 import { createBybitPublicClient } from "@buy-crypto-dip-bot/exchange-bybit";
 import { eq } from "drizzle-orm";
@@ -78,13 +79,7 @@ export const strategiesRoutes = new Hono()
           name: `${symbol} Dip Buying Strategy`,
           symbol,
           mode: "DRY_RUN",
-          config: {
-            thresholdPercent: 1.0,
-            suggestedQuoteAmount: 20,
-            maxDailySpendUsdt: 300,
-            maxWeeklySpendUsdt: 1000,
-            cooldownMinutes: 60,
-          },
+          config: { ...strategyDefaults },
         })
         .returning();
 

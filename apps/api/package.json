@@ -14,6 +14,7 @@
     "valibot": "catalog:",
     "pino": "catalog:",
     "@buy-crypto-dip-bot/shared-types": "workspace:*",
+    "@buy-crypto-dip-bot/config": "workspace:*",
     "@buy-crypto-dip-bot/risk-engine": "workspace:*",
     "@buy-crypto-dip-bot/strategy-engine": "workspace:*",
     "@buy-crypto-dip-bot/exchange-core": "workspace:*",

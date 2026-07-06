@@ -4,7 +4,7 @@ export type RiskDecisionStatus = "APPROVED" | "REJECTED";
 export interface StrategyConfig {
   id: string;
   name: string;
-  symbol: "BTCUSDT";
+  symbol: string;
   mode: TradingMode;
   maxDailySpendUsdt: number;
   maxWeeklySpendUsdt: number;
