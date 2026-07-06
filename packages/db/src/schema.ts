@@ -1,4 +1,5 @@
 import {
+  bigint,
   boolean,
   jsonb,
   numeric,
@@ -8,8 +9,20 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+// Identity is the Telegram account: the bot sees ctx.from.id, the web
+// dashboard receives the same id via Telegram Login Widget / Mini App initData.
+export const users = pgTable("users", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  telegramUserId: text("telegram_user_id").notNull().unique(),
+  telegramChatId: text("telegram_chat_id").notNull(),
+  username: text("username"),
+  firstName: text("first_name"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const strategies = pgTable("strategies", {
   id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").references(() => users.id),
   name: text("name").notNull(),
   symbol: text("symbol").notNull(),
   mode: text("mode").notNull().default("DRY_RUN"),
@@ -38,10 +51,17 @@ export const orders = pgTable("orders", {
   price: numeric("price"),
   status: text("status").notNull(),
   riskDecisionId: uuid("risk_decision_id"),
+  // When a PENDING order becomes due. Execution is DB-driven so pending
+  // orders survive process restarts (no in-memory timers).
+  executeAt: timestamp("execute_at"),
+  // Telegram alert message id, kept so the message can be edited to its
+  // final state even after a restart.
+  tgMessageId: bigint("tg_message_id", { mode: "number" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export const schema = {
+  users,
   strategies,
   auditEvents,
   orders,
