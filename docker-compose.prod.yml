@@ -57,12 +57,37 @@ services:
       NITRO_HOST: 0.0.0.0
     depends_on:
       - api
-    # Localhost-only: nginx terminates 80/443 and proxies here.
-    ports:
-      - "127.0.0.1:3000:3000"
+    networks:
+      - default
+      - proxy
+    # Traefik terminates 80/443 and discovers this service via labels —
+    # no ports are published on the host.
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+      - traefik.http.services.dipbot.loadbalancer.server.port=3000
+      # HTTPS router (Cloudflare -> :2053 via Origin Rule)
+      - traefik.http.routers.dipbot.rule=Host(`buy-crypto-dip-bot.com`) || Host(`www.buy-crypto-dip-bot.com`)
+      - traefik.http.routers.dipbot.entrypoints=websecure
+      - traefik.http.routers.dipbot.tls.certresolver=le
+      - traefik.http.routers.dipbot.middlewares=dipbot-www
+      # Plain-HTTP router: keeps the site up while Cloudflare still reaches
+      # the origin over :80 (before the 443->2053 Origin Rule is in place).
+      - traefik.http.routers.dipbot-http.rule=Host(`buy-crypto-dip-bot.com`) || Host(`www.buy-crypto-dip-bot.com`)
+      - traefik.http.routers.dipbot-http.entrypoints=web
+      # www -> apex
+      - traefik.http.middlewares.dipbot-www.redirectregex.regex=^https://www\.(.*)
+      - traefik.http.middlewares.dipbot-www.redirectregex.replacement=https://$$1
+      - traefik.http.middlewares.dipbot-www.redirectregex.permanent=true
 
 volumes:
   pgdata:
     # Explicit name: survives compose project-dir renames and avoids
     # colliding with volumes from earlier deployment layouts.
     name: dipbot-pgdata
+
+networks:
+  # Shared edge network owned by the Traefik stack (infra/traefik on the VPS).
+  # Every SaaS project on this box joins it and gets routing via labels.
+  proxy:
+    external: true
