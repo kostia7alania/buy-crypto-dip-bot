@@ -3,7 +3,7 @@ const props = defineProps<{
   checked: boolean;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   (e: "change", value: boolean): void;
 }>();
 </script>
@@ -14,7 +14,7 @@ defineEmits<{
       type="checkbox"
       class="ui-switch__input"
       :checked="props.checked"
-      @change="$emit('change', ($event.target as HTMLInputElement).checked)"
+      @change="emit('change', ($event.target as HTMLInputElement).checked)"
     />
     <span class="ui-switch__slider"></span>
   </label>

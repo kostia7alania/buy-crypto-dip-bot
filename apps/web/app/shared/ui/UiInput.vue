@@ -8,7 +8,7 @@ const props = defineProps<{
   suffix?: string;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   (e: "update:modelValue", value: string): void;
   (e: "input", event: Event): void;
 }>();
@@ -22,7 +22,7 @@ defineEmits<{
       :placeholder="props.placeholder"
       :disabled="props.disabled"
       :value="props.modelValue"
-      @input="$emit('update:modelValue', ($event.target as HTMLInputElement).value)"
+      @input="emit('update:modelValue', ($event.target as HTMLInputElement).value)"
       class="ui-input"
       :class="{ 'ui-input--with-suffix': props.suffix }"
     />

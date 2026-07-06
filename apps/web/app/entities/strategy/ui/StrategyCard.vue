@@ -22,7 +22,7 @@ const props = defineProps<{
   editForm: StrategyConfigData | null;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   (e: "toggle"): void;
   (e: "edit"): void;
   (e: "save"): void;
@@ -43,7 +43,7 @@ defineEmits<{
         </span>
         <UiSwitch
           :checked="props.strategy.enabled"
-          @change="$emit('toggle')"
+          @change="emit('toggle')"
         />
       </div>
     </div>
@@ -125,10 +125,10 @@ defineEmits<{
     <!-- Edit Actions -->
     <div class="strategy-card__actions">
       <div v-if="props.isEditing" class="strategy-card__edit-buttons">
-        <button @click="$emit('save')" class="ui-button ui-button--primary ui-button--sm">Save 💾</button>
-        <button @click="$emit('cancel')" class="ui-button ui-button--secondary ui-button--sm">Cancel</button>
+        <button @click="emit('save')" class="ui-button ui-button--primary ui-button--sm">Save 💾</button>
+        <button @click="emit('cancel')" class="ui-button ui-button--secondary ui-button--sm">Cancel</button>
       </div>
-      <button @click="$emit('edit')" v-else class="ui-button ui-button--secondary ui-button--sm ui-button--block">
+      <button @click="emit('edit')" v-else class="ui-button ui-button--secondary ui-button--sm ui-button--block">
         Configure ⚙️
       </button>
     </div>

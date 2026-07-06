@@ -20,6 +20,8 @@
 - Use Valibot for runtime validation.
 - Use Drizzle for database schema and migrations.
 - Vue components must always declare props using `const props = defineProps<...>()`. Implicit props usage is prohibited; in both `<script>` and `<template>`, props must always be accessed explicitly via `props.propName` (e.g. `props.checked`).
+- Vue components must always declare emits using `const emit = defineEmits<...>()`. Implicit emits usage is prohibited; in both `<script>` and `<template>`, emits must always be invoked explicitly via the captured `emit` variable (e.g. `emit('toggle')` instead of `$emit('toggle')`).
+
 
 ## Commands
 
