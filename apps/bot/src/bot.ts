@@ -599,7 +599,10 @@ export const createBot = (token: string) => {
   bot.api
     .setMyCommands([
       { command: "start", description: "Start the bot & get chat ID" },
-      { command: "price", description: "Current price & dip % (e.g. /price ETHUSDT)" },
+      {
+        command: "price",
+        description: "Current price & dip % (e.g. /price ETHUSDT)",
+      },
       { command: "status", description: "Show current trading statistics" },
       { command: "settings", description: "Show and edit configurations" },
       { command: "toggle", description: "Enable/disable strategy execution" },

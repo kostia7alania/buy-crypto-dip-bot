@@ -56,6 +56,9 @@ const connection = computed(() => {
     <!-- Risk Section -->
     <RiskGuardWidget />
 
+    <!-- Simulated PnL: does the strategy actually work? -->
+    <PnlWidget />
+
     <!-- Strategies Section -->
     <StrategyListWidget />
 
