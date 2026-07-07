@@ -37,4 +37,4 @@ COPY --from=build /repo/packages/db/migrations /app/migrations
 ENV DB_MIGRATIONS_DIR=/app/migrations
 
 # Default command is the API; compose overrides for bot/web.
-CMD ["node", "apps/api/dist/server.js"]
+CMD ["node", "apps/api/dist/server.mjs"]

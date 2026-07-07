@@ -12,7 +12,6 @@
     "@hono/node-server": "catalog:",
     "hono": "catalog:",
     "valibot": "catalog:",
-    "pino": "catalog:",
     "@buy-crypto-dip-bot/shared-types": "workspace:*",
     "@buy-crypto-dip-bot/config": "workspace:*",
     "@buy-crypto-dip-bot/risk-engine": "workspace:*",

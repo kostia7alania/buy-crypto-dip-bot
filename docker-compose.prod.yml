@@ -21,7 +21,7 @@ services:
 
   api:
     image: ghcr.io/kostia7alania/buy-crypto-dip-bot:latest
-    command: ["node", "apps/api/dist/server.js"]
+    command: ["node", "apps/api/dist/server.mjs"]
     restart: unless-stopped
     env_file: .env
     environment:
@@ -36,7 +36,7 @@ services:
 
   bot:
     image: ghcr.io/kostia7alania/buy-crypto-dip-bot:latest
-    command: ["node", "apps/bot/dist/index.js"]
+    command: ["node", "apps/bot/dist/index.mjs"]
     restart: unless-stopped
     env_file: .env
     environment:
