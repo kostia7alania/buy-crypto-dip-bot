@@ -52,6 +52,11 @@ jobs:
           script: |
             set -e
             cd /opt/buy-crypto-dip-bot
+            # Sync the compose file from the repo so infra changes (image
+            # tags, service commands, volume mounts) reach the server — the
+            # pulled image alone can't carry them. Secrets stay in the local
+            # .env, which the compose file references but never contains.
+            curl -fsSL https://raw.githubusercontent.com/kostia7alania/buy-crypto-dip-bot/main/docker-compose.prod.yml -o docker-compose.yml
             docker compose pull
             docker compose up -d
             docker image prune -f
