@@ -20,6 +20,21 @@ export default defineNuxtConfig({
     head: {
       htmlAttrs: { lang: "en" },
       titleTemplate: "%s · Buy Crypto Dip Bot",
+      link: [
+        { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+        {
+          rel: "icon",
+          type: "image/png",
+          sizes: "48x48",
+          href: "/favicon-48.png",
+        },
+        {
+          rel: "apple-touch-icon",
+          sizes: "180x180",
+          href: "/apple-touch-icon.png",
+        },
+      ],
+      meta: [{ name: "theme-color", content: "#101214" }],
     },
   },
   vite: {

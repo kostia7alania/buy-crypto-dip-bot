@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Buy Crypto Dip Bot">
+  <title>Buy Crypto Dip Bot</title>
+  <rect width="64" height="64" rx="14" fill="#101214"/>
+  <!-- dip curve: price falls, then rebounds -->
+  <path d="M8 20 L24 40 L32 46 L40 40 L56 16" fill="none" stroke="#67e8f9" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- buy marker at the bottom of the dip -->
+  <circle cx="32" cy="46" r="7" fill="#4ade80"/>
+</svg>

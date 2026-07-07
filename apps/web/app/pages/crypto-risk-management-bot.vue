@@ -37,6 +37,14 @@ const steps = [
 ];
 const faqs = [
   {
+    q: "Is a crypto trading bot safe?",
+    a: "Only as safe as its limits. A bot without spend caps can drain an account on a bug or a bad market. This bot is built the other way around: dry-run by default, hard daily/weekly caps, spot-only keys with no withdrawal permission, and a one-command kill switch.",
+  },
+  {
+    q: "Is a Telegram crypto bot safe?",
+    a: "Telegram is just the interface — safety depends on what the bot can do. This bot never asks for withdrawal-enabled keys, never custodies funds, and every action it takes is capped and logged.",
+  },
+  {
     q: "What does 'risk-first' actually mean here?",
     a: "Every order must pass RiskGuard — spend caps, an allowlist and a cooldown — and the system defaults to dry-run. Safety is the default, not an add-on.",
   },
@@ -58,8 +66,8 @@ const faqs = [
 <template>
   <LandingPage
     eyebrow="Crypto Risk Management Bot"
-    title="Crypto Risk Management Bot"
-    description="A risk-first crypto trading bot where every order passes RiskGuard: spend caps, allowlist, cooldown, dry-run by default, audit logs and a kill switch."
+    title="Is a Crypto Bot Safe? A Risk-Management-First Trading Bot"
+    description="Is a crypto trading bot safe? This one is built risk-first: every order passes spend caps, allowlist and cooldown; dry-run by default, audit logs, kill switch."
     headline="Risk management is the product, not a feature"
     subheadline="Every order passes RiskGuard — spend caps, allowlist and cooldown — with dry-run by default, full audit logs and an instant kill switch."
     :features="features"

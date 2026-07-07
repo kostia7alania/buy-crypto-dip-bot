@@ -23,6 +23,13 @@ const url = computed(
   () => `${config.public.siteUrl}${route.path === "/" ? "" : route.path}`,
 );
 
+// Don't append the site-wide "· Buy Crypto Dip Bot" suffix when the page
+// title already carries the brand (e.g. the homepage) — duplicated brand
+// wastes SERP title width.
+if (props.title.includes("Buy Crypto Dip Bot")) {
+  useHead({ titleTemplate: null });
+}
+
 // Meta + Open Graph / Twitter cards for rich link previews and ranking.
 useSeoMeta({
   title: props.title,

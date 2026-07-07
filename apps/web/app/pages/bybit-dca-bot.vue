@@ -58,9 +58,9 @@ const faqs = [
 <template>
   <LandingPage
     eyebrow="Bybit DCA Bot"
-    title="Bybit DCA Bot"
-    description="A risk-first DCA bot for Bybit spot: dip detection on live Bybit prices, spot-only no-withdrawal keys, dry-run mode and Telegram alerts."
-    headline="A DCA bot built for Bybit spot"
+    title="Bybit DCA Bot via Telegram — Spot Dip Buying, Free"
+    description="A Telegram-native DCA bot for Bybit spot: dip detection on live Bybit prices, spot-only no-withdrawal keys, dry-run mode and instant alerts. Free."
+    headline="The Telegram DCA bot built for Bybit spot"
     subheadline="Dollar-cost average into dips on Bybit with spot-only keys, hard spend limits and a dry-run mode that needs no API keys at all."
     :features="features"
     :steps="steps"

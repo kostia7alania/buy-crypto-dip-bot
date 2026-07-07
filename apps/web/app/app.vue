@@ -12,6 +12,34 @@ const canonical = computed(
 
 useHead({
   link: [{ rel: "canonical", href: canonical }],
+  script: [
+    // Sitewide entity data: who publishes this site and what it is.
+    {
+      type: "application/ld+json",
+      innerHTML: JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        name: "Buy Crypto Dip Bot",
+        url: config.public.siteUrl,
+      }),
+    },
+    {
+      type: "application/ld+json",
+      innerHTML: JSON.stringify({
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        name: "Buy Crypto Dip Bot",
+        url: config.public.siteUrl,
+        logo: `${config.public.siteUrl}/apple-touch-icon.png`,
+      }),
+    },
+  ],
+});
+
+// Default social card for every page (pages can override).
+useSeoMeta({
+  ogImage: `${config.public.siteUrl}/og-image.png`,
+  twitterImage: `${config.public.siteUrl}/og-image.png`,
 });
 </script>
 

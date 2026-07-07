@@ -16,6 +16,14 @@ const features = [
     title: "Full audit trail",
     body: "Every signal, approval, rejection and simulated order is logged and visible on a real-time dashboard.",
   },
+  {
+    title: "Benchmarked honestly",
+    body: "The dashboard compares dip-buying against dumb calendar DCA and buy-and-hold over the same capital — wins and losses shown as they are.",
+  },
+  {
+    title: "Free and self-hostable",
+    body: "Open source, no subscription, no custody. Run it yourself or use the hosted dashboard — you only ever pay exchange fees.",
+  },
 ];
 
 const steps = [
@@ -54,16 +62,24 @@ const faqs = [
     q: "How much does it cost?",
     a: "The bot is free and self-hostable. You only pay normal exchange trading fees if you enable live trading.",
   },
+  {
+    q: "How do I know the strategy actually works?",
+    a: "You watch it prove itself: the dashboard benchmarks your dip-buying against calendar DCA and buy-and-hold with the same capital over the same window. If it lags, you'll see that too — honesty is the feature.",
+  },
+  {
+    q: "Is it safe to connect my exchange account?",
+    a: "You don't have to — paper trading needs no keys at all. Going live uses spot-only Bybit API keys with withdrawals disabled, so the bot can never move funds off the exchange.",
+  },
 ];
 </script>
 
 <template>
   <LandingPage
     eyebrow="Buy Crypto Dip Bot"
-    title="AI Crypto DCA Bot for Buying the Dip"
-    description="Automate risk-first crypto dip buying on Bybit spot: dry-run mode by default, strict spend limits, full audit logs and Telegram alerts."
+    title="Buy Crypto Dip Bot — Risk-First Crypto DCA Bot, Free"
+    description="A free crypto DCA bot that buys the dip safely: paper-trade first on live Bybit prices, hard spend limits, honest benchmarks, Telegram alerts. Built for beginners who don't trust bots."
     headline="Buy the dip safely, prove it works, then trade"
-    subheadline="A risk-first, Telegram-native DCA bot that simulates every dip buy first — so you build trust before you risk a cent."
+    subheadline="A risk-first, Telegram-native crypto DCA bot that paper-trades every dip buy first — so you build trust before you risk a cent."
     :features="features"
     :steps="steps"
     :faqs="faqs"

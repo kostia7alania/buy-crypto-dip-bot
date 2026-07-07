@@ -52,14 +52,18 @@ const faqs = [
     q: "What if Bitcoin keeps falling?",
     a: "Daily and weekly spend limits cap how much it deploys, so a prolonged downtrend can't drain your budget.",
   },
+  {
+    q: "Bitcoin DCA vs lump sum — which is better?",
+    a: "Lump sum wins in steadily rising markets; DCA wins psychologically and in volatile or falling markets by averaging your entry. Dip-triggered DCA aims to improve on calendar DCA by buying only when price is already down — and our dashboard benchmarks all three honestly.",
+  },
 ];
 </script>
 
 <template>
   <LandingPage
     eyebrow="Bitcoin DCA Bot"
-    title="Bitcoin DCA Bot"
-    description="A risk-first Bitcoin DCA bot that accumulates BTC on dips on Bybit spot, with dry-run mode, spend caps and Telegram alerts. No leverage, ever."
+    title="Bitcoin DCA Bot — Auto-Buy BTC Dips, Spot-Only & Free"
+    description="A risk-first Bitcoin DCA bot with a smarter DCA strategy: auto-buy BTC dips on Bybit spot with dry-run simulation, spend caps and Telegram alerts. No leverage."
     headline="Stack Bitcoin on the dips, safely"
     subheadline="Automate BTC dollar-cost averaging with strict limits and a simulation-first workflow — spot only, no leverage, no drama."
     :features="features"

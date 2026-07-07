@@ -52,15 +52,19 @@ const faqs = [
     q: "Do I need to keep my computer on?",
     a: "No. It runs on a server and talks to you through Telegram and a web dashboard.",
   },
+  {
+    q: "What are the best DCA bot settings?",
+    a: "Start conservative: a 1–2% dip threshold, a small fixed buy amount, daily and weekly spend caps you can afford, and a cooldown of at least an hour. Then tune based on dry-run results, not gut feeling.",
+  },
 ];
 </script>
 
 <template>
   <LandingPage
     eyebrow="Crypto DCA Bot"
-    title="Crypto DCA Bot"
-    description="A risk-first crypto DCA bot that dollar-cost averages into dips on Bybit spot, with dry-run mode, spend caps and Telegram alerts."
-    headline="Dollar-cost average into crypto, on autopilot"
+    title="Best Crypto DCA Bot for Beginners — Dry-Run First & Free"
+    description="Looking for the best crypto DCA bot? Ours dollar-cost averages into dips on Bybit spot with dry-run mode, hard spend caps and Telegram alerts — free."
+    headline="A crypto DCA bot built for people who don't trust bots"
     subheadline="Automate DCA into the dips with strict limits and a simulation-first workflow — averaging done safely, not blindly."
     :features="features"
     :steps="steps"

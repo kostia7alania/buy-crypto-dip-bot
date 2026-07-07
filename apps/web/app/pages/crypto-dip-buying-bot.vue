@@ -58,8 +58,8 @@ const faqs = [
 <template>
   <LandingPage
     eyebrow="Crypto Dip Buying Bot"
-    title="Crypto Dip Buying Bot"
-    description="A risk-first crypto dip buying bot on Bybit spot: threshold-based dip detection, cooldown, full audit logs, dry-run mode and Telegram alerts."
+    title="Buy the Dip Bot — Automated Crypto Dip Buying, Free"
+    description="A buy-the-dip bot done right: threshold-based dip detection on Bybit spot, cooldown, full audit logs, dry-run mode and Telegram alerts. Free to run."
     headline="Turn 'buy the dip' into a disciplined rule"
     subheadline="Systematic dip buying with cooldowns, audit logs and hard limits — and a dry-run mode to prove the edge before you risk capital."
     :features="features"
