@@ -91,17 +91,24 @@ serves this. Ship polish, not features.
 
 ## Near-term product backlog (ranked by trust-per-effort)
 
-1. **PnL vs benchmark** — show dip-DCA against "dumb calendar DCA" and
-   "just hold". The single most persuasive number we can render. (PnL widget
-   already lays the groundwork.)
+1. ~~**PnL vs benchmark**~~ — ✅ Shipped 2026-07-07. `/performance` API +
+   dashboard PerformanceWidget + `/performance` bot command compare dip-DCA
+   against calendar-DCA and buy-and-hold over the same capital and window,
+   with a win/lag/mixed verdict.
 2. **Backtesting MVP** — replay historical klines through the existing
-   strategy+risk engines. Highest-credibility, reuses pure core packages.
+   strategy+risk engines. Foundation now in place (`getKlines` on the Bybit
+   adapter + pure `compareToBenchmarks`); next step is a replay harness that
+   runs the strategy over a chosen historical window instead of live ticks.
 3. **Onboarding wizard in Telegram** — `/start` → pick coin → threshold →
    amount → confirm; auto-store chat id. Lower the activation barrier to zero.
 4. **Daily digest** — one Telegram message: dips caught, simulated PnL, vs
-   benchmark. Retention loop.
+   benchmark. Retention loop. (`/performance` copy is reusable here.)
 5. **Telegram Login on the dashboard** — unify bot + web identity (schema
    ready). Unlocks multi-user.
+
+Also shipped 2026-07-07: rich SEO landing pages (reusable LandingPage widget,
+8 unique keyword pages, JSON-LD FAQ + SoftwareApplication, OG/Twitter cards)
+turning the thin placeholder pages into a real acquisition asset.
 
 ## Success metric to watch
 Not MRR yet. **Weeks-a-user-keeps-the-bot-running in dry-run.** If people
