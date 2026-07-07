@@ -75,11 +75,14 @@ reachable only from the docker network / localhost.
 ### Edge proxy: Traefik (all projects on this VPS)
 
 Traefik (`/opt/traefik`, from `infra/traefik/docker-compose.yml`) owns ports
-80 and 2053 and terminates TLS with automatic Let's Encrypt certificates.
-Host nginx is retired. Host port 443 is occupied by an unrelated service, so
-HTTPS rides Cloudflare's alternative port 2053; a Cloudflare **Origin Rule**
-(incoming port 443 → destination port 2053) makes standard
-`https://buy-crypto-dip-bot.com` work. Keep Cloudflare SSL mode **Full**.
+80, 443 and 2053 (fallback) and terminates TLS with automatic Let's Encrypt
+certificates. Host nginx is retired. Keep Cloudflare SSL mode **Full**.
+
+Port 443 is shared with the host's x-ui VPN (xray, VLESS+Reality): xray
+listens on 8443 (firewalled to docker subnets only), and `dynamic.yml`
+routes the Reality SNI plus any unknown SNI to it via L4 TLS passthrough.
+VPN clients keep connecting to :443 — their configs never changed. If you
+edit the x-ui inbound, keep its port at 8443.
 
 Adding the next subdomain/SaaS project needs zero central config — in that
 project's compose:
