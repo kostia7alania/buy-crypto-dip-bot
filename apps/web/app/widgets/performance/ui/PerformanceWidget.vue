@@ -213,6 +213,7 @@ const barWidth = (value: number, p: PerformancePosition) => {
 
 .perf__pnl {
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .perf__pnl--green {

@@ -113,6 +113,7 @@ const pnlClass = (n: number) =>
   font-size: 1.25rem;
   font-weight: 800;
   letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
 }
 
 .pnl__empty {
@@ -180,6 +181,7 @@ const pnlClass = (n: number) =>
   margin: 0;
   color: #cbd5e1;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .pnl__row--main {
