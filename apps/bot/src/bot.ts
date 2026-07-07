@@ -175,6 +175,47 @@ export const createBot = (token: string) => {
     }
   });
 
+  bot.command("performance", async (ctx) => {
+    try {
+      const apiUrl = process.env.API_URL ?? "http://localhost:8787";
+      const apiKey = process.env.API_KEY;
+      const response = await fetch(`${apiUrl}/performance`, {
+        headers: apiKey ? { "x-api-key": apiKey } : {},
+      });
+      if (!response.ok) throw new Error(`API ${response.status}`);
+      const data = (await response.json()) as {
+        positions: Array<{
+          symbol: string;
+          actual: { pnlPercent: number };
+          calendarDca: { pnlPercent: number };
+          hold: { pnlPercent: number };
+        }>;
+      };
+      if (data.positions.length === 0) {
+        return ctx.reply(
+          "📭 No simulated purchases yet — the comparison appears after the first executed dry-run order.",
+        );
+      }
+      const sign = (n: number) => (n >= 0 ? "+" : "");
+      const p2 = (n: number) => `${sign(n)}${n.toFixed(2)}%`;
+      let msg = `📊 *Strategy vs Benchmarks*\n_Same capital, same window_\n\n`;
+      for (const p of data.positions) {
+        const won =
+          p.actual.pnlPercent >= p.calendarDca.pnlPercent &&
+          p.actual.pnlPercent >= p.hold.pnlPercent;
+        msg +=
+          `${won ? "🏆" : "•"} *${p.symbol}*\n` +
+          `  └ Dip buying: \`${p2(p.actual.pnlPercent)}\`\n` +
+          `  └ Calendar DCA: \`${p2(p.calendarDca.pnlPercent)}\`\n` +
+          `  └ Buy & hold: \`${p2(p.hold.pnlPercent)}\`\n\n`;
+      }
+      return ctx.reply(msg, { parse_mode: "Markdown" });
+    } catch (error) {
+      console.error("Failed to fetch performance:", error);
+      return ctx.reply("❌ Failed to fetch performance from the API.");
+    }
+  });
+
   bot.command("pnl", async (ctx) => {
     try {
       const apiUrl = process.env.API_URL ?? "http://localhost:8787";
@@ -695,6 +736,7 @@ export const createBot = (token: string) => {
     .setMyCommands([
       { command: "start", description: "Start the bot & get chat ID" },
       { command: "pnl", description: "Simulated portfolio PnL" },
+      { command: "performance", description: "Dip strategy vs benchmarks" },
       {
         command: "pause_all",
         description: "Kill switch: pause all strategies",

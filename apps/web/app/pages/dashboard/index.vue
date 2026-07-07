@@ -59,6 +59,9 @@ const connection = computed(() => {
     <!-- Simulated PnL: does the strategy actually work? -->
     <PnlWidget />
 
+    <!-- The proof: dip-buying vs naive benchmarks -->
+    <PerformanceWidget />
+
     <!-- Strategies Section -->
     <StrategyListWidget />
 
