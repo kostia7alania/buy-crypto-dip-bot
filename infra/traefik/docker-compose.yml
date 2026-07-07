@@ -4,6 +4,9 @@
 # Any project on this box gets a domain + automatic HTTPS by joining the
 # external "proxy" network and adding traefik labels to its service —
 # no changes here ever needed.
+#
+# Port 443 is shared with the host's x-ui VPN via L4 SNI passthrough
+# (see dynamic.yml): xray listens on 8443, Traefik tunnels non-web SNI to it.
 
 services:
   traefik:
@@ -14,6 +17,7 @@ services:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
       - --providers.docker.network=proxy
+      - --providers.file.filename=/etc/traefik/dynamic.yml
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
       - --certificatesresolvers.le.acme.email=kostia7alania@gmail.com
@@ -22,14 +26,15 @@ services:
       - --log.level=INFO
     ports:
       - "80:80"
-      # Host port 443 is occupied by x-ui (user's VPN) — Traefik takes 2053,
-      # one of Cloudflare's official alternative HTTPS ports. A CF Origin
-      # Rule (incoming 443 -> origin 2053) completes the standard-port setup
-      # without touching x-ui. Once/if x-ui moves off 443, change to 443:443
-      # and enable the web->websecure redirect.
+      - "443:443"
+      # Cloudflare's alternative HTTPS port, kept as a fallback entry.
       - "2053:443"
+    extra_hosts:
+      # Lets the container reach xray on the host (8443).
+      - "host.docker.internal:host-gateway"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./dynamic.yml:/etc/traefik/dynamic.yml:ro
       - letsencrypt:/letsencrypt
     networks:
       - proxy

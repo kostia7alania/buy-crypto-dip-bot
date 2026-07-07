@@ -1,0 +1,24 @@
+# L4 SNI passthrough: the host's x-ui (xray Reality VPN) used to own :443.
+# Traefik now owns :443 and tunnels raw TLS bytes to xray (moved to :8443)
+# for every SNI that is not one of our web domains. Reality clients use
+# SNI www.cloudflare.com; the wildcard also sends scanners to xray's
+# camouflage instead of exposing Traefik.
+tcp:
+  routers:
+    xui-reality:
+      entryPoints: [websecure]
+      rule: HostSNI(`www.cloudflare.com`)
+      tls:
+        passthrough: true
+      service: xui
+    xui-catchall:
+      entryPoints: [websecure]
+      rule: HostSNI(`*`)
+      tls:
+        passthrough: true
+      service: xui
+  services:
+    xui:
+      loadBalancer:
+        servers:
+          - address: "host.docker.internal:8443"
