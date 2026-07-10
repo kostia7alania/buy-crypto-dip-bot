@@ -129,6 +129,107 @@ export const createBot = (token: string) => {
     }
   });
 
+  // Replay the strategy over real history: /backtest [symbol] [days] [threshold%] [amount]
+  bot.command("backtest", async (ctx) => {
+    const parts = ctx.match?.trim().split(/\s+/).filter(Boolean) ?? [];
+    const symbol = (parts[0] ?? "BTCUSDT").toUpperCase();
+    const days = Number(parts[1] ?? 30);
+    const threshold = Number(parts[2] ?? 1.5);
+    const amount = Number(parts[3] ?? 20);
+
+    if (
+      [days, threshold, amount].some((n) => Number.isNaN(n)) ||
+      days < 7 ||
+      days > 120
+    ) {
+      return ctx.reply(
+        "❌ Usage: `/backtest [symbol] [days 7-120] [threshold%] [amount]`\nExample: `/backtest ETHUSDT 60 2 50`",
+        { parse_mode: "Markdown" },
+      );
+    }
+
+    let progress: Awaited<ReturnType<typeof ctx.reply>> | null = null;
+    try {
+      progress = await ctx.reply(
+        `⏳ Replaying ${days} days of ${symbol} history...`,
+      );
+    } catch {
+      /* non-fatal */
+    }
+
+    try {
+      const apiUrl = process.env.API_URL ?? "http://localhost:8787";
+      const apiKey = process.env.API_KEY;
+      const qs = new URLSearchParams({
+        symbol,
+        days: String(days),
+        threshold: String(threshold),
+        amount: String(amount),
+      });
+      const response = await fetch(`${apiUrl}/backtest?${qs}`, {
+        headers: apiKey ? { "x-api-key": apiKey } : {},
+      });
+      if (!response.ok) throw new Error(`API ${response.status}`);
+      const d = (await response.json()) as {
+        tradeCount: number;
+        spentUsdt: number;
+        valueUsdt: number;
+        pnlUsdt: number;
+        pnlPercent: number;
+        benchmarks: {
+          actual: { pnlPercent: number };
+          calendarDca: { pnlPercent: number };
+          hold: { pnlPercent: number };
+        } | null;
+      };
+
+      const sign = (n: number) => (n >= 0 ? "+" : "");
+      let msg =
+        `🧪 *Backtest: ${symbol}, last ${days} days*\n` +
+        `_dip ≥ ${threshold}%, ${amount} USDT per buy_\n\n` +
+        `• *Buys:* \`${d.tradeCount}\`\n` +
+        `• *Invested:* \`${d.spentUsdt.toFixed(2)} USDT\`\n` +
+        `• *End value:* \`${d.valueUsdt.toFixed(2)} USDT\`\n` +
+        `• *Result:* \`${sign(d.pnlUsdt)}${d.pnlUsdt.toFixed(2)} USDT (${sign(d.pnlPercent)}${d.pnlPercent.toFixed(2)}%)\`\n`;
+
+      if (d.benchmarks) {
+        const b = d.benchmarks;
+        msg +=
+          `\n*Same budget, same window:*\n` +
+          `• This strategy: \`${sign(b.actual.pnlPercent)}${b.actual.pnlPercent.toFixed(2)}%\`\n` +
+          `• Calendar DCA: \`${sign(b.calendarDca.pnlPercent)}${b.calendarDca.pnlPercent.toFixed(2)}%\`\n` +
+          `• Buy & hold: \`${sign(b.hold.pnlPercent)}${b.hold.pnlPercent.toFixed(2)}%\`\n`;
+        const beatsDca = b.actual.pnlPercent > b.calendarDca.pnlPercent;
+        const beatsHold = b.actual.pnlPercent > b.hold.pnlPercent;
+        msg +=
+          beatsDca && beatsHold
+            ? `\n✅ Dip-buying beat both benchmarks here.`
+            : !beatsDca && !beatsHold
+              ? `\n🔻 Dip-buying lagged both benchmarks here.`
+              : `\n➖ Mixed: beat ${beatsDca ? "calendar DCA" : "buy & hold"}, lagged the other.`;
+      }
+      msg += `\n\n_Past performance ≠ future results._`;
+
+      if (progress) {
+        await ctx.api
+          .deleteMessage(ctx.chat.id, progress.message_id)
+          .catch(() => {});
+      }
+      return ctx.reply(msg, { parse_mode: "Markdown" });
+    } catch (error) {
+      console.error("Backtest command failed:", error);
+      if (progress) {
+        await ctx.api
+          .deleteMessage(ctx.chat.id, progress.message_id)
+          .catch(() => {});
+      }
+      return ctx.reply(
+        `❌ Backtest failed for *${symbol}*. Check the symbol and try again.`,
+        { parse_mode: "Markdown" },
+      );
+    }
+  });
+
   // Kill switch: instantly pause every strategy (audited).
   bot.command("pause_all", async (ctx) => {
     try {
@@ -736,6 +837,11 @@ export const createBot = (token: string) => {
     .setMyCommands([
       { command: "start", description: "Start the bot & get chat ID" },
       { command: "pnl", description: "Simulated portfolio PnL" },
+      {
+        command: "backtest",
+        description:
+          "Replay strategy over history (e.g. /backtest ETHUSDT 60 2 50)",
+      },
       { command: "performance", description: "Dip strategy vs benchmarks" },
       {
         command: "pause_all",

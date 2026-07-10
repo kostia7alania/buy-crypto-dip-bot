@@ -62,6 +62,9 @@ const connection = computed(() => {
     <!-- The proof: dip-buying vs naive benchmarks -->
     <PerformanceWidget />
 
+    <!-- The time machine: replay the rules over real history -->
+    <BacktestWidget />
+
     <!-- Strategies Section -->
     <StrategyListWidget />
 

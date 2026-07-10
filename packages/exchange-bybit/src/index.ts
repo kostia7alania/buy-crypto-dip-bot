@@ -44,6 +44,9 @@ export const createBybitPublicClient = (
     url.searchParams.set("symbol", query.symbol);
     url.searchParams.set("interval", query.interval);
     url.searchParams.set("limit", String(query.limit ?? 200));
+    if (query.end !== undefined) {
+      url.searchParams.set("end", String(query.end));
+    }
     const response = await fetch(url);
     if (!response.ok)
       throw new Error(`Bybit kline request failed: ${response.status}`);

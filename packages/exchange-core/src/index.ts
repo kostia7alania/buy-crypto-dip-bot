@@ -16,6 +16,9 @@ export interface KlineQuery {
   symbol: string;
   interval: string; // exchange-native, e.g. "D" for daily on Bybit
   limit?: number;
+  // Only candles opening at or before this ms timestamp — the cursor for
+  // paginating further back in history.
+  end?: number;
 }
 export interface ExchangeMarketDataPort {
   getTicker(symbol: string): Promise<MarketTicker>;

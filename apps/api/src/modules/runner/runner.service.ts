@@ -11,14 +11,18 @@ import { createBybitPublicClient } from "@buy-crypto-dip-bot/exchange-bybit";
 import { evaluateRisk } from "@buy-crypto-dip-bot/risk-engine";
 import { evaluateDipStrategy } from "@buy-crypto-dip-bot/strategy-engine";
 import { and, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
+import { computePnlReport } from "../pnl/pnl.route.js";
 
 let tickIntervalId: NodeJS.Timeout | null = null;
 let dueOrdersIntervalId: NodeJS.Timeout | null = null;
+let digestIntervalId: NodeJS.Timeout | null = null;
 
 const RUN_INTERVAL_MS = 30000; // strategy evaluation cadence
 const DUE_ORDERS_POLL_MS = 3000; // how often due PENDING orders are executed
 const COUNTDOWN_STEP_S = 3; // how often the Telegram countdown message is edited
 const COUNTDOWN_BAR_WIDTH = 10;
+const DIGEST_UTC_HOUR = 6; // daily digest ~06:00 UTC (morning in EU/Asia)
+const DIGEST_CHECK_MS = 10 * 60 * 1000;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -151,6 +155,64 @@ async function processDueOrders(db: Db) {
       await editTelegramMessage(order.tgMessageId, successText);
     }
   }
+}
+
+// Daily digest: one Telegram message each morning — what the bot did in the
+// last 24h and where the simulated portfolio stands. The retention loop.
+let lastDigestDay: string | null = null;
+
+async function maybeSendDailyDigest(db: Db) {
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  if (now.getUTCHours() !== DIGEST_UTC_HOUR || lastDigestDay === today) return;
+  lastDigestDay = today;
+
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const buys = await db
+    .select()
+    .from(schema.orders)
+    .where(
+      and(
+        eq(schema.orders.status, "COMPLETED"),
+        eq(schema.orders.side, "BUY"),
+        gte(schema.orders.createdAt, oneDayAgo),
+      ),
+    );
+  const spent24h = buys.reduce((s, o) => s + Number(o.quoteAmount), 0);
+
+  let pnlLine = "";
+  try {
+    const pnl = await computePnlReport(db);
+    if (pnl.totals.spentUsdt > 0) {
+      const sign = pnl.totals.pnlUsdt >= 0 ? "+" : "";
+      pnlLine =
+        `• *Portfolio:* \`${pnl.totals.spentUsdt.toFixed(2)} USDT\` invested, ` +
+        `now \`${pnl.totals.currentValueUsdt.toFixed(2)}\` ` +
+        `(\`${sign}${pnl.totals.pnlUsdt.toFixed(2)} / ${sign}${pnl.totals.pnlPercent.toFixed(2)}%\`)\n`;
+    }
+  } catch (error) {
+    console.error("Digest: PnL computation failed:", error);
+  }
+
+  const bySymbol = new Map<string, number>();
+  for (const o of buys) {
+    bySymbol.set(o.symbol, (bySymbol.get(o.symbol) ?? 0) + 1);
+  }
+  const symbolsLine =
+    bySymbol.size > 0
+      ? `• *Dips caught:* ${[...bySymbol.entries()].map(([s, n]) => `${s}×${n}`).join(", ")}\n`
+      : "";
+
+  const msg =
+    `☕️ *Morning digest*\n\n` +
+    `• *Simulated buys (24h):* \`${buys.length}\`\n` +
+    symbolsLine +
+    `• *Spent (24h):* \`${spent24h.toFixed(2)} USDT\`\n` +
+    pnlLine +
+    `\nSee /pnl, /performance or /backtest for details.`;
+
+  await sendTelegramAlert(msg);
+  console.log("Daily digest sent.");
 }
 
 // Cosmetic live countdown in Telegram. Execution itself is DB-driven in
@@ -498,11 +560,17 @@ export async function startRunner() {
       console.error("Error processing due orders:", err),
     );
   }, DUE_ORDERS_POLL_MS);
+  digestIntervalId = setInterval(() => {
+    maybeSendDailyDigest(db).catch((err) =>
+      console.error("Error sending daily digest:", err),
+    );
+  }, DIGEST_CHECK_MS);
 
   // Close connection pool on process exit
   process.on("SIGTERM", async () => {
     if (tickIntervalId) clearInterval(tickIntervalId);
     if (dueOrdersIntervalId) clearInterval(dueOrdersIntervalId);
+    if (digestIntervalId) clearInterval(digestIntervalId);
     await pool.end();
   });
 }
