@@ -95,14 +95,14 @@ serves this. Ship polish, not features.
    dashboard PerformanceWidget + `/performance` bot command compare dip-DCA
    against calendar-DCA and buy-and-hold over the same capital and window,
    with a win/lag/mixed verdict.
-2. **Backtesting MVP** — replay historical klines through the existing
-   strategy+risk engines. Foundation now in place (`getKlines` on the Bybit
-   adapter + pure `compareToBenchmarks`); next step is a replay harness that
-   runs the strategy over a chosen historical window instead of live ticks.
+2. ~~**Backtesting MVP**~~ — ✅ Shipped 2026-07-08. Pure `runDipBacktest`
+   replay in strategy-engine (production rules over hourly candles),
+   paginated `/backtest` API (up to 120 days), dashboard BacktestWidget
+   with form + verdict, and the `/backtest` bot command.
 3. **Onboarding wizard in Telegram** — `/start` → pick coin → threshold →
    amount → confirm; auto-store chat id. Lower the activation barrier to zero.
-4. **Daily digest** — one Telegram message: dips caught, simulated PnL, vs
-   benchmark. Retention loop. (`/performance` copy is reusable here.)
+4. ~~**Daily digest**~~ — ✅ Shipped 2026-07-08. Runner sends a morning
+   Telegram summary (buys, spent, portfolio PnL) once per day at 06:00 UTC.
 5. **Telegram Login on the dashboard** — unify bot + web identity (schema
    ready). Unlocks multi-user.
 
