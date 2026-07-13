@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted } from "vue";
 import { fetchOrders } from "~/entities/order";
+import { formatMoney } from "~/shared/lib/number-format";
+
+const formatPrice = (value: string) => formatMoney(Number(value));
 
 const { data: orders, refresh: refreshOrders } = await useAsyncData(
   "orders",
@@ -42,7 +45,7 @@ onUnmounted(() => {
           <tr v-for="order in orders" :key="order.id" class="order-ledger__row">
             <td class="order-ledger__symbol">{{ order.symbol }}</td>
             <td class="order-ledger__side order-ledger__side--buy">BUY</td>
-            <td>${{ Number(order.price).toLocaleString(undefined, { minimumFractionDigits: 2 }) }}</td>
+            <td>${{ formatPrice(order.price) }}</td>
             <td>{{ Number(order.quoteAmount).toFixed(2) }} USDT</td>
             <td class="order-ledger__time">
               <NuxtTime :datetime="order.createdAt" hour="2-digit" minute="2-digit" second="2-digit" />

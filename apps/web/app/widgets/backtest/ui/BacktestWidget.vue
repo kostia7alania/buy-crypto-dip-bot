@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import type { BacktestReport } from "~/entities/backtest";
 import { runBacktest } from "~/entities/backtest";
+import { formatMoney } from "~/shared/lib/number-format";
 
 const symbol = ref("BTCUSDT");
 const days = ref(30);
@@ -11,6 +12,20 @@ const amount = ref(20);
 const report = ref<BacktestReport | null>(null);
 const loading = ref(false);
 const error = ref("");
+
+const getStatusMessage = (caught: unknown): string | undefined => {
+  if (
+    typeof caught !== "object" ||
+    caught === null ||
+    !("statusMessage" in caught)
+  ) {
+    return undefined;
+  }
+
+  return typeof caught.statusMessage === "string"
+    ? caught.statusMessage
+    : undefined;
+};
 
 const run = async () => {
   loading.value = true;
@@ -22,10 +37,10 @@ const run = async () => {
       threshold: threshold.value,
       amount: amount.value,
     });
-  } catch (e: any) {
+  } catch (caught) {
     report.value = null;
     error.value =
-      e.statusMessage === "NOT_ENOUGH_HISTORY"
+      getStatusMessage(caught) === "NOT_ENOUGH_HISTORY"
         ? "Not enough price history for this pair."
         : "Backtest failed — check the symbol and try again.";
   } finally {
@@ -33,11 +48,7 @@ const run = async () => {
   }
 };
 
-const money = (n: number) =>
-  n.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+const money = (value: number) => formatMoney(value);
 const sign = (n: number) => (n >= 0 ? "+" : "");
 const pnlClass = (n: number) => (n >= 0 ? "bt__green" : "bt__red");
 

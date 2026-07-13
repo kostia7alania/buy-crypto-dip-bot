@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from "vue";
 import { fetchPnl } from "~/entities/pnl";
+import { formatMoney } from "~/shared/lib/number-format";
 
 const { data: pnl, refresh: refreshPnl } = await useAsyncData("pnl", () =>
   fetchPnl(),
@@ -21,12 +22,7 @@ onUnmounted(() => {
 const totals = computed(() => pnl.value?.totals ?? null);
 const positions = computed(() => pnl.value?.positions ?? []);
 
-const money = (n: number) =>
-  n.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-
+const money = (value: number) => formatMoney(value);
 const sign = (n: number) => (n >= 0 ? "+" : "");
 
 const pnlClass = (n: number) =>

@@ -1,7 +1,9 @@
 export default defineEventHandler(async () => {
+  const observedAt = new Date().toISOString();
+
   try {
     const data = await apiFetch<Record<string, unknown>>("/risk/status");
-    return { ...data, apiReachable: true };
+    return { ...data, apiReachable: true, observedAt };
   } catch (error) {
     console.error(
       "Failed to fetch risk status from API, returning backup:",
@@ -12,10 +14,9 @@ export default defineEventHandler(async () => {
     return {
       mode: "DRY_RUN",
       liveTradingEnabled: false,
-      maxDailySpendUsdt: 20,
-      maxWeeklySpendUsdt: 100,
       orderLikeActionsRequireApproval: true,
       apiReachable: false,
+      observedAt,
     };
   }
 });

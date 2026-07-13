@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from "vue";
+import {
+  getRunnerConnection,
+  type RunnerStatusResponse,
+} from "~/entities/runner";
 
 useSeoMeta({ title: "Dashboard", robots: "noindex,nofollow" });
 
-const { data: risk, refresh: refreshRisk } = await useFetch<{
-  apiReachable?: boolean;
-  runner?: { lastTickAt: string | null; tickIntervalMs: number };
-}>("/api/risk-status", { key: "risk-status" });
+const { data: risk, refresh: refreshRisk } =
+  await useFetch<RunnerStatusResponse>("/api/risk-status", {
+    key: "risk-status",
+  });
 
 let statusInterval: ReturnType<typeof setInterval> | null = null;
 onMounted(() => {
@@ -16,18 +20,7 @@ onUnmounted(() => {
   if (statusInterval) clearInterval(statusInterval);
 });
 
-// Three honest states: API down, API up but trading loop stale, all live.
-const connection = computed(() => {
-  if (risk.value?.apiReachable !== true) {
-    return { state: "offline", label: "API Offline" };
-  }
-  const lastTick = risk.value.runner?.lastTickAt;
-  const interval = risk.value.runner?.tickIntervalMs ?? 30000;
-  if (!lastTick || Date.now() - new Date(lastTick).getTime() > interval * 3) {
-    return { state: "stale", label: "Runner Stale" };
-  }
-  return { state: "live", label: "Live Connection Active" };
-});
+const connection = computed(() => getRunnerConnection(risk.value));
 </script>
 
 <template>

@@ -12,6 +12,7 @@ import { evaluateRisk } from "@buy-crypto-dip-bot/risk-engine";
 import { evaluateDipStrategy } from "@buy-crypto-dip-bot/strategy-engine";
 import { and, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 import { computePnlReport } from "../pnl/pnl.route.js";
+import { buildPendingText, getCountdownSecondsLeft } from "./countdown.js";
 
 let tickIntervalId: NodeJS.Timeout | null = null;
 let dueOrdersIntervalId: NodeJS.Timeout | null = null;
@@ -19,8 +20,7 @@ let digestIntervalId: NodeJS.Timeout | null = null;
 
 const RUN_INTERVAL_MS = 30000; // strategy evaluation cadence
 const DUE_ORDERS_POLL_MS = 3000; // how often due PENDING orders are executed
-const COUNTDOWN_STEP_S = 3; // how often the Telegram countdown message is edited
-const COUNTDOWN_BAR_WIDTH = 10;
+const COUNTDOWN_TICK_MS = 1000; // Telegram's documented per-chat limit is 1 message/s
 const DIGEST_UTC_HOUR = 6; // daily digest ~06:00 UTC (morning in EU/Asia)
 const DIGEST_CHECK_MS = 10 * 60 * 1000;
 
@@ -70,30 +70,6 @@ async function seedDefaultStrategyIfNeeded(db: Db) {
     }
   }
 }
-
-const buildPendingText = (
-  strategyName: string,
-  symbol: string,
-  price: number,
-  quoteAmount: number,
-  secondsLeft: number,
-) => {
-  const total = orderExecutionDelaySeconds;
-  const filled = Math.min(
-    COUNTDOWN_BAR_WIDTH,
-    Math.round(((total - secondsLeft) / total) * COUNTDOWN_BAR_WIDTH),
-  );
-  const bar = "▓".repeat(filled) + "░".repeat(COUNTDOWN_BAR_WIDTH - filled);
-  return (
-    `🚨 *Pending Buy Alert*\n\n` +
-    `• *Strategy:* ${strategyName}\n` +
-    `• *Symbol:* ${symbol}\n` +
-    `• *Price:* $${price.toLocaleString()}\n` +
-    `• *Amount:* ${quoteAmount} USDT\n` +
-    `• *Status:* ⏳ Executing in *${secondsLeft}s*\n` +
-    `\`${bar}\``
-  );
-};
 
 // Executes every PENDING order whose execute_at has passed. DB-driven so
 // orders survive restarts; the atomic status flip below also guards against
@@ -225,13 +201,14 @@ async function runCountdownEdits(
   textFor: (secondsLeft: number) => string,
 ) {
   try {
+    let lastRenderedSeconds = getCountdownSecondsLeft(executeAt);
+
     while (true) {
-      await sleep(COUNTDOWN_STEP_S * 1000);
-      const secondsLeft = Math.max(
-        0,
-        Math.round((executeAt.getTime() - Date.now()) / 1000),
-      );
+      await sleep(COUNTDOWN_TICK_MS);
+      const secondsLeft = getCountdownSecondsLeft(executeAt);
       if (secondsLeft <= 0) return;
+      if (secondsLeft === lastRenderedSeconds) continue;
+      lastRenderedSeconds = secondsLeft;
 
       // Stop if the order was cancelled or force-executed meanwhile
       const [currentOrder] = await db
@@ -241,7 +218,14 @@ async function runCountdownEdits(
         .limit(1);
       if (currentOrder?.status !== "PENDING") return;
 
-      await editTelegramMessage(messageId, textFor(secondsLeft), orderId);
+      const retryAfterSeconds = await editTelegramMessage(
+        messageId,
+        textFor(secondsLeft),
+        orderId,
+      );
+      if (retryAfterSeconds) {
+        await sleep(retryAfterSeconds * 1000);
+      }
     }
   } catch (err) {
     console.error("Countdown edit loop failed:", err);
@@ -535,7 +519,7 @@ export async function startRunner() {
                 .where(eq(schema.orders.id, order.id));
 
               // Fire-and-forget: cosmetic countdown edits
-              runCountdownEdits(
+              void runCountdownEdits(
                 db,
                 order.id,
                 alert.messageId,
@@ -647,10 +631,10 @@ async function editTelegramMessage(
   // When provided, keeps the Cancel/Buy Now buttons attached — Telegram
   // drops reply_markup on every edit unless it is sent again.
   keepButtonsForOrderId?: string,
-): Promise<void> {
+): Promise<number | null> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
-  if (!token || !chatId || !messageId) return;
+  if (!token || !chatId || !messageId) return null;
 
   const url = `https://api.telegram.org/bot${token}/editMessageText`;
   try {
@@ -667,10 +651,22 @@ async function editTelegramMessage(
           : {}),
       }),
     });
-    if (!response.ok) {
-      console.error(`Telegram message edit failed: ${response.statusText}`);
+    if (response.ok) return null;
+
+    if (response.status === 429) {
+      const payload = (await response.json().catch(() => null)) as {
+        parameters?: { retry_after?: number };
+      } | null;
+      const retryAfterSeconds = payload?.parameters?.retry_after ?? 1;
+      console.warn(
+        `Telegram countdown rate-limited; retrying after ${retryAfterSeconds}s`,
+      );
+      return retryAfterSeconds;
     }
+
+    console.error(`Telegram message edit failed: ${response.statusText}`);
   } catch (error) {
     console.error("Failed to edit Telegram message:", error);
   }
+  return null;
 }

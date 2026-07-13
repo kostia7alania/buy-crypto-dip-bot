@@ -2,8 +2,6 @@
 interface RiskStatus {
   mode: string;
   liveTradingEnabled: boolean;
-  maxDailySpendUsdt: number;
-  maxWeeklySpendUsdt: number;
   orderLikeActionsRequireApproval: boolean;
 }
 
@@ -30,8 +28,10 @@ const { data: risk } = await useFetch<RiskStatus>("/api/risk-status", {
         </dd>
       </div>
       <div class="risk-guard__card">
-        <dt class="risk-guard__label">Daily Max Spend Limit</dt>
-        <dd class="risk-guard__value">{{ risk?.maxDailySpendUsdt ?? 20 }} USDT</dd>
+        <dt class="risk-guard__label">Order Approval Gate</dt>
+        <dd class="risk-guard__value risk-guard__value--cyan">
+          {{ risk?.orderLikeActionsRequireApproval === false ? 'BYPASSED' : 'REQUIRED' }}
+        </dd>
       </div>
     </dl>
   </section>
