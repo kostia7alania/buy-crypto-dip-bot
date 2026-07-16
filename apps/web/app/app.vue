@@ -10,9 +10,23 @@ const canonical = computed(
   () => `${config.public.siteUrl}${route.path === "/" ? "" : route.path}`,
 );
 
+// GA4 only ships in production builds — dev traffic shouldn't pollute analytics.
+const gaScripts = import.meta.env.PROD
+  ? [
+      {
+        src: `https://www.googletagmanager.com/gtag/js?id=${config.public.gaId}`,
+        async: true,
+      },
+      {
+        innerHTML: `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${config.public.gaId}');`,
+      },
+    ]
+  : [];
+
 useHead({
   link: [{ rel: "canonical", href: canonical }],
   script: [
+    ...gaScripts,
     // Sitewide entity data: who publishes this site and what it is.
     {
       type: "application/ld+json",

@@ -14,6 +14,10 @@ export default defineNuxtConfig({
     public: {
       // Overridable via NUXT_PUBLIC_SITE_URL
       siteUrl: "https://buy-crypto-dip-bot.com",
+      // GA4 Measurement ID. Overridable via NUXT_PUBLIC_GA_ID.
+      // Placeholder until a real ID is set — replace before relying on analytics.
+      // Only loaded in production builds — see app/app.vue.
+      gaId: "G-XXXXXXXXXX",
     },
   },
   app: {
