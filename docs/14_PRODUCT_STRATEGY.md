@@ -99,8 +99,10 @@ serves this. Ship polish, not features.
    replay in strategy-engine (production rules over hourly candles),
    paginated `/backtest` API (up to 120 days), dashboard BacktestWidget
    with form + verdict, and the `/backtest` bot command.
-3. **Onboarding wizard in Telegram** — `/start` → pick coin → threshold →
-   amount → confirm; auto-store chat id. Lower the activation barrier to zero.
+3. ~~**Onboarding wizard in Telegram**~~ — ✅ Shipped 2026-07-19. `/start`
+   shows a three-step inline-keyboard wizard (coin → dip threshold → buy
+   amount → confirm) that enables a dry-run strategy and writes an audit
+   event; chat id auto-stored. Stateless: step state lives in callback data.
 4. ~~**Daily digest**~~ — ✅ Shipped 2026-07-08. Runner sends a morning
    Telegram summary (buys, spent, portfolio PnL) once per day at 06:00 UTC.
 5. **Telegram Login on the dashboard** — unify bot + web identity (schema

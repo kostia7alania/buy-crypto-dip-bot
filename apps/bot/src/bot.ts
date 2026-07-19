@@ -3,9 +3,12 @@ import { createBybitPublicClient } from "@buy-crypto-dip-bot/exchange-bybit";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { Bot } from "grammy";
 import { getDb } from "./db.js";
+import { registerOnboardingWizard, startKeyboard } from "./onboarding.js";
 
 export const createBot = (token: string) => {
   const bot = new Bot(token);
+
+  registerOnboardingWizard(bot);
 
   bot.command("start", async (ctx) => {
     const chatId = ctx.chat.id;
@@ -36,11 +39,17 @@ export const createBot = (token: string) => {
 
     const msg =
       `🤖 *Buy Crypto Dip Bot Started*\n\n` +
-      `Your Chat ID: \`${chatId}\`\n\n` +
-      `To receive live notifications, configure this in your \`.env\` file:\n` +
-      `\`TELEGRAM_CHAT_ID=${chatId}\``;
+      `I watch for price dips and simulate buys in \`DRY_RUN\` mode — ` +
+      `no real money is ever spent by default.\n\n` +
+      `Tap the button below to set up your first dip strategy in ` +
+      `three quick steps.\n\n` +
+      `Your Chat ID: \`${chatId}\`\n` +
+      `For notifications, set in \`.env\`: \`TELEGRAM_CHAT_ID=${chatId}\``;
 
-    return ctx.reply(msg, { parse_mode: "Markdown" });
+    return ctx.reply(msg, {
+      parse_mode: "Markdown",
+      reply_markup: startKeyboard(),
+    });
   });
 
   bot.command("status", async (ctx) => {
@@ -835,7 +844,7 @@ export const createBot = (token: string) => {
   // Register command hints with Telegram
   bot.api
     .setMyCommands([
-      { command: "start", description: "Start the bot & get chat ID" },
+      { command: "start", description: "Start & set up a dip strategy" },
       { command: "pnl", description: "Simulated portfolio PnL" },
       {
         command: "backtest",

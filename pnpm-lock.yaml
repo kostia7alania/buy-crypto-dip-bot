@@ -144,6 +144,9 @@ importers:
 
   apps/bot:
     dependencies:
+      '@buy-crypto-dip-bot/config':
+        specifier: workspace:*
+        version: link:../../packages/config
       '@buy-crypto-dip-bot/db':
         specifier: workspace:*
         version: link:../../packages/db
