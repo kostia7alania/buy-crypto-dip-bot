@@ -105,8 +105,12 @@ serves this. Ship polish, not features.
    event; chat id auto-stored. Stateless: step state lives in callback data.
 4. ~~**Daily digest**~~ — ✅ Shipped 2026-07-08. Runner sends a morning
    Telegram summary (buys, spent, portfolio PnL) once per day at 06:00 UTC.
-5. **Telegram Login on the dashboard** — unify bot + web identity (schema
-   ready). Unlocks multi-user.
+5. ~~**Telegram Login on the dashboard**~~ — ✅ Shipped 2026-07-19
+   (ExecPlan 003). Official Login Widget in the dashboard header; the API
+   verifies the payload (HMAC per Telegram spec) and upserts the same
+   `users` row the bot writes, the BFF keeps a sealed session cookie.
+   Requires `NUXT_PUBLIC_TELEGRAM_BOT_USERNAME` + BotFather `/setdomain`.
+   Unlocks multi-user.
 
 Also shipped 2026-07-07: rich SEO landing pages (reusable LandingPage widget,
 8 unique keyword pages, JSON-LD FAQ + SoftwareApplication, OG/Twitter cards)

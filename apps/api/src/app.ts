@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { auditRoutes } from "./modules/audit/audit.route.js";
+import { authRoutes } from "./modules/auth/auth.route.js";
 import { backtestRoutes } from "./modules/backtest/backtest.route.js";
 import { healthRoutes } from "./modules/health/health.route.js";
 import { marketDataRoutes } from "./modules/market-data/market-data.route.js";
@@ -34,6 +35,7 @@ export const createApp = () => {
   app.route("/performance", performanceRoutes);
   app.route("/backtest", backtestRoutes);
   app.route("/audit", auditRoutes);
+  app.route("/auth", authRoutes);
   app.route("/strategies", strategiesRoutes);
   return app;
 };

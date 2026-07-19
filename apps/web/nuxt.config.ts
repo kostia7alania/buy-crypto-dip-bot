@@ -18,6 +18,11 @@ export default defineNuxtConfig({
       // Placeholder until a real ID is set — replace before relying on analytics.
       // Only loaded in production builds — see app/app.vue.
       gaId: "G-XXXXXXXXXX",
+      // Bot username (without @) for the Telegram Login Widget on the
+      // dashboard. Overridable via NUXT_PUBLIC_TELEGRAM_BOT_USERNAME.
+      // Empty = the login button is hidden. The widget also requires
+      // /setdomain to be configured in BotFather for the site domain.
+      telegramBotUsername: "",
     },
   },
   app: {

@@ -34,15 +34,18 @@ const connection = computed(() => getRunnerConnection(risk.value));
           Monitoring the safety engine, strategy triggers, and simulated order book in real-time.
         </p>
       </div>
-      <div
-        class="ops-dashboard__status"
-        :class="`ops-dashboard__status--${connection.state}`"
-      >
+      <div class="ops-dashboard__header-side">
+        <TelegramLoginWidget />
         <div
-          class="ops-dashboard__pulse-dot"
-          :class="`ops-dashboard__pulse-dot--${connection.state}`"
-        ></div>
-        <span>{{ connection.label }}</span>
+          class="ops-dashboard__status"
+          :class="`ops-dashboard__status--${connection.state}`"
+        >
+          <div
+            class="ops-dashboard__pulse-dot"
+            :class="`ops-dashboard__pulse-dot--${connection.state}`"
+          ></div>
+          <span>{{ connection.label }}</span>
+        </div>
       </div>
     </header>
 
@@ -116,6 +119,13 @@ const connection = computed(() => getRunnerConnection(risk.value));
   color: #94a3b8;
   font-size: 1.1rem;
   line-height: 1.6;
+}
+
+.ops-dashboard__header-side {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
 }
 
 .ops-dashboard__status {
