@@ -2,15 +2,15 @@
 const features = [
   {
     title: "Native Bybit spot",
-    body: "Prices come straight from Bybit's public API; live trading uses your own spot-only Bybit keys.",
+    body: "Prices come from Bybit's public spot API; the current release does not connect private trading keys.",
   },
   {
-    title: "No withdrawal access",
-    body: "Connect with keys that can trade but never withdraw. The bot can't move your funds off the exchange.",
+    title: "No custody or private keys",
+    body: "The bot cannot move funds or place exchange orders because it reads public market data only.",
   },
   {
     title: "Dry-run first",
-    body: "Simulate DCA on real Bybit prices before you enable a single live order.",
+    body: "Simulate DCA against observed Bybit prices without enabling any live order path.",
   },
   {
     title: "Telegram control",
@@ -31,18 +31,18 @@ const steps = [
     body: "RiskGuard enforces limits and cooldowns; dry-run orders come with a Telegram cancel window.",
   },
   {
-    title: "Go live when ready",
-    body: "Add spot-only, no-withdrawal keys to enable capped live trading.",
+    title: "Review the evidence",
+    body: "Use simulated PnL, benchmarks and audit history to evaluate the rules. Live trading is outside this release.",
   },
 ];
 const faqs = [
   {
     q: "Does it work with Bybit spot?",
-    a: "Yes. Bybit spot is the first and default exchange. Market data uses Bybit's public API and live trading uses your Bybit spot keys.",
+    a: "Yes for public spot market data and dry-run simulation. The released product does not submit orders to Bybit.",
   },
   {
     q: "What API permissions do I need?",
-    a: "Spot trading only, with withdrawals disabled. The bot never needs — and should never be given — withdrawal permission.",
+    a: "None. Do not provide an exchange key to the current release; it uses Bybit's public market-data endpoints.",
   },
   {
     q: "Can I test without live keys?",
@@ -59,9 +59,9 @@ const faqs = [
   <LandingPage
     eyebrow="Bybit DCA Bot"
     title="Bybit DCA Bot via Telegram — Spot Dip Buying, Free"
-    description="A Telegram-native DCA bot for Bybit spot: dip detection on live Bybit prices, spot-only no-withdrawal keys, dry-run mode and instant alerts. Free."
+    description="A Telegram-native Bybit DCA simulator: dip detection on public spot prices, dry-run orders, spend limits and alerts without private exchange keys."
     headline="The Telegram DCA bot built for Bybit spot"
-    subheadline="Dollar-cost average into dips on Bybit with spot-only keys, hard spend limits and a dry-run mode that needs no API keys at all."
+    subheadline="Simulate dollar-cost averaging into Bybit dips with hard spend limits, audit history and no private API keys."
     :features="features"
     :steps="steps"
     :faqs="faqs"

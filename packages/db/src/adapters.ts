@@ -7,9 +7,13 @@ import { schema } from "./schema.js";
 
 export type DatabaseRuntime = "production" | "local" | "test";
 export type DatabaseDialect = "postgresql";
+export type DatabaseClient = ReturnType<typeof drizzle<typeof schema>>;
+export type DatabaseTransaction = Parameters<
+  Parameters<DatabaseClient["transaction"]>[0]
+>[0];
 
 export interface DatabaseConnection {
-  db: ReturnType<typeof drizzle<typeof schema>>;
+  db: DatabaseClient;
   pool: pg.Pool;
 }
 
@@ -29,9 +33,7 @@ export const createPostgresConnection = (
   return { db, pool };
 };
 
-export const runMigrations = async (
-  db: ReturnType<typeof drizzle<typeof schema>>,
-): Promise<void> => {
+export const runMigrations = async (db: DatabaseClient): Promise<void> => {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
   // In production the app is bundled, so the relative path from this file no

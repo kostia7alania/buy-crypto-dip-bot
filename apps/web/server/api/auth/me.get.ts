@@ -1,6 +1,6 @@
-import { useAppSession } from "../../utils/session.js";
+import { readAppPrincipal } from "../../utils/require-user.js";
 
 export default defineEventHandler(async (event) => {
-  const session = await useAppSession(event);
-  return { user: session.data.user ?? null };
+  const user = await readAppPrincipal(event);
+  return { user };
 });

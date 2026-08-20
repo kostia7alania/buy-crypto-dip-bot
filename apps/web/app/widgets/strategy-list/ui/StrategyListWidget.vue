@@ -1,31 +1,19 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from "vue";
+import { ref } from "vue";
 import {
   createStrategy,
-  fetchStrategies,
   type Strategy,
   type StrategyConfigData,
   updateStrategy,
 } from "~/entities/strategy";
 
-const { data: strategies, refresh: refreshStrategies } = await useAsyncData(
-  "strategies",
-  () => fetchStrategies(),
-);
+const props = defineProps<{
+  strategies: readonly Strategy[];
+}>();
 
-let pollingInterval: ReturnType<typeof setInterval> | null = null;
-
-onMounted(() => {
-  pollingInterval = setInterval(() => {
-    if (editingId.value === null) {
-      refreshStrategies();
-    }
-  }, 5000);
-});
-
-onUnmounted(() => {
-  if (pollingInterval) clearInterval(pollingInterval);
-});
+const emit = defineEmits<{
+  mutated: [];
+}>();
 
 // Editing state for strategy config
 const editingId = ref<string | null>(null);
@@ -55,7 +43,7 @@ const saveEdit = async (strategyId: string) => {
     });
     editingId.value = null;
     editForm.value = null;
-    await refreshStrategies();
+    emit("mutated");
   } catch (error: any) {
     alert(`Failed to save strategy: ${error.statusMessage || error.message}`);
   }
@@ -66,7 +54,7 @@ const toggleStrategy = async (strategy: Strategy) => {
     await updateStrategy(strategy.id, {
       enabled: !strategy.enabled,
     });
-    await refreshStrategies();
+    emit("mutated");
   } catch (error: any) {
     alert(`Failed to toggle strategy: ${error.statusMessage || error.message}`);
   }
@@ -86,7 +74,7 @@ const addCustomPair = async () => {
   try {
     await createStrategy(symbol);
     newSymbol.value = "";
-    await refreshStrategies();
+    emit("mutated");
   } catch (error: any) {
     addError.value =
       error.statusMessage || error.message || "Failed to add strategy";
@@ -119,7 +107,7 @@ const addCustomPair = async () => {
 
     <div class="strategy-list__grid">
       <StrategyCard
-        v-for="strategy in strategies"
+        v-for="strategy in props.strategies"
         :key="strategy.id"
         :strategy="strategy"
         :is-editing="editingId === strategy.id"

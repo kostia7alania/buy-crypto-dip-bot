@@ -1,26 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from "vue";
-import { fetchPnl } from "~/entities/pnl";
+import { computed } from "vue";
+import type { PnlReport } from "~/entities/pnl";
 import { formatMoney } from "~/shared/lib/number-format";
 
-const { data: pnl, refresh: refreshPnl } = await useAsyncData("pnl", () =>
-  fetchPnl(),
-);
+const props = defineProps<{
+  pnl?: PnlReport;
+}>();
 
-let pollingInterval: ReturnType<typeof setInterval> | null = null;
-
-onMounted(() => {
-  pollingInterval = setInterval(() => {
-    refreshPnl();
-  }, 15000);
-});
-
-onUnmounted(() => {
-  if (pollingInterval) clearInterval(pollingInterval);
-});
-
-const totals = computed(() => pnl.value?.totals ?? null);
-const positions = computed(() => pnl.value?.positions ?? []);
+const totals = computed(() => props.pnl?.totals ?? null);
+const positions = computed(() => props.pnl?.positions ?? []);
 
 const money = (value: number) => formatMoney(value);
 const sign = (n: number) => (n >= 0 ? "+" : "");

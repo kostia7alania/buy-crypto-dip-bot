@@ -2,11 +2,11 @@
 const features = [
   {
     title: "Built for Bitcoin",
-    body: "Accumulate BTC on dips with a rule you control — threshold, size and limits — instead of guessing the bottom.",
+    body: "Simulate BTC dip accumulation with a rule you control: threshold, size and limits instead of guessing the bottom.",
   },
   {
-    title: "Spot only, no leverage",
-    body: "Just spot Bitcoin. No futures, no liquidations, no margin calls — accumulation the boring, safe way.",
+    title: "Spot market data, no leverage",
+    body: "The current engine reads public BTCUSDT spot data and models buys only. It has no futures, margin or live-order adapter.",
   },
   {
     title: "Simulated first",
@@ -42,15 +42,15 @@ const faqs = [
   },
   {
     q: "Does it hold my Bitcoin?",
-    a: "No. In live mode it trades on your own Bybit account with spot-only, no-withdrawal keys. It never custodies funds.",
+    a: "No. The current release does not connect to a private Bybit account, execute orders or custody Bitcoin. Every recorded buy is simulated.",
   },
   {
     q: "Can it use leverage on Bitcoin?",
-    a: "No. It is spot-only by design — there is no margin, futures or liquidation risk.",
+    a: "No. It models a spot-only accumulation strategy and has no margin, futures or live execution path.",
   },
   {
     q: "What if Bitcoin keeps falling?",
-    a: "Daily and weekly spend limits cap how much it deploys, so a prolonged downtrend can't drain your budget.",
+    a: "Daily and weekly limits cap simulated allocation. They do not stop Bitcoin from falling or turn the strategy into a profit guarantee.",
   },
   {
     q: "Bitcoin DCA vs lump sum — which is better?",
@@ -62,10 +62,10 @@ const faqs = [
 <template>
   <LandingPage
     eyebrow="Bitcoin DCA Bot"
-    title="Bitcoin DCA Bot — Auto-Buy BTC Dips, Spot-Only & Free"
-    description="A risk-first Bitcoin DCA bot with a smarter DCA strategy: auto-buy BTC dips on Bybit spot with dry-run simulation, spend caps and Telegram alerts. No leverage."
-    headline="Stack Bitcoin on the dips, safely"
-    subheadline="Automate BTC dollar-cost averaging with strict limits and a simulation-first workflow — spot only, no leverage, no drama."
+    title="Bitcoin DCA Bot - Simulate BTC Dip Buys for Free"
+    description="A risk-first Bitcoin DCA simulator: model BTC dip buys on public Bybit spot prices with spend caps, benchmarks and Telegram alerts. No leverage or live orders."
+    headline="Test a rule for stacking Bitcoin on dips"
+    subheadline="Simulate BTC dollar-cost averaging with strict limits and current spot data before putting exchange funds at risk."
     :features="features"
     :steps="steps"
     :faqs="faqs"

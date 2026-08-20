@@ -1,13 +1,9 @@
 <script setup lang="ts">
-interface RiskStatus {
-  mode: string;
-  liveTradingEnabled: boolean;
-  orderLikeActionsRequireApproval: boolean;
-}
+import type { DashboardRiskStatus } from "~/entities/dashboard-snapshot";
 
-const { data: risk } = await useFetch<RiskStatus>("/api/risk-status", {
-  key: "risk-status",
-});
+const props = defineProps<{
+  risk?: DashboardRiskStatus;
+}>();
 </script>
 
 <template>
@@ -16,21 +12,21 @@ const { data: risk } = await useFetch<RiskStatus>("/api/risk-status", {
     <dl class="risk-guard__grid">
       <div class="risk-guard__card">
         <dt class="risk-guard__label">System Mode</dt>
-        <dd class="risk-guard__value risk-guard__value--cyan">{{ risk?.mode ?? 'DRY_RUN' }}</dd>
+        <dd class="risk-guard__value risk-guard__value--cyan">{{ props.risk?.mode ?? 'DRY_RUN' }}</dd>
       </div>
       <div class="risk-guard__card">
         <dt class="risk-guard__label">Live Trading Status</dt>
         <dd
           class="risk-guard__value"
-          :class="risk?.liveTradingEnabled ? 'risk-guard__value--green' : 'risk-guard__value--red'"
+          :class="props.risk?.liveTradingEnabled ? 'risk-guard__value--green' : 'risk-guard__value--red'"
         >
-          {{ risk?.liveTradingEnabled ? 'ENABLED' : 'DISABLED' }}
+          {{ props.risk?.liveTradingEnabled ? 'ENABLED' : 'DISABLED' }}
         </dd>
       </div>
       <div class="risk-guard__card">
         <dt class="risk-guard__label">Order Approval Gate</dt>
         <dd class="risk-guard__value risk-guard__value--cyan">
-          {{ risk?.orderLikeActionsRequireApproval === false ? 'BYPASSED' : 'REQUIRED' }}
+          {{ props.risk?.orderLikeActionsRequireApproval === false ? 'BYPASSED' : 'REQUIRED' }}
         </dd>
       </div>
     </dl>

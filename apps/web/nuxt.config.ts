@@ -1,9 +1,56 @@
+import { seoRoutes } from "@buy-crypto-dip-bot/seo-keywords";
 import tailwindcss from "@tailwindcss/vite";
+
+const publicRouteRules = Object.fromEntries(
+  seoRoutes.map((route) => [
+    route,
+    {
+      prerender: true,
+      headers: {
+        "cache-control":
+          "public, max-age=0, s-maxage=3600, stale-while-revalidate=86400",
+      },
+    },
+  ]),
+);
+
+const dashboardHeaders = {
+  "cache-control": "private, no-store",
+  "x-robots-tag": "noindex, nofollow, noarchive",
+};
 
 export default defineNuxtConfig({
   compatibilityDate: "2026-07-04",
   devtools: { enabled: true },
   typescript: { strict: true },
+  routeRules: {
+    ...publicRouteRules,
+    "/robots.txt": {
+      prerender: true,
+      headers: { "cache-control": "public, max-age=0, s-maxage=3600" },
+    },
+    "/sitemap.xml": {
+      prerender: true,
+      headers: { "cache-control": "public, max-age=0, s-maxage=3600" },
+    },
+    "/dashboard": {
+      ssr: false,
+      prerender: false,
+      headers: dashboardHeaders,
+    },
+    "/dashboard/**": {
+      ssr: false,
+      prerender: false,
+      headers: dashboardHeaders,
+    },
+    "/api/dashboard/snapshot": {
+      prerender: false,
+      headers: {
+        "cache-control": "private, no-store",
+        vary: "Cookie",
+      },
+    },
+  },
   components: [
     { path: "~/widgets", pattern: "**/ui/**", pathPrefix: false },
     { path: "~/entities", pattern: "**/ui/**", pathPrefix: false },

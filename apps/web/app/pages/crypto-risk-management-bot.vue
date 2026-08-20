@@ -2,15 +2,15 @@
 const features = [
   {
     title: "RiskGuard on every action",
-    body: "No order exists until it passes spend caps, an allowlist and a cooldown. Risk checks are not optional.",
+    body: "No simulated order exists until it passes spend caps, an allowlist and a cooldown. Risk checks are not optional.",
   },
   {
-    title: "Dry-run by default",
-    body: "The safest setting is the default: simulate everything until you explicitly choose to go live.",
+    title: "Dry-run only",
+    body: "The released system simulates every order and has no private exchange execution adapter.",
   },
   {
     title: "Spend caps you set",
-    body: "Daily and weekly USDT limits per strategy put a hard ceiling on exposure.",
+    body: "Daily and weekly USDT limits per strategy put a hard ceiling on simulated spend.",
   },
   {
     title: "Instant kill switch",
@@ -38,11 +38,11 @@ const steps = [
 const faqs = [
   {
     q: "Is a crypto trading bot safe?",
-    a: "Only as safe as its limits. A bot without spend caps can drain an account on a bug or a bad market. This bot is built the other way around: dry-run by default, hard daily/weekly caps, spot-only keys with no withdrawal permission, and a one-command kill switch.",
+    a: "Any live trading bot can lose funds. This release avoids that execution risk entirely: it is dry-run only, accepts no exchange key and applies limits to simulated orders.",
   },
   {
     q: "Is a Telegram crypto bot safe?",
-    a: "Telegram is just the interface — safety depends on what the bot can do. This bot never asks for withdrawal-enabled keys, never custodies funds, and every action it takes is capped and logged.",
+    a: "Telegram is just the interface; safety depends on what the service can do. This release asks for no exchange key, never custodies funds, and caps and logs its simulated actions.",
   },
   {
     q: "What does 'risk-first' actually mean here?",
@@ -53,8 +53,8 @@ const faqs = [
     a: "You set daily and weekly USDT caps per strategy. When a buy would exceed a cap, RiskGuard rejects it and logs the reason.",
   },
   {
-    q: "Can I halt trading immediately?",
-    a: "Yes. The /pause_all command in Telegram disables every strategy at once, and /resume_all re-enables them.",
+    q: "Can I halt the simulation immediately?",
+    a: "Yes. The /pause_all command in Telegram disables every dry-run strategy at once, and /resume_all re-enables them.",
   },
   {
     q: "Is there a record of what the bot did?",

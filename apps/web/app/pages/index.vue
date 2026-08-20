@@ -2,18 +2,18 @@
 const features = [
   {
     icon: "shield" as const,
-    title: "It can't spend more than you allow",
-    body: "You set a daily and a weekly budget. The bot physically cannot exceed them — not in a crash, not on a bug, not ever. That's the whole point.",
+    title: "Budgets checked before every simulated buy",
+    body: "You set daily and weekly limits. RiskGuard rejects a simulated order when it would exceed them and records the reason.",
   },
   {
     icon: "dip" as const,
-    title: "Practice mode, on by default",
-    body: "It trades with pretend money against real prices until you say otherwise. Watch it work for a few weeks. If the numbers convince you — and only then — go live.",
+    title: "Practice mode is the product today",
+    body: "It uses pretend money against public Bybit prices. The current release never places an order on your exchange account.",
   },
   {
     icon: "send" as const,
     title: "Lives in your Telegram",
-    body: "Every planned buy pings you with a countdown. One tap to cancel, one tap to buy now. No new app, no tab to keep open.",
+    body: "Every planned simulated buy pings you with a countdown. One tap cancels it; one tap completes it now in the dry-run ledger.",
   },
   {
     icon: "scale" as const,
@@ -27,8 +27,8 @@ const features = [
   },
   {
     icon: "open" as const,
-    title: "Free, open, yours",
-    body: "Open source, no subscription, and it never holds your money. Run it on your own server if you like.",
+    title: "Open source and self-hosted",
+    body: "The code has no subscription and never holds funds. Your server, database and domain can still have provider costs.",
   },
 ];
 
@@ -39,7 +39,7 @@ const steps = [
   },
   {
     title: "It watches the market so you don't",
-    body: "The bot checks prices around the clock. You get on with your life.",
+    body: "While your self-hosted services are running, the bot checks public Bybit prices on a schedule.",
   },
   {
     title: "A dip hits — you get a heads-up",
@@ -54,7 +54,7 @@ const steps = [
 const faqs = [
   {
     q: "Is this a real trading bot or a simulation?",
-    a: "Both. It starts in practice mode — real prices, pretend money — so you can judge it risk-free. Live trading on Bybit spot is opt-in, capped by your limits, and can be paused with one command.",
+    a: "The current release is a simulation: public Bybit prices, pretend money and no exchange orders. Live execution would require a separate future executor and is not available today.",
   },
   {
     q: "How do I know the strategy actually works?",
@@ -62,7 +62,7 @@ const faqs = [
   },
   {
     q: "Is it safe to connect my exchange account?",
-    a: "You don't have to — practice mode needs no account at all. Going live uses Bybit API keys that can only trade spot and can never withdraw, so the bot physically cannot move funds out.",
+    a: "Do not connect one. The current release needs no private exchange key and has no live order adapter; it reads public Bybit market data only.",
   },
   {
     q: "Does it trade memecoins or use leverage?",
@@ -70,11 +70,11 @@ const faqs = [
   },
   {
     q: "How much does it cost?",
-    a: "Nothing. It's free and open source. If you enable live trading you pay your exchange's normal trading fees — that's it.",
+    a: "The code is free and open source. Self-hosting, a domain, database usage and other provider resources may still cost money.",
   },
   {
     q: "Which exchange does it work with?",
-    a: "Bybit spot, with BTC, ETH and SOL set up out of the box. You can add any Bybit spot pair from Telegram.",
+    a: "It reads public Bybit spot data for dry-run strategies. BTC, ETH and SOL are available in the onboarding flow; live exchange trading is not supported.",
   },
 ];
 </script>
@@ -82,10 +82,10 @@ const faqs = [
 <template>
   <LandingPage
     eyebrow="Buy Crypto Dip Bot"
-    title="Buy Crypto Dip Bot — Risk-First Crypto DCA Bot, Free"
-    description="A free crypto DCA bot that buys the dip safely: paper-trade first on live Bybit prices, hard spend limits, honest benchmarks, Telegram alerts. Built for beginners who don't trust bots."
+    title="Buy Crypto Dip Bot - Risk-First Paper Trading Bot"
+    description="A free, open-source crypto DCA simulator: paper-trade dip signals on public Bybit prices with spend limits, benchmarks and Telegram alerts. No live exchange orders."
     headline="The dip-buying bot for people who don't trust bots"
-    subheadline="It practices with pretend money until you're convinced, never spends past your limits, and shows you honestly whether it beats doing nothing. All from Telegram."
+    subheadline="It practices with pretend money, checks every simulated order against your limits, and shows whether dip-buying beats simpler baselines. All from Telegram."
     :features="features"
     :steps="steps"
     :faqs="faqs"

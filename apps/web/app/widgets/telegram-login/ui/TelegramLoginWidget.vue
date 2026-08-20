@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { nextTick, onMounted, ref } from "vue";
 import {
-  fetchMe,
   loginWithTelegram,
   logout,
   type MeResponse,
   type TelegramAuthPayload,
 } from "~/entities/user";
+
+const emit = defineEmits<{
+  authChanged: [authenticated: boolean];
+}>();
 
 const config = useRuntimeConfig();
 const botUsername = config.public.telegramBotUsername;
@@ -18,8 +21,9 @@ const { data: me, refresh } = await useFetch<MeResponse>("/api/auth/me", {
 const widgetHost = ref<HTMLDivElement | null>(null);
 const loginFailed = ref(false);
 
-onMounted(() => {
+const mountTelegramWidget = () => {
   if (!botUsername || me.value?.user || !widgetHost.value) return;
+  widgetHost.value.replaceChildren();
 
   // The official widget calls a global function on successful auth.
   (
@@ -31,6 +35,7 @@ onMounted(() => {
       loginFailed.value = false;
       await loginWithTelegram(payload);
       await refresh();
+      emit("authChanged", true);
     } catch (error) {
       console.error("Telegram login failed:", error);
       loginFailed.value = true;
@@ -46,11 +51,19 @@ onMounted(() => {
   script.setAttribute("data-onauth", "onTelegramAuth(user)");
   script.setAttribute("data-request-access", "write");
   widgetHost.value.appendChild(script);
+};
+
+onMounted(() => {
+  emit("authChanged", Boolean(me.value?.user));
+  mountTelegramWidget();
 });
 
 const onLogout = async () => {
   await logout();
   await refresh();
+  emit("authChanged", false);
+  await nextTick();
+  mountTelegramWidget();
 };
 
 const displayName = (user: NonNullable<MeResponse["user"]>) =>

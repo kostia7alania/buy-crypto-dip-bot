@@ -1,22 +1,9 @@
-export default defineEventHandler(async () => {
+export default defineEventHandler(async (event) => {
   const observedAt = new Date().toISOString();
+  const data = await authenticatedApiFetch<Record<string, unknown>>(
+    event,
+    "/risk/status",
+  );
 
-  try {
-    const data = await apiFetch<Record<string, unknown>>("/risk/status");
-    return { ...data, apiReachable: true, observedAt };
-  } catch (error) {
-    console.error(
-      "Failed to fetch risk status from API, returning backup:",
-      error,
-    );
-    // Degraded fallback so the dashboard still renders. apiReachable lets
-    // the UI show an honest connection state instead of pretending.
-    return {
-      mode: "DRY_RUN",
-      liveTradingEnabled: false,
-      orderLikeActionsRequireApproval: true,
-      apiReachable: false,
-      observedAt,
-    };
-  }
+  return { ...data, apiReachable: true, observedAt };
 });

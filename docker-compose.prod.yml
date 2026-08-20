@@ -1,6 +1,6 @@
 # Production stack for the VPS. Lives at /opt/buy-crypto-dip-bot/docker-compose.yml
-# together with a .env file (see .env.example + POSTGRES_PASSWORD).
-# Deploys are: docker compose pull && docker compose up -d
+# together with a deploy-owned, mode-0600 .env file. DIPBOT_IMAGE must be an immutable
+# GHCR digest written by the deploy workflow.
 
 services:
   db:
@@ -18,45 +18,87 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
+
+  migrate:
+    image: ${DIPBOT_IMAGE:?set DIPBOT_IMAGE to an immutable GHCR digest}
+    restart: "no"
+    command:
+      - node
+      - --input-type=module
+      - -e
+      - |
+        const { createPostgresConnection, runMigrations } = await import('/app/packages/db/dist/index.mjs');
+        const { db, pool } = createPostgresConnection(process.env.POSTGRES_CONNECTION_STRING);
+        try { await runMigrations(db); } finally { await pool.end(); }
+    environment:
+      POSTGRES_CONNECTION_STRING: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/dipbot
+    depends_on:
+      db:
+        condition: service_healthy
 
   api:
-    image: ghcr.io/kostia7alania/buy-crypto-dip-bot:latest
+    image: ${DIPBOT_IMAGE:?set DIPBOT_IMAGE to an immutable GHCR digest}
     command: ["node", "apps/api/dist/server.mjs"]
     restart: unless-stopped
-    env_file: .env
     environment:
       POSTGRES_CONNECTION_STRING: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/dipbot
       PORT: "8787"
+      API_KEY: ${API_KEY:?set API_KEY in .env}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?set TELEGRAM_BOT_TOKEN in .env}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      ALLOWLIST_SYMBOLS: ${ALLOWLIST_SYMBOLS:-BTCUSDT,ETHUSDT,SOLUSDT}
+      RUNNER_ENABLED: ${RUNNER_ENABLED:-true}
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     # Localhost-only: nginx and debugging; never exposed to the internet.
     ports:
       - "127.0.0.1:8787:8787"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8787/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
 
   bot:
-    image: ghcr.io/kostia7alania/buy-crypto-dip-bot:latest
+    image: ${DIPBOT_IMAGE:?set DIPBOT_IMAGE to an immutable GHCR digest}
     command: ["node", "apps/bot/dist/index.mjs"]
     restart: unless-stopped
-    env_file: .env
     environment:
       POSTGRES_CONNECTION_STRING: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/dipbot
       API_URL: http://api:8787
+      API_KEY: ${API_KEY:?set API_KEY in .env}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?set TELEGRAM_BOT_TOKEN in .env}
     depends_on:
-      db:
+      migrate:
+        condition: service_completed_successfully
+      api:
         condition: service_healthy
 
   web:
-    image: ghcr.io/kostia7alania/buy-crypto-dip-bot:latest
+    image: ${DIPBOT_IMAGE:?set DIPBOT_IMAGE to an immutable GHCR digest}
     command: ["node", "apps/web/.output/server/index.mjs"]
     restart: unless-stopped
-    env_file: .env
     environment:
       API_URL: http://api:8787
+      API_KEY: ${API_KEY:?set API_KEY in .env}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
+      NUXT_PUBLIC_SITE_URL: ${NUXT_PUBLIC_SITE_URL:-https://buy-crypto-dip-bot.com}
+      NUXT_PUBLIC_TELEGRAM_BOT_USERNAME: ${NUXT_PUBLIC_TELEGRAM_BOT_USERNAME:-}
+      NUXT_PUBLIC_GA_ID: ${NUXT_PUBLIC_GA_ID:-}
       NITRO_PORT: "3000"
       NITRO_HOST: 0.0.0.0
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     networks:
       - default
       - proxy
@@ -70,15 +112,34 @@ services:
       - traefik.http.routers.dipbot.rule=Host(`buy-crypto-dip-bot.com`) || Host(`www.buy-crypto-dip-bot.com`)
       - traefik.http.routers.dipbot.entrypoints=websecure
       - traefik.http.routers.dipbot.tls.certresolver=le
-      - traefik.http.routers.dipbot.middlewares=dipbot-www
-      # Plain-HTTP router: keeps the site up while Cloudflare still reaches
-      # the origin over :80 (before the 443->2053 Origin Rule is in place).
+      - traefik.http.routers.dipbot.middlewares=dipbot-www,dipbot-security
+      # Plain HTTP is redirect-only; Cloudflare must use Full/Full (strict) SSL.
       - traefik.http.routers.dipbot-http.rule=Host(`buy-crypto-dip-bot.com`) || Host(`www.buy-crypto-dip-bot.com`)
       - traefik.http.routers.dipbot-http.entrypoints=web
+      - traefik.http.routers.dipbot-http.middlewares=dipbot-https
+      - traefik.http.middlewares.dipbot-https.redirectscheme.scheme=https
+      - traefik.http.middlewares.dipbot-https.redirectscheme.permanent=true
       # www -> apex
       - traefik.http.middlewares.dipbot-www.redirectregex.regex=^https://www\.(.*)
       - traefik.http.middlewares.dipbot-www.redirectregex.replacement=https://$$1
       - traefik.http.middlewares.dipbot-www.redirectregex.permanent=true
+      - traefik.http.middlewares.dipbot-security.headers.contenttypenosniff=true
+      - traefik.http.middlewares.dipbot-security.headers.framedeny=true
+      - traefik.http.middlewares.dipbot-security.headers.referrerpolicy=strict-origin-when-cross-origin
+      - traefik.http.middlewares.dipbot-security.headers.stsseconds=31536000
+      - traefik.http.middlewares.dipbot-security.headers.stsincludesubdomains=true
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
 
 volumes:
   pgdata:

@@ -1,26 +1,22 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from "vue";
-import {
-  getRunnerConnection,
-  type RunnerStatusResponse,
-} from "~/entities/runner";
+import { computed } from "vue";
+import { getRunnerConnection } from "~/entities/runner";
+import { useDashboardRefresh } from "~/features/dashboard-refresh";
 
 useSeoMeta({ title: "Dashboard", robots: "noindex,nofollow" });
 
-const { data: risk, refresh: refreshRisk } =
-  await useFetch<RunnerStatusResponse>("/api/risk-status", {
-    key: "risk-status",
-  });
+const { snapshot, refreshDashboard, setDashboardAuthenticated } =
+  useDashboardRefresh();
 
-let statusInterval: ReturnType<typeof setInterval> | null = null;
-onMounted(() => {
-  statusInterval = setInterval(() => refreshRisk(), 10000);
-});
-onUnmounted(() => {
-  if (statusInterval) clearInterval(statusInterval);
-});
+const connection = computed(() => getRunnerConnection(snapshot.value?.risk));
 
-const connection = computed(() => getRunnerConnection(risk.value));
+const handleStrategyMutated = () => {
+  void refreshDashboard();
+};
+
+const handleAuthChanged = (authenticated: boolean) => {
+  setDashboardAuthenticated(authenticated);
+};
 </script>
 
 <template>
@@ -35,7 +31,7 @@ const connection = computed(() => getRunnerConnection(risk.value));
         </p>
       </div>
       <div class="ops-dashboard__header-side">
-        <TelegramLoginWidget />
+        <TelegramLoginWidget @auth-changed="handleAuthChanged" />
         <div
           class="ops-dashboard__status"
           :class="`ops-dashboard__status--${connection.state}`"
@@ -50,24 +46,27 @@ const connection = computed(() => getRunnerConnection(risk.value));
     </header>
 
     <!-- Risk Section -->
-    <RiskGuardWidget />
+    <RiskGuardWidget :risk="snapshot?.risk" />
 
     <!-- Simulated PnL: does the strategy actually work? -->
-    <PnlWidget />
+    <PnlWidget :pnl="snapshot?.pnl" />
 
     <!-- The proof: dip-buying vs naive benchmarks -->
-    <PerformanceWidget />
+    <PerformanceWidget :performance="snapshot?.performance" />
 
     <!-- The time machine: replay the rules over real history -->
     <BacktestWidget />
 
     <!-- Strategies Section -->
-    <StrategyListWidget />
+    <StrategyListWidget
+      :strategies="snapshot?.strategies ?? []"
+      @mutated="handleStrategyMutated"
+    />
 
     <!-- Two Column Ledger & Feed -->
     <div class="ops-dashboard__two-columns">
-      <OrderLedgerWidget />
-      <AuditFeedWidget />
+      <OrderLedgerWidget :orders="snapshot?.orders ?? []" />
+      <AuditFeedWidget :audit="snapshot?.audit ?? []" />
     </div>
   </section>
 </template>

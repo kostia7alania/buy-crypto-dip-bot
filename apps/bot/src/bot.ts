@@ -1,9 +1,63 @@
-import { schema } from "@buy-crypto-dip-bot/db";
+import { schema, withTenantContext } from "@buy-crypto-dip-bot/db";
 import { createBybitPublicClient } from "@buy-crypto-dip-bot/exchange-bybit";
 import { and, eq, gte, sql } from "drizzle-orm";
-import { Bot } from "grammy";
+import { Bot, type Context } from "grammy";
 import { getDb } from "./db.js";
 import { registerOnboardingWizard, startKeyboard } from "./onboarding.js";
+import {
+  type BotPrincipal,
+  requirePrivatePrincipal,
+  tenantApiHeaders,
+} from "./tenant-context.js";
+
+const requireCommandPrincipal = (ctx: Context) =>
+  requirePrivatePrincipal(ctx, (message) => ctx.reply(message));
+
+const requireCallbackPrincipal = (ctx: Context) =>
+  requirePrivatePrincipal(ctx, (message) => ctx.answerCallbackQuery(message));
+
+const updateTenantStrategyConfig = async (
+  principal: BotPrincipal,
+  symbol: string,
+  configPatch: Record<string, number>,
+  action: string,
+) =>
+  withTenantContext(getDb(), principal, async (tx) => {
+    const [strategy] = await tx
+      .select()
+      .from(schema.strategies)
+      .where(
+        and(
+          eq(schema.strategies.tenantId, principal.tenantId),
+          eq(schema.strategies.symbol, symbol),
+        ),
+      )
+      .limit(1);
+    if (!strategy) return null;
+
+    const [updated] = await tx
+      .update(schema.strategies)
+      .set({ config: { ...(strategy.config as object), ...configPatch } })
+      .where(
+        and(
+          eq(schema.strategies.id, strategy.id),
+          eq(schema.strategies.tenantId, principal.tenantId),
+        ),
+      )
+      .returning();
+    if (!updated) return null;
+
+    await tx.insert(schema.auditEvents).values({
+      tenantId: principal.tenantId,
+      actorUserId: principal.userId,
+      entityType: "strategy",
+      entityId: strategy.id,
+      action,
+      payload: { symbol, changes: configPatch, via: "telegram" },
+    });
+
+    return updated;
+  });
 
 export const createBot = (token: string) => {
   const bot = new Bot(token);
@@ -11,31 +65,8 @@ export const createBot = (token: string) => {
   registerOnboardingWizard(bot);
 
   bot.command("start", async (ctx) => {
-    const chatId = ctx.chat.id;
-
-    // Register/refresh the user keyed by Telegram id — the same identity
-    // the web dashboard will authenticate with (Telegram Login / initData).
-    try {
-      const db = getDb();
-      await db
-        .insert(schema.users)
-        .values({
-          telegramUserId: String(ctx.from?.id ?? chatId),
-          telegramChatId: String(chatId),
-          username: ctx.from?.username ?? null,
-          firstName: ctx.from?.first_name ?? null,
-        })
-        .onConflictDoUpdate({
-          target: schema.users.telegramUserId,
-          set: {
-            telegramChatId: String(chatId),
-            username: ctx.from?.username ?? null,
-            firstName: ctx.from?.first_name ?? null,
-          },
-        });
-    } catch (err) {
-      console.error("Failed to register user on /start:", err);
-    }
+    const principal = await requireCommandPrincipal(ctx);
+    if (!principal) return;
 
     const msg =
       `🤖 *Buy Crypto Dip Bot Started*\n\n` +
@@ -43,8 +74,7 @@ export const createBot = (token: string) => {
       `no real money is ever spent by default.\n\n` +
       `Tap the button below to set up your first dip strategy in ` +
       `three quick steps.\n\n` +
-      `Your Chat ID: \`${chatId}\`\n` +
-      `For notifications, set in \`.env\`: \`TELEGRAM_CHAT_ID=${chatId}\``;
+      `This private chat is linked to your personal workspace.`;
 
     return ctx.reply(msg, {
       parse_mode: "Markdown",
@@ -53,40 +83,54 @@ export const createBot = (token: string) => {
   });
 
   bot.command("status", async (ctx) => {
+    const principal = await requireCommandPrincipal(ctx);
+    if (!principal) return;
+
     try {
       const db = getDb();
+      const { activeStrategies, ordersToday, spentToday } =
+        await withTenantContext(db, principal, async (tx) => {
+          const activeStrategies = await tx
+            .select()
+            .from(schema.strategies)
+            .where(
+              and(
+                eq(schema.strategies.tenantId, principal.tenantId),
+                eq(schema.strategies.enabled, true),
+              ),
+            );
 
-      // 1. Get active strategies count
-      const activeStrategies = await db
-        .select()
-        .from(schema.strategies)
-        .where(eq(schema.strategies.enabled, true));
+          const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+          const ordersToday = await tx
+            .select()
+            .from(schema.orders)
+            .where(
+              and(
+                eq(schema.orders.tenantId, principal.tenantId),
+                eq(schema.orders.status, "COMPLETED"),
+                gte(schema.orders.createdAt, oneDayAgo),
+              ),
+            );
 
-      // 2. Query today's orders & spent amount
-      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      const ordersToday = await db
-        .select()
-        .from(schema.orders)
-        .where(
-          and(
-            eq(schema.orders.status, "COMPLETED"),
-            gte(schema.orders.createdAt, oneDayAgo),
-          ),
-        );
+          const dailySpentResult = await tx
+            .select({
+              sum: sql<string>`sum(cast(${schema.orders.quoteAmount} as numeric))`,
+            })
+            .from(schema.orders)
+            .where(
+              and(
+                eq(schema.orders.tenantId, principal.tenantId),
+                eq(schema.orders.status, "COMPLETED"),
+                gte(schema.orders.createdAt, oneDayAgo),
+              ),
+            );
 
-      const dailySpentResult = await db
-        .select({
-          sum: sql<string>`sum(cast(${schema.orders.quoteAmount} as numeric))`,
-        })
-        .from(schema.orders)
-        .where(
-          and(
-            eq(schema.orders.status, "COMPLETED"),
-            gte(schema.orders.createdAt, oneDayAgo),
-          ),
-        );
-
-      const spentToday = Number(dailySpentResult[0]?.sum ?? "0");
+          return {
+            activeStrategies,
+            ordersToday,
+            spentToday: Number(dailySpentResult[0]?.sum ?? "0"),
+          };
+        });
 
       const msg =
         `📊 *Buy Crypto Dip Bot Status (Last 24h)*\n\n` +
@@ -106,9 +150,17 @@ export const createBot = (token: string) => {
   });
 
   bot.command("settings", async (ctx) => {
+    const principal = await requireCommandPrincipal(ctx);
+    if (!principal) return;
+
     try {
       const db = getDb();
-      const strategiesList = await db.select().from(schema.strategies);
+      const strategiesList = await withTenantContext(db, principal, (tx) =>
+        tx
+          .select()
+          .from(schema.strategies)
+          .where(eq(schema.strategies.tenantId, principal.tenantId)),
+      );
       if (strategiesList.length === 0) {
         return ctx.reply("❌ No strategies found in database.");
       }
@@ -140,6 +192,9 @@ export const createBot = (token: string) => {
 
   // Replay the strategy over real history: /backtest [symbol] [days] [threshold%] [amount]
   bot.command("backtest", async (ctx) => {
+    const principal = await requireCommandPrincipal(ctx);
+    if (!principal) return;
+
     const parts = ctx.match?.trim().split(/\s+/).filter(Boolean) ?? [];
     const symbol = (parts[0] ?? "BTCUSDT").toUpperCase();
     const days = Number(parts[1] ?? 30);
@@ -168,7 +223,6 @@ export const createBot = (token: string) => {
 
     try {
       const apiUrl = process.env.API_URL ?? "http://localhost:8787";
-      const apiKey = process.env.API_KEY;
       const qs = new URLSearchParams({
         symbol,
         days: String(days),
@@ -176,7 +230,7 @@ export const createBot = (token: string) => {
         amount: String(amount),
       });
       const response = await fetch(`${apiUrl}/backtest?${qs}`, {
-        headers: apiKey ? { "x-api-key": apiKey } : {},
+        headers: tenantApiHeaders(principal),
       });
       if (!response.ok) throw new Error(`API ${response.status}`);
       const d = (await response.json()) as {
@@ -241,17 +295,26 @@ export const createBot = (token: string) => {
 
   // Kill switch: instantly pause every strategy (audited).
   bot.command("pause_all", async (ctx) => {
+    const principal = await requireCommandPrincipal(ctx);
+    if (!principal) return;
+
     try {
       const db = getDb();
-      const updated = await db
-        .update(schema.strategies)
-        .set({ enabled: false })
-        .returning();
-      await db.insert(schema.auditEvents).values({
-        entityType: "strategy",
-        entityId: "ALL",
-        action: "ALL_STRATEGIES_PAUSED",
-        payload: { count: updated.length, via: "telegram" },
+      const updated = await withTenantContext(db, principal, async (tx) => {
+        const updated = await tx
+          .update(schema.strategies)
+          .set({ enabled: false })
+          .where(eq(schema.strategies.tenantId, principal.tenantId))
+          .returning();
+        await tx.insert(schema.auditEvents).values({
+          tenantId: principal.tenantId,
+          actorUserId: principal.userId,
+          entityType: "tenant",
+          entityId: principal.tenantId,
+          action: "ALL_STRATEGIES_PAUSED",
+          payload: { count: updated.length, via: "telegram" },
+        });
+        return updated;
       });
       return ctx.reply(
         `⏸ *All strategies paused* (${updated.length}).\nNo new orders will be created. Resume with /resume_all`,
@@ -264,17 +327,31 @@ export const createBot = (token: string) => {
   });
 
   bot.command("resume_all", async (ctx) => {
+    const principal = await requireCommandPrincipal(ctx);
+    if (!principal) return;
+
     try {
       const db = getDb();
-      const updated = await db
-        .update(schema.strategies)
-        .set({ enabled: true })
-        .returning();
-      await db.insert(schema.auditEvents).values({
-        entityType: "strategy",
-        entityId: "ALL",
-        action: "ALL_STRATEGIES_RESUMED",
-        payload: { count: updated.length, via: "telegram" },
+      const updated = await withTenantContext(db, principal, async (tx) => {
+        const updated = await tx
+          .update(schema.strategies)
+          .set({ enabled: true })
+          .where(
+            and(
+              eq(schema.strategies.tenantId, principal.tenantId),
+              eq(schema.strategies.mode, "DRY_RUN"),
+            ),
+          )
+          .returning();
+        await tx.insert(schema.auditEvents).values({
+          tenantId: principal.tenantId,
+          actorUserId: principal.userId,
+          entityType: "tenant",
+          entityId: principal.tenantId,
+          action: "ALL_DRY_RUN_STRATEGIES_RESUMED",
+          payload: { count: updated.length, via: "telegram" },
+        });
+        return updated;
       });
       return ctx.reply(`▶️ *All strategies resumed* (${updated.length}).`, {
         parse_mode: "Markdown",
@@ -286,11 +363,13 @@ export const createBot = (token: string) => {
   });
 
   bot.command("performance", async (ctx) => {
+    const principal = await requireCommandPrincipal(ctx);
+    if (!principal) return;
+
     try {
       const apiUrl = process.env.API_URL ?? "http://localhost:8787";
-      const apiKey = process.env.API_KEY;
       const response = await fetch(`${apiUrl}/performance`, {
-        headers: apiKey ? { "x-api-key": apiKey } : {},
+        headers: tenantApiHeaders(principal),
       });
       if (!response.ok) throw new Error(`API ${response.status}`);
       const data = (await response.json()) as {
@@ -327,11 +406,13 @@ export const createBot = (token: string) => {
   });
 
   bot.command("pnl", async (ctx) => {
+    const principal = await requireCommandPrincipal(ctx);
+    if (!principal) return;
+
     try {
       const apiUrl = process.env.API_URL ?? "http://localhost:8787";
-      const apiKey = process.env.API_KEY;
       const response = await fetch(`${apiUrl}/pnl`, {
-        headers: apiKey ? { "x-api-key": apiKey } : {},
+        headers: tenantApiHeaders(principal),
       });
       if (!response.ok) throw new Error(`API ${response.status}`);
       const data = (await response.json()) as {
@@ -406,6 +487,9 @@ export const createBot = (token: string) => {
   });
 
   bot.command("set_threshold", async (ctx) => {
+    const principal = await requireCommandPrincipal(ctx);
+    if (!principal) return;
+
     const parts = ctx.match?.trim().split(/\s+/) ?? [];
     const firstPart = parts[0];
     const secondPart = parts[1];
@@ -425,28 +509,17 @@ export const createBot = (token: string) => {
     }
 
     try {
-      const db = getDb();
-      const existing = await db
-        .select()
-        .from(schema.strategies)
-        .where(eq(schema.strategies.symbol, symbol))
-        .limit(1);
-      const [strategy] = existing;
-      if (!strategy) {
+      const updated = await updateTenantStrategyConfig(
+        principal,
+        symbol,
+        { thresholdPercent: val },
+        "STRATEGY_THRESHOLD_UPDATED",
+      );
+      if (!updated) {
         return ctx.reply(`❌ Strategy for symbol *${symbol}* not found.`, {
           parse_mode: "Markdown",
         });
       }
-
-      const newConfig = {
-        ...(strategy.config as any),
-        thresholdPercent: val,
-      };
-
-      await db
-        .update(schema.strategies)
-        .set({ config: newConfig })
-        .where(eq(schema.strategies.id, strategy.id));
 
       return ctx.reply(
         `✅ Dip threshold for *${symbol}* updated to *${val}%*`,
@@ -461,6 +534,9 @@ export const createBot = (token: string) => {
   });
 
   bot.command("set_amount", async (ctx) => {
+    const principal = await requireCommandPrincipal(ctx);
+    if (!principal) return;
+
     const parts = ctx.match?.trim().split(/\s+/) ?? [];
     const firstPart = parts[0];
     const secondPart = parts[1];
@@ -478,28 +554,17 @@ export const createBot = (token: string) => {
     }
 
     try {
-      const db = getDb();
-      const existing = await db
-        .select()
-        .from(schema.strategies)
-        .where(eq(schema.strategies.symbol, symbol))
-        .limit(1);
-      const [strategy] = existing;
-      if (!strategy) {
+      const updated = await updateTenantStrategyConfig(
+        principal,
+        symbol,
+        { suggestedQuoteAmount: val },
+        "STRATEGY_AMOUNT_UPDATED",
+      );
+      if (!updated) {
         return ctx.reply(`❌ Strategy for symbol *${symbol}* not found.`, {
           parse_mode: "Markdown",
         });
       }
-
-      const newConfig = {
-        ...(strategy.config as any),
-        suggestedQuoteAmount: val,
-      };
-
-      await db
-        .update(schema.strategies)
-        .set({ config: newConfig })
-        .where(eq(schema.strategies.id, strategy.id));
 
       return ctx.reply(
         `✅ Buy amount for *${symbol}* updated to *${val} USDT*`,
@@ -514,6 +579,9 @@ export const createBot = (token: string) => {
   });
 
   bot.command("set_limit", async (ctx) => {
+    const principal = await requireCommandPrincipal(ctx);
+    if (!principal) return;
+
     const parts = ctx.match?.trim().split(/\s+/) ?? [];
     const firstPart = parts[0];
     const secondPart = parts[1];
@@ -531,28 +599,17 @@ export const createBot = (token: string) => {
     }
 
     try {
-      const db = getDb();
-      const existing = await db
-        .select()
-        .from(schema.strategies)
-        .where(eq(schema.strategies.symbol, symbol))
-        .limit(1);
-      const [strategy] = existing;
-      if (!strategy) {
+      const updated = await updateTenantStrategyConfig(
+        principal,
+        symbol,
+        { maxDailySpendUsdt: val },
+        "STRATEGY_DAILY_LIMIT_UPDATED",
+      );
+      if (!updated) {
         return ctx.reply(`❌ Strategy for symbol *${symbol}* not found.`, {
           parse_mode: "Markdown",
         });
       }
-
-      const newConfig = {
-        ...(strategy.config as any),
-        maxDailySpendUsdt: val,
-      };
-
-      await db
-        .update(schema.strategies)
-        .set({ config: newConfig })
-        .where(eq(schema.strategies.id, strategy.id));
 
       return ctx.reply(
         `✅ Daily spend limit for *${symbol}* updated to *${val} USDT*`,
@@ -567,6 +624,9 @@ export const createBot = (token: string) => {
   });
 
   bot.command("toggle", async (ctx) => {
+    const principal = await requireCommandPrincipal(ctx);
+    if (!principal) return;
+
     const symbol = ctx.match?.trim().toUpperCase();
     if (!symbol) {
       return ctx.reply(
@@ -577,27 +637,45 @@ export const createBot = (token: string) => {
 
     try {
       const db = getDb();
-      const existing = await db
-        .select()
-        .from(schema.strategies)
-        .where(eq(schema.strategies.symbol, symbol))
-        .limit(1);
-      const [strategy] = existing;
-      if (!strategy) {
+      const updated = await withTenantContext(db, principal, async (tx) => {
+        const [updated] = await tx
+          .update(schema.strategies)
+          .set({ enabled: sql`not ${schema.strategies.enabled}` })
+          .where(
+            and(
+              eq(schema.strategies.tenantId, principal.tenantId),
+              eq(schema.strategies.symbol, symbol),
+              eq(schema.strategies.mode, "DRY_RUN"),
+            ),
+          )
+          .returning();
+        if (!updated) return null;
+
+        await tx.insert(schema.auditEvents).values({
+          tenantId: principal.tenantId,
+          actorUserId: principal.userId,
+          entityType: "strategy",
+          entityId: updated.id,
+          action: updated.enabled
+            ? "DRY_RUN_STRATEGY_ENABLED"
+            : "DRY_RUN_STRATEGY_DISABLED",
+          payload: {
+            symbol: updated.symbol,
+            enabled: updated.enabled,
+            via: "telegram",
+          },
+        });
+
+        return updated;
+      });
+      if (!updated) {
         return ctx.reply(`❌ Strategy for symbol *${symbol}* not found.`, {
           parse_mode: "Markdown",
         });
       }
 
-      const nextStatus = !strategy.enabled;
-
-      await db
-        .update(schema.strategies)
-        .set({ enabled: nextStatus })
-        .where(eq(schema.strategies.id, strategy.id));
-
       return ctx.reply(
-        `✅ Strategy for *${symbol}* updated to: ${nextStatus ? "🟢 *Enabled*" : "🔴 *Disabled*"}`,
+        `✅ Strategy for *${symbol}* updated to: ${updated.enabled ? "🟢 *Enabled*" : "🔴 *Disabled*"}`,
         {
           parse_mode: "Markdown",
         },
@@ -608,13 +686,18 @@ export const createBot = (token: string) => {
     }
   });
 
-  const handleAddPair = async (ctx: any, symbol: string) => {
-    let loadingMsg: any;
+  const handleAddPair = async (
+    ctx: Context,
+    principal: BotPrincipal,
+    symbol: string,
+  ) => {
+    let loadingMessageId: number | null = null;
     try {
-      loadingMsg = await ctx.reply(
+      const loadingMessage = await ctx.reply(
         `⏳ Validating <b>${symbol}</b> on Bybit Spot server...`,
         { parse_mode: "HTML" },
       );
+      loadingMessageId = loadingMessage.message_id;
       await ctx.replyWithChatAction("typing");
     } catch (err) {
       console.error("Failed to send loading status:", err);
@@ -623,19 +706,18 @@ export const createBot = (token: string) => {
     try {
       // Call Hono API server
       const apiUrl = process.env.API_URL ?? "http://localhost:8787";
-      const apiKey = process.env.API_KEY;
       const response = await fetch(`${apiUrl}/strategies`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(apiKey ? { "x-api-key": apiKey } : {}),
+          ...tenantApiHeaders(principal),
         },
         body: JSON.stringify({ symbol }),
       });
 
-      if (loadingMsg) {
+      if (loadingMessageId !== null && ctx.chat) {
         await ctx.api
-          .deleteMessage(ctx.chat.id, loadingMsg.message_id)
+          .deleteMessage(ctx.chat.id, loadingMessageId)
           .catch(() => {});
       }
 
@@ -685,9 +767,9 @@ export const createBot = (token: string) => {
       );
     } catch (error) {
       console.error("Failed to add strategy via API:", error);
-      if (loadingMsg) {
+      if (loadingMessageId !== null && ctx.chat) {
         await ctx.api
-          .deleteMessage(ctx.chat.id, loadingMsg.message_id)
+          .deleteMessage(ctx.chat.id, loadingMessageId)
           .catch(() => {});
       }
       return ctx.reply(
@@ -697,6 +779,9 @@ export const createBot = (token: string) => {
   };
 
   bot.command("add_pair", async (ctx) => {
+    const principal = await requireCommandPrincipal(ctx);
+    if (!principal) return;
+
     const symbol = ctx.match?.trim().toUpperCase();
     if (!symbol) {
       return ctx.reply(
@@ -707,44 +792,90 @@ export const createBot = (token: string) => {
       );
     }
 
-    return handleAddPair(ctx, symbol);
+    return handleAddPair(ctx, principal, symbol);
   });
 
   bot.callbackQuery(/^cancel_order:(.+)$/, async (ctx) => {
+    const principal = await requireCallbackPrincipal(ctx);
+    if (!principal) return;
+
     const orderId = ctx.match[1];
     if (!orderId) return ctx.answerCallbackQuery("❌ Order ID missing.");
 
     try {
       const db = getDb();
-      const [order] = await db
-        .select()
-        .from(schema.orders)
-        .where(eq(schema.orders.id, orderId))
-        .limit(1);
+      const transition = await withTenantContext(db, principal, async (tx) => {
+        const [order] = await tx
+          .update(schema.orders)
+          .set({ status: "CANCELLED" })
+          .where(
+            and(
+              eq(schema.orders.id, orderId),
+              eq(schema.orders.tenantId, principal.tenantId),
+              eq(schema.orders.mode, "DRY_RUN"),
+              eq(schema.orders.status, "PENDING"),
+            ),
+          )
+          .returning();
 
-      if (!order) {
-        return ctx.answerCallbackQuery("❌ Order not found.");
-      }
+        if (!order) {
+          const [current] = await tx
+            .select({ status: schema.orders.status, mode: schema.orders.mode })
+            .from(schema.orders)
+            .where(
+              and(
+                eq(schema.orders.id, orderId),
+                eq(schema.orders.tenantId, principal.tenantId),
+              ),
+            )
+            .limit(1);
+          return { changed: false as const, current };
+        }
 
-      if (order.status === "COMPLETED") {
-        return ctx.answerCallbackQuery("⚠️ Too late! Order already executed.");
-      }
-      if (order.status === "CANCELLED") {
-        return ctx.answerCallbackQuery("ℹ️ Order already cancelled.");
-      }
+        const eventKey = `telegram-order-final:${order.id}:CANCELLED`;
+        await tx.insert(schema.auditEvents).values({
+          tenantId: principal.tenantId,
+          actorUserId: principal.userId,
+          eventKey,
+          entityType: "order",
+          entityId: order.id,
+          action: "DRY_RUN_ORDER_CANCELLED",
+          payload: { order, via: "telegram_callback" },
+        });
+        await tx
+          .insert(schema.outboxEvents)
+          .values({
+            tenantId: principal.tenantId,
+            topic: "telegram.order.finalized",
+            dedupeKey: eventKey,
+            payload: {
+              orderId: order.id,
+              status: "CANCELLED",
+              actorUserId: principal.userId,
+              telegramChatId: principal.telegramChatId,
+            },
+          })
+          .onConflictDoNothing();
 
-      // Update order status to CANCELLED
-      await db
-        .update(schema.orders)
-        .set({ status: "CANCELLED" })
-        .where(eq(schema.orders.id, orderId));
-
-      await db.insert(schema.auditEvents).values({
-        entityType: "order",
-        entityId: order.id,
-        action: "DRY_RUN_ORDER_CANCELLED",
-        payload: { order: { ...order, status: "CANCELLED" } },
+        return { changed: true as const, order };
       });
+
+      if (!transition.changed) {
+        if (!transition.current) {
+          return ctx.answerCallbackQuery("❌ Order not found.");
+        }
+        if (transition.current.status === "COMPLETED") {
+          return ctx.answerCallbackQuery("⚠️ Too late! Order already executed.");
+        }
+        if (transition.current.status === "CANCELLED") {
+          return ctx.answerCallbackQuery("ℹ️ Order already cancelled.");
+        }
+        return ctx.answerCallbackQuery(
+          `ℹ️ Order is ${transition.current.status}; no change was made.`,
+        );
+      }
+
+      const { order } = transition;
 
       await ctx.answerCallbackQuery("❌ Order cancelled successfully!");
       return ctx.editMessageText(
@@ -761,49 +892,104 @@ export const createBot = (token: string) => {
   });
 
   bot.callbackQuery(/^buy_now:(.+)$/, async (ctx) => {
+    const principal = await requireCallbackPrincipal(ctx);
+    if (!principal) return;
+
     const orderId = ctx.match[1];
     if (!orderId) return ctx.answerCallbackQuery("❌ Order ID missing.");
 
     try {
       const db = getDb();
-      const [order] = await db
-        .select()
-        .from(schema.orders)
-        .where(eq(schema.orders.id, orderId))
-        .limit(1);
+      const transition = await withTenantContext(db, principal, async (tx) => {
+        const [order] = await tx
+          .update(schema.orders)
+          .set({ status: "COMPLETED" })
+          .where(
+            and(
+              eq(schema.orders.id, orderId),
+              eq(schema.orders.tenantId, principal.tenantId),
+              eq(schema.orders.mode, "DRY_RUN"),
+              eq(schema.orders.status, "PENDING"),
+            ),
+          )
+          .returning();
 
-      if (!order) {
-        return ctx.answerCallbackQuery("❌ Order not found.");
-      }
+        if (!order) {
+          const [current] = await tx
+            .select({ status: schema.orders.status, mode: schema.orders.mode })
+            .from(schema.orders)
+            .where(
+              and(
+                eq(schema.orders.id, orderId),
+                eq(schema.orders.tenantId, principal.tenantId),
+              ),
+            )
+            .limit(1);
+          return { changed: false as const, current };
+        }
 
-      if (order.status === "COMPLETED") {
-        return ctx.answerCallbackQuery("ℹ️ Order already executed.");
-      }
-      if (order.status === "CANCELLED") {
-        return ctx.answerCallbackQuery("⚠️ Too late! Order already cancelled.");
-      }
+        const [strategy] = order.strategyId
+          ? await tx
+              .select({ name: schema.strategies.name })
+              .from(schema.strategies)
+              .where(
+                and(
+                  eq(schema.strategies.id, order.strategyId),
+                  eq(schema.strategies.tenantId, principal.tenantId),
+                ),
+              )
+              .limit(1)
+          : [];
+        const eventKey = `telegram-order-final:${order.id}:COMPLETED`;
+        await tx.insert(schema.auditEvents).values({
+          tenantId: principal.tenantId,
+          actorUserId: principal.userId,
+          eventKey,
+          entityType: "order",
+          entityId: order.id,
+          action: "DRY_RUN_ORDER_COMPLETED",
+          payload: { order, via: "telegram_callback" },
+        });
+        await tx
+          .insert(schema.outboxEvents)
+          .values({
+            tenantId: principal.tenantId,
+            topic: "telegram.order.finalized",
+            dedupeKey: eventKey,
+            payload: {
+              orderId: order.id,
+              status: "COMPLETED",
+              actorUserId: principal.userId,
+              telegramChatId: principal.telegramChatId,
+            },
+          })
+          .onConflictDoNothing();
 
-      // Update order status to COMPLETED
-      await db
-        .update(schema.orders)
-        .set({ status: "COMPLETED" })
-        .where(eq(schema.orders.id, orderId));
-
-      // Fetch strategy details for the text
-      const [strategy] = await db
-        .select()
-        .from(schema.strategies)
-        .where(eq(schema.strategies.id, order.strategyId ?? ""))
-        .limit(1);
-
-      const strategyName = strategy?.name ?? "Dip Buying Strategy";
-
-      await db.insert(schema.auditEvents).values({
-        entityType: "order",
-        entityId: order.id,
-        action: "DRY_RUN_ORDER_COMPLETED",
-        payload: { order: { ...order, status: "COMPLETED" } },
+        return {
+          changed: true as const,
+          order,
+          strategyName: strategy?.name ?? "Dip Buying Strategy",
+        };
       });
+
+      if (!transition.changed) {
+        if (!transition.current) {
+          return ctx.answerCallbackQuery("❌ Order not found.");
+        }
+        if (transition.current.status === "COMPLETED") {
+          return ctx.answerCallbackQuery("ℹ️ Order already executed.");
+        }
+        if (transition.current.status === "CANCELLED") {
+          return ctx.answerCallbackQuery(
+            "⚠️ Too late! Order already cancelled.",
+          );
+        }
+        return ctx.answerCallbackQuery(
+          `ℹ️ Order is ${transition.current.status}; no change was made.`,
+        );
+      }
+
+      const { order, strategyName } = transition;
 
       await ctx.answerCallbackQuery("⚡ Order executed now!");
       return ctx.editMessageText(
@@ -826,9 +1012,12 @@ export const createBot = (token: string) => {
     if (
       replyTo?.text?.includes("reply to this message with the ticker symbol")
     ) {
+      const principal = await requireCommandPrincipal(ctx);
+      if (!principal) return;
+
       const symbol = ctx.message.text?.trim().toUpperCase();
       if (!symbol) return ctx.reply("❌ Please enter a valid symbol.");
-      return handleAddPair(ctx, symbol);
+      return handleAddPair(ctx, principal, symbol);
     }
 
     return ctx.reply(

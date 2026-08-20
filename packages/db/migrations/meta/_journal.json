@@ -15,6 +15,13 @@
       "when": 1783313014289,
       "tag": "0001_glorious_kulan_gath",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787198678185,
+      "tag": "0002_cost_first_tenancy",
+      "breakpoints": true
     }
   ]
 }
