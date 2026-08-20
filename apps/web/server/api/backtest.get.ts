@@ -5,12 +5,18 @@ export default defineEventHandler(async (event) => {
   } catch (error) {
     const fetchError = error as {
       status?: number;
+      statusCode?: number;
+      statusMessage?: string;
       data?: { error?: string };
     };
-    console.error("Backtest via API failed:", error);
+    const statusCode = fetchError.statusCode ?? fetchError.status ?? 500;
+    if (statusCode >= 500) {
+      console.error("Backtest via API failed:", error);
+    }
     throw createError({
-      statusCode: fetchError.status || 500,
-      statusMessage: fetchError.data?.error || "Backtest failed",
+      statusCode,
+      statusMessage:
+        fetchError.statusMessage ?? fetchError.data?.error ?? "Backtest failed",
     });
   }
 });
