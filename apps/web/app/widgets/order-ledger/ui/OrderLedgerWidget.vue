@@ -1,26 +1,12 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from "vue";
-import { fetchOrders } from "~/entities/order";
+import type { Order } from "~/entities/order";
 import { formatMoney } from "~/shared/lib/number-format";
 
 const formatPrice = (value: string) => formatMoney(Number(value));
 
-const { data: orders, refresh: refreshOrders } = await useAsyncData(
-  "orders",
-  () => fetchOrders(),
-);
-
-let pollingInterval: ReturnType<typeof setInterval> | null = null;
-
-onMounted(() => {
-  pollingInterval = setInterval(() => {
-    refreshOrders();
-  }, 5000);
-});
-
-onUnmounted(() => {
-  if (pollingInterval) clearInterval(pollingInterval);
-});
+const props = defineProps<{
+  orders: readonly Order[];
+}>();
 </script>
 
 <template>
@@ -39,10 +25,10 @@ onUnmounted(() => {
           </tr>
         </thead>
         <tbody>
-          <tr v-if="!orders || orders.length === 0">
+          <tr v-if="props.orders.length === 0">
             <td colspan="6" class="order-ledger__empty">No dry-run orders executed yet. Waiting for market dips...</td>
           </tr>
-          <tr v-for="order in orders" :key="order.id" class="order-ledger__row">
+          <tr v-for="order in props.orders" :key="order.id" class="order-ledger__row">
             <td class="order-ledger__symbol">{{ order.symbol }}</td>
             <td class="order-ledger__side order-ledger__side--buy">BUY</td>
             <td>${{ formatPrice(order.price) }}</td>

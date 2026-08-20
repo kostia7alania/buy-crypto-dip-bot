@@ -1,12 +1,16 @@
 export default defineEventHandler(async (event) => {
   const q = getQuery(event);
   try {
-    return await apiFetch("/backtest", { query: q });
-  } catch (error: any) {
+    return await authenticatedApiFetch(event, "/backtest", { query: q });
+  } catch (error) {
+    const fetchError = error as {
+      status?: number;
+      data?: { error?: string };
+    };
     console.error("Backtest via API failed:", error);
     throw createError({
-      statusCode: error.status || 500,
-      statusMessage: error.data?.error || "Backtest failed",
+      statusCode: fetchError.status || 500,
+      statusMessage: fetchError.data?.error || "Backtest failed",
     });
   }
 });

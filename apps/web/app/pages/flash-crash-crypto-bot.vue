@@ -2,15 +2,15 @@
 const features = [
   {
     title: "Catches sharp drops",
-    body: "When price gaps down from its 24h high, the bot is already watching — and can act faster than you can.",
+    body: "When an observed price drops from its 24h high, the bot can record a dry-run response without manual chart watching.",
   },
   {
     title: "Bounded by design",
-    body: "A flash crash won't drain your account: daily and weekly caps limit total exposure automatically.",
+    body: "Daily and weekly caps limit simulated spend while you study how the rules behave in a sharp decline.",
   },
   {
     title: "Cancel window",
-    body: "Even in fast markets, every buy is announced with a countdown so you stay in control.",
+    body: "Every pending simulated buy is announced with Cancel and Buy Now controls before its scheduled transition.",
   },
   {
     title: "Kill switch",
@@ -38,7 +38,7 @@ const steps = [
 const faqs = [
   {
     q: "Can a bot really catch a flash crash?",
-    a: "A bot reacts on every price tick without hesitation, so it can act on sudden drops faster than manual trading — within your pre-set rules.",
+    a: "This bot samples public Bybit prices on a schedule and records simulated responses when a configured threshold is met. It is not a tick-level execution system.",
   },
   {
     q: "Isn't buying a crash risky?",
@@ -59,9 +59,9 @@ const faqs = [
   <LandingPage
     eyebrow="Flash Crash Crypto Bot"
     title="Flash Crash Crypto Bot"
-    description="A risk-first flash-crash bot that buys sharp crypto drops on Bybit spot within strict spend limits, with a dry-run mode, cancel window and kill switch."
+    description="A risk-first flash-crash simulator that detects sharp Bybit spot drops and records dry-run orders within strict spend limits."
     headline="Be ready for the flash crash"
-    subheadline="Automatically buy sharp drops on Bybit spot — bounded by hard limits, a cancel window and an instant kill switch, tested safely in dry-run first."
+    subheadline="Simulate responses to sharp Bybit spot drops with hard limits, a cancel window and an instant dry-run kill switch."
     :features="features"
     :steps="steps"
     :faqs="faqs"

@@ -3,6 +3,25 @@
 _Written 2026-07-07 during infra hardening. A living document — revise as the
 market and product move._
 
+## Product truth as of 2026-08-20
+
+The released repository is a **self-hosted, tenant-safe dry-run product**.
+It reads public Bybit spot prices and creates simulated orders. RiskGuard
+hard-disables live execution, and there is no private exchange adapter or
+managed multi-tenant SaaS deployment.
+
+Telegram login establishes a personal tenant; strategies, orders, audit,
+aggregates, bot callbacks and private BFF/API requests are tenant-scoped, with
+forced PostgreSQL RLS as defense in depth. The cost-first Supabase/Cloudflare
+migration is still a target documented in
+[`docs/15_COST_FIRST_SAAS_STRATEGY.md`](15_COST_FIRST_SAAS_STRATEGY.md), not
+shipped behavior.
+
+Public copy must preserve this boundary. It may describe the live-market-data
+simulation and future product direction, but it must not say that users can
+connect exchange keys, execute live orders, or sign up for a managed SaaS
+today.
+
 ## One-line positioning
 
 **The risk-first, dry-run-first, Telegram-native dip-buying bot for CEX spot
@@ -57,19 +76,22 @@ retention mechanic, and a compliance posture in one.
 ## Who I think we become (3 horizons)
 
 ### Horizon 1 — "The safe dip bot" (now → 3 months)
-A single-tenant, self-hostable, Telegram-first DCA/dip bot on Bybit spot,
-dry-run by default, with an honest live dashboard. **Win = a user runs it for
-a month, sees the simulated PnL, and trusts it.** Everything already built
-serves this. Ship polish, not features.
+A self-hostable, tenant-safe, Telegram-first DCA/dip bot on Bybit spot,
+dry-run only, with an honest dashboard backed by current public market data.
+**Win = a user runs it for a month, sees the simulated PnL, and trusts it.**
+Everything already built serves this. Ship polish, not features.
 
 ### Horizon 2 — "Prove it, then trade it" (3–9 months)
 - **Backtesting** on historical Bybit data (min 3 years, bull+bear+range) —
   the #1 credibility feature competitors gatekeep behind paid tiers. Turn
   our dry-run engine into a time-machine.
-- **Guarded live trading**: spot-only, per-strategy caps, the existing
-  RiskGuard as the gate, `/pause_all` kill switch. Live is opt-in, capped,
-  and reversible.
-- **Multi-user** via the Telegram identity already in the schema.
+- **Guarded live trading research**: a separate stable-egress executor,
+  spot-only permissions, per-strategy caps, RiskGuard, reconciliation, and a
+  kill switch. This is a separate security and release decision, not a mode
+  hidden behind today's UI.
+- **Tenant-safe SaaS**: Supabase identity, required ownership, scoped BFF/API
+  and bot paths, and PostgreSQL RLS. Telegram identity is only the starting
+  point.
 
 ### Horizon 3 — "The trust layer for retail automation" (9+ months)
 - Multiple safe strategies (QFL/base-drop, laddered DCA, rebalancing) — but
@@ -103,14 +125,16 @@ serves this. Ship polish, not features.
    shows a three-step inline-keyboard wizard (coin → dip threshold → buy
    amount → confirm) that enables a dry-run strategy and writes an audit
    event; chat id auto-stored. Stateless: step state lives in callback data.
-4. ~~**Daily digest**~~ — ✅ Shipped 2026-07-08. Runner sends a morning
-   Telegram summary (buys, spent, portfolio PnL) once per day at 06:00 UTC.
+4. **Daily digest** — removed from the release runner during tenant isolation.
+   A future digest must be tenant-scoped and event-driven rather than a global
+   process timer.
 5. ~~**Telegram Login on the dashboard**~~ — ✅ Shipped 2026-07-19
    (ExecPlan 003). Official Login Widget in the dashboard header; the API
    verifies the payload (HMAC per Telegram spec) and upserts the same
    `users` row the bot writes, the BFF keeps a sealed session cookie.
    Requires `NUXT_PUBLIC_TELEGRAM_BOT_USERNAME` + BotFather `/setdomain`.
-   Unlocks multi-user.
+   The identity now resolves to the same personal tenant used by bot, BFF, API,
+   runner and RLS. Supabase OIDC remains pending in ExecPlan 004.
 
 Also shipped 2026-07-07: rich SEO landing pages (reusable LandingPage widget,
 8 unique keyword pages, JSON-LD FAQ + SoftwareApplication, OG/Twitter cards)

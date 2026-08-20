@@ -1,8 +1,8 @@
 <script setup lang="ts">
 const features = [
   {
-    title: "Automated dollar-cost averaging",
-    body: "Set a threshold and an amount, and the bot averages into dips for you — no manual timing, no emotional buys.",
+    title: "Automated DCA simulation",
+    body: "Set a threshold and amount, and the bot records simulated dip buys so you can evaluate the rule without committing capital.",
   },
   {
     title: "Simulation before real money",
@@ -24,7 +24,7 @@ const steps = [
   },
   {
     title: "The bot watches prices",
-    body: "It checks Bybit spot every tick and triggers a buy when the drop from the 24h high meets your threshold.",
+    body: "It samples Bybit spot on a schedule and triggers a simulated buy when the drop from the 24h high meets your threshold.",
   },
   {
     title: "RiskGuard approves",
@@ -32,13 +32,13 @@ const steps = [
   },
   {
     title: "Review the results",
-    body: "Track average buy price and unrealized PnL and decide when to go live.",
+    body: "Track average simulated buy price, unrealized PnL and benchmark comparisons to judge the hypothesis.",
   },
 ];
 const faqs = [
   {
     q: "What is a crypto DCA bot?",
-    a: "It automatically buys a fixed amount of crypto on a schedule or on dips, averaging your entry price over time instead of trying to time the bottom.",
+    a: "A DCA bot applies a fixed recurring or dip-based rule. This release simulates those buys and never submits them to an exchange.",
   },
   {
     q: "Is DCA safer than lump-sum buying?",

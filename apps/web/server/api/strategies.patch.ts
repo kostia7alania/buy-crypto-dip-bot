@@ -1,8 +1,9 @@
 export default defineEventHandler(async (event) => {
+  await requireAppPrincipal(event);
   const body = (await readBody(event)) as {
     id: string;
     enabled?: boolean;
-    config?: any;
+    config?: unknown;
   };
   if (!body.id) {
     throw createError({
@@ -12,16 +13,8 @@ export default defineEventHandler(async (event) => {
   }
 
   const { id, ...updates } = body;
-  try {
-    return await apiFetch(`/strategies/${id}`, {
-      method: "PATCH",
-      body: updates,
-    });
-  } catch (error: any) {
-    console.error(`Failed to update strategy ${id} via API:`, error);
-    throw createError({
-      statusCode: error.status || 500,
-      statusMessage: error.data?.error || "Internal Server Error",
-    });
-  }
+  return authenticatedApiFetch(event, `/strategies/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: updates,
+  });
 });

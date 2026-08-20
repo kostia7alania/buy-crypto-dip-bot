@@ -1,5 +1,6 @@
 export interface CurrentUser {
   id: string;
+  tenantId: string;
   telegramUserId: string;
   username: string | null;
   firstName: string | null;

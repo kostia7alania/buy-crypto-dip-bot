@@ -1,23 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from "vue";
-import {
-  fetchPerformance,
-  type PerformancePosition,
+import { computed } from "vue";
+import type {
+  PerformancePosition,
+  PerformanceReport,
 } from "~/entities/performance";
 
-const { data, refresh } = await useAsyncData("performance", () =>
-  fetchPerformance(),
-);
+const props = defineProps<{
+  performance?: PerformanceReport;
+}>();
 
-let pollingInterval: ReturnType<typeof setInterval> | null = null;
-onMounted(() => {
-  pollingInterval = setInterval(() => refresh(), 30000);
-});
-onUnmounted(() => {
-  if (pollingInterval) clearInterval(pollingInterval);
-});
-
-const positions = computed(() => data.value?.positions ?? []);
+const positions = computed(() => props.performance?.positions ?? []);
 
 const sign = (n: number) => (n >= 0 ? "+" : "");
 const pct = (n: number) => `${sign(n)}${n.toFixed(2)}%`;

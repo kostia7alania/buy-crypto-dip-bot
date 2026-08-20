@@ -1,30 +1,17 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from "vue";
-import { fetchAuditLogs } from "~/entities/audit";
+import type { AuditLog } from "~/entities/audit";
 
-const { data: audit, refresh: refreshAudit } = await useAsyncData("audit", () =>
-  fetchAuditLogs(),
-);
-
-let pollingInterval: ReturnType<typeof setInterval> | null = null;
-
-onMounted(() => {
-  pollingInterval = setInterval(() => {
-    refreshAudit();
-  }, 5000);
-});
-
-onUnmounted(() => {
-  if (pollingInterval) clearInterval(pollingInterval);
-});
+const props = defineProps<{
+  audit: readonly AuditLog[];
+}>();
 </script>
 
 <template>
   <section class="audit-feed">
     <h2 class="audit-feed__title">Audit Engine Feed</h2>
     <div class="audit-feed__list">
-      <p v-if="!audit || audit.length === 0" class="audit-feed__empty">No audit logs received yet.</p>
-      <div v-for="log in audit" :key="log.id" class="audit-feed__item">
+      <p v-if="props.audit.length === 0" class="audit-feed__empty">No audit logs received yet.</p>
+      <div v-for="log in props.audit" :key="log.id" class="audit-feed__item">
         <header class="audit-feed__item-header">
           <span class="audit-feed__action" :class="`audit-feed__action--${log.action.toLowerCase()}`">
             {{ log.action }}

@@ -1,12 +1,12 @@
 <script setup lang="ts">
 const features = [
   {
-    title: "Buys dips automatically",
-    body: "The bot measures the drop from the 24-hour high and buys when your threshold is hit — no staring at charts.",
+    title: "Simulates dips automatically",
+    body: "The bot measures the drop from the 24-hour high and records a dry-run buy when your threshold is hit.",
   },
   {
-    title: "Cancel any buy in time",
-    body: "Each pending buy is announced in Telegram with a live countdown so you can cancel or execute instantly.",
+    title: "Control each pending simulation",
+    body: "Each pending dry-run buy is announced in Telegram with Cancel and Buy Now controls before its scheduled transition.",
   },
   {
     title: "Never over-commits",
@@ -38,11 +38,11 @@ const steps = [
 const faqs = [
   {
     q: "How does the bot decide when to buy the dip?",
-    a: "It tracks the 24-hour high and buys when the current price has dropped by at least your configured threshold percentage.",
+    a: "It tracks the 24-hour high and schedules a simulated buy when the observed price has dropped by at least your configured threshold percentage.",
   },
   {
     q: "Can I stop a buy I don't like?",
-    a: "Yes. Every pending buy is posted to Telegram with Cancel and Buy Now buttons and a countdown before it executes.",
+    a: "Yes. Every pending simulated buy is posted to Telegram with Cancel and Buy Now buttons before its scheduled transition.",
   },
   {
     q: "What stops it from buying all the way down?",
@@ -59,9 +59,9 @@ const faqs = [
   <LandingPage
     eyebrow="Buy Crypto Dip Bot"
     title="Buy Crypto Dip Bot"
-    description="Automatically buy crypto dips on Bybit spot with a risk-first bot: 24h-high dip detection, spend caps, dry-run mode and Telegram alerts."
-    headline="Buy every crypto dip — without the stress"
-    subheadline="Automated dip buying with a cancel window, hard spend limits and a simulation-first workflow you can actually trust."
+    description="Simulate crypto dip buys on Bybit spot with 24h-high detection, spend caps, an audit trail and Telegram controls."
+    headline="Test every crypto dip rule — without risking funds"
+    subheadline="Automated dry-run dip buying with a cancel window, hard simulated-spend limits and an auditable workflow."
     :features="features"
     :steps="steps"
     :faqs="faqs"

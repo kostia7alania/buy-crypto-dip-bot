@@ -14,7 +14,7 @@ const features = [
   },
   {
     title: "Dry-run proof",
-    body: "Validate the dip-buying edge on live prices before enabling real trades.",
+    body: "Evaluate the dip-buying hypothesis on public market prices without enabling real trades.",
   },
 ];
 const steps = [
@@ -38,7 +38,7 @@ const steps = [
 const faqs = [
   {
     q: "What is a dip-buying bot?",
-    a: "A bot that automatically buys an asset when its price drops by a set amount from a recent high, removing hesitation and emotion from the decision.",
+    a: "This dry-run bot records a simulated buy when price drops by a configured amount from a recent high, making the decision rule explicit and auditable.",
   },
   {
     q: "How is this different from a grid bot?",
@@ -50,7 +50,7 @@ const faqs = [
   },
   {
     q: "Is it safe to run unattended?",
-    a: "It runs dry-run by default and, in live mode, is bounded by spend caps and a cooldown, with a /pause_all kill switch in Telegram.",
+    a: "It is dry-run only, with simulated spend caps, a cooldown and a /pause_all kill switch in Telegram. It cannot place a real exchange order.",
   },
 ];
 </script>

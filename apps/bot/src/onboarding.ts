@@ -1,9 +1,10 @@
 import { riskDefaults, strategyDefaults } from "@buy-crypto-dip-bot/config";
-import { schema } from "@buy-crypto-dip-bot/db";
-import { eq } from "drizzle-orm";
+import { schema, withTenantContext } from "@buy-crypto-dip-bot/db";
+import { and, eq } from "drizzle-orm";
 import type { Bot } from "grammy";
 import { InlineKeyboard } from "grammy";
 import { getDb } from "./db.js";
+import { requirePrivatePrincipal } from "./tenant-context.js";
 
 // The onboarding wizard is stateless: every step encodes its accumulated
 // choices in the callback data (`wiz:<step>:...args`), so no session storage
@@ -119,6 +120,11 @@ export const startKeyboard = () =>
 
 export const registerOnboardingWizard = (bot: Bot) => {
   bot.callbackQuery(/^wiz:/, async (ctx) => {
+    const principal = await requirePrivatePrincipal(ctx, (message) =>
+      ctx.answerCallbackQuery(message),
+    );
+    if (!principal) return;
+
     const parsed = parseWizardCallback(ctx.callbackQuery.data);
     if (!parsed) {
       return ctx.answerCallbackQuery("❌ Unknown wizard action.");
@@ -182,52 +188,67 @@ export const registerOnboardingWizard = (bot: Bot) => {
       case "apply": {
         try {
           const db = getDb();
-          const [existing] = await db
-            .select()
-            .from(schema.strategies)
-            .where(eq(schema.strategies.symbol, parsed.symbol))
-            .limit(1);
-
           const configPatch = {
             thresholdPercent: parsed.thresholdPercent,
             suggestedQuoteAmount: parsed.amountUsdt,
           };
+          await withTenantContext(db, principal, async (tx) => {
+            const [existing] = await tx
+              .select()
+              .from(schema.strategies)
+              .where(
+                and(
+                  eq(schema.strategies.tenantId, principal.tenantId),
+                  eq(schema.strategies.symbol, parsed.symbol),
+                ),
+              )
+              .limit(1);
 
-          let strategyId: string;
-          if (existing) {
-            await db
-              .update(schema.strategies)
-              .set({
-                enabled: true,
-                config: { ...(existing.config as object), ...configPatch },
-              })
-              .where(eq(schema.strategies.id, existing.id));
-            strategyId = existing.id;
-          } else {
-            // Wizard coins come from the risk allowlist, so no exchange
-            // validation round-trip is needed here (unlike /add_pair).
-            const [created] = await db
-              .insert(schema.strategies)
-              .values({
-                name: `${parsed.symbol} Dip Buying Strategy`,
+            let strategyId: string;
+            if (existing) {
+              await tx
+                .update(schema.strategies)
+                .set({
+                  enabled: true,
+                  mode: "DRY_RUN",
+                  config: { ...(existing.config as object), ...configPatch },
+                })
+                .where(
+                  and(
+                    eq(schema.strategies.id, existing.id),
+                    eq(schema.strategies.tenantId, principal.tenantId),
+                  ),
+                );
+              strategyId = existing.id;
+            } else {
+              // Wizard coins come from the risk allowlist, so no exchange
+              // validation round-trip is needed here (unlike /add_pair).
+              const [created] = await tx
+                .insert(schema.strategies)
+                .values({
+                  tenantId: principal.tenantId,
+                  name: `${parsed.symbol} Dip Buying Strategy`,
+                  symbol: parsed.symbol,
+                  mode: "DRY_RUN",
+                  config: { ...strategyDefaults, ...configPatch },
+                })
+                .returning();
+              if (!created) throw new Error("insert returned no row");
+              strategyId = created.id;
+            }
+
+            await tx.insert(schema.auditEvents).values({
+              tenantId: principal.tenantId,
+              actorUserId: principal.userId,
+              entityType: "strategy",
+              entityId: strategyId,
+              action: "STRATEGY_ONBOARDED",
+              payload: {
                 symbol: parsed.symbol,
-                mode: "DRY_RUN",
-                config: { ...strategyDefaults, ...configPatch },
-              })
-              .returning();
-            if (!created) throw new Error("insert returned no row");
-            strategyId = created.id;
-          }
-
-          await db.insert(schema.auditEvents).values({
-            entityType: "strategy",
-            entityId: strategyId,
-            action: "STRATEGY_ONBOARDED",
-            payload: {
-              symbol: parsed.symbol,
-              ...configPatch,
-              via: "telegram_wizard",
-            },
+                ...configPatch,
+                via: "telegram_wizard",
+              },
+            });
           });
 
           return ctx.editMessageText(
