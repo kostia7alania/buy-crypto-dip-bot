@@ -88,20 +88,36 @@ jobs:
             test -s .env
             test -s docker-compose.yml
 
-            set_image() {
-              local image="$1"
-              awk -v image="$image" '
+            set_env_value() {
+              local key="$1"
+              local value="$2"
+              awk -v key="$key" -v value="$value" '
                 BEGIN { replaced = 0 }
-                /^DIPBOT_IMAGE=/ {
-                  if (!replaced) print "DIPBOT_IMAGE=" image
+                index($0, key "=") == 1 {
+                  if (!replaced) print key "=" value
                   replaced = 1
                   next
                 }
                 { print }
-                END { if (!replaced) print "DIPBOT_IMAGE=" image }
+                END { if (!replaced) print key "=" value }
               ' .env > .env.next
               chmod 600 .env.next
               mv .env.next .env
+            }
+
+            set_image() {
+              set_env_value DIPBOT_IMAGE "$1"
+            }
+
+            ensure_secret() {
+              local key="$1"
+              local current
+              current="$(sed -n "s/^${key}=//p" .env | tail -n 1)"
+              if test -n "$current"; then
+                return
+              fi
+              command -v openssl > /dev/null
+              set_env_value "$key" "$(openssl rand -hex 32)"
             }
 
             rollback() {
@@ -118,6 +134,8 @@ jobs:
               fi
               exit "$status"
             }
+
+            ensure_secret SESSION_SECRET
 
             curl --fail --silent --show-error --location --retry 3 \
               "https://raw.githubusercontent.com/${{ github.repository }}/$TARGET_SHA/docker-compose.prod.yml" \
