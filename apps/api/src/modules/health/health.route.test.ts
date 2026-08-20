@@ -1,5 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createApp } from "../../app.js";
+
+vi.mock("../../db.js", () => ({
+  getDb: () => ({ execute: async () => [] }),
+}));
 
 describe("health and version routes", () => {
   it("returns health status", async () => {
