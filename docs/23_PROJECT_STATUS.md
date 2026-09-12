@@ -10,7 +10,7 @@ claims; they do not override this verdict.
 
 | Source | Observed state | What its evidence proves |
 | --- | --- | --- |
-| Local base | `cedc6df`, originally on `main`; large existing uncommitted Gate 1/Safety Ledger package recovered | Local source and checks through catalog `0014_bouncy_zuras` |
+| Recovery source | `31212e159d8da7b5ccebb52b57f5b794db156ec2`, based on `cedc6df`; existing Gate 1/Safety Ledger package plus recovery fixes | Local source and checks through catalog `0014_bouncy_zuras` |
 | Remote main | `becc46bb3b957c484324dbc3c517d5db7762be97`, fetched 2026-09-11 | Cost-first tenant/RLS and VPS implementation merged on 2026-08-20 |
 | Running production | Revision, database catalog and provider configuration not inspected in this recovery | No deployment, availability or production isolation claim |
 
