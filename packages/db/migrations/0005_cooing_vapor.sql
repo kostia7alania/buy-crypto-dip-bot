@@ -1,0 +1,1 @@
+ALTER TABLE "api_sessions" ADD COLUMN "kind" text DEFAULT 'WEB' NOT NULL;

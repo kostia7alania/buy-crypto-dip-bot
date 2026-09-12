@@ -12,6 +12,7 @@
       "!**/.output",
       "!**/.turbo",
       "!**/coverage",
+      "!packages/db/migrations/meta/*.json",
       "!apps/web/app/assets/css/main.css"
     ]
   },

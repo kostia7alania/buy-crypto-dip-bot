@@ -1,13 +1,14 @@
 import { serve } from "@hono/node-server";
-import { createApp } from "./app.js";
-import { startRunner } from "./modules/runner/runner.service.js";
+import { prepareApi } from "./bootstrap.js";
+import { logApiError, logApiEvent } from "./operational-log.js";
 
-const port = Number(process.env.PORT ?? 8787);
-serve({ fetch: createApp().fetch, port }, (info) => {
-  console.log(`API listening on http://localhost:${info.port}`);
-
-  // Start background trading runner in dev and prod
-  startRunner().catch((err) => {
-    console.error("Failed to start background trading runner:", err);
+try {
+  const { app, config } = await prepareApi();
+  serve({ fetch: app.fetch, port: config.port }, (info) => {
+    void info;
+    logApiEvent("API_LISTENING");
   });
-});
+} catch (error) {
+  logApiError("API_STARTUP_FAILED", error);
+  process.exitCode = 1;
+}

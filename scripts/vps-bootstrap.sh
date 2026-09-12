@@ -59,19 +59,31 @@ echo "=== 7. App directory ==="
 mkdir -p "$APP_DIR"
 if [ ! -f "$APP_DIR/.env" ]; then
   API_KEY=$(openssl rand -hex 32)
+  BOT_HEARTBEAT_SECRET=$(openssl rand -hex 32)
   PG_PASS=$(openssl rand -hex 24)
   SESSION_SECRET=$(openssl rand -hex 32)
   cat > "$APP_DIR/.env" <<EOF
 POSTGRES_PASSWORD=${PG_PASS}
 API_KEY=${API_KEY}
+BOT_HEARTBEAT_SECRET=${BOT_HEARTBEAT_SECRET}
 SESSION_SECRET=${SESSION_SECRET}
 TELEGRAM_BOT_TOKEN=
-TELEGRAM_CHAT_ID=
+OPERATOR_TELEGRAM_USER_ID=
 NUXT_PUBLIC_TELEGRAM_BOT_USERNAME=
 ALLOWLIST_SYMBOLS=BTCUSDT,ETHUSDT,SOLUSDT
 EOF
   chmod 600 "$APP_DIR/.env"
-  echo ">>> Generated $APP_DIR/.env — fill TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID"
+  echo ">>> Generated $APP_DIR/.env — fill TELEGRAM_BOT_TOKEN"
+fi
+if ! grep -Eq '^BOT_HEARTBEAT_SECRET=.{32,}$' "$APP_DIR/.env"; then
+  BOT_HEARTBEAT_SECRET=$(openssl rand -hex 32)
+  if grep -q '^BOT_HEARTBEAT_SECRET=' "$APP_DIR/.env"; then
+    sed -i "s/^BOT_HEARTBEAT_SECRET=.*/BOT_HEARTBEAT_SECRET=${BOT_HEARTBEAT_SECRET}/" "$APP_DIR/.env"
+  else
+    printf '\nBOT_HEARTBEAT_SECRET=%s\n' "$BOT_HEARTBEAT_SECRET" >> "$APP_DIR/.env"
+  fi
+  chmod 600 "$APP_DIR/.env"
+  echo ">>> Generated missing BOT_HEARTBEAT_SECRET in $APP_DIR/.env"
 fi
 chown -R deploy:deploy "$APP_DIR"
 

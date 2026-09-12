@@ -15,6 +15,22 @@ export const riskDefaults = {
   allowlistSymbols: ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
 } as const;
 
+// Deployment configuration may narrow the reviewed policy, never extend it.
+// An explicit empty or unknown-only value disables every symbol.
+export const getAllowedSymbols = (configuredSymbols?: string): string[] => {
+  const requested = configuredSymbols
+    ?.split(",")
+    .map((symbol) => symbol.trim().toUpperCase());
+  return riskDefaults.allowlistSymbols.filter(
+    (symbol) => requested === undefined || requested.includes(symbol),
+  );
+};
+
+export const isAllowedSymbol = (
+  symbol: string,
+  configuredSymbols?: string,
+): boolean => getAllowedSymbols(configuredSymbols).includes(symbol);
+
 // Grace period between a BUY signal and dry-run execution during which the
 // user can cancel or force the order from Telegram.
 export const orderExecutionDelaySeconds = 15;

@@ -41,7 +41,7 @@ describe("evaluateRisk", () => {
   });
 
   it("keeps default guard in dry-run mode with auditable status", () => {
-    expect(createDefaultRiskGuard().getStatus()).toEqual({
+    expect(createDefaultRiskGuard(["BTCUSDT"]).getStatus()).toEqual({
       liveTradingEnabled: false,
       mode: "DRY_RUN",
       allowedSymbols: ["BTCUSDT"],

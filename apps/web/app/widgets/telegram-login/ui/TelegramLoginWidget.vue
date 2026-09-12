@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { logOperationalError } from "@buy-crypto-dip-bot/shared-types";
+import { onUnmounted, ref, watch, watchPostEffect } from "vue";
 import {
-  fetchMe,
   loginWithTelegram,
   logout,
   type MeResponse,
@@ -17,25 +17,61 @@ const { data: me, refresh } = await useFetch<MeResponse>("/api/auth/me", {
 
 const widgetHost = ref<HTMLDivElement | null>(null);
 const loginFailed = ref(false);
+const logoutFailed = ref(false);
+const changingSession = ref(false);
 
-onMounted(() => {
-  if (!botUsername || me.value?.user || !widgetHost.value) return;
+const clearPrivateData = () => {
+  clearNuxtData([
+    "strategies",
+    "audit",
+    "orders",
+    "pnl",
+    "performance",
+    "risk-status",
+  ]);
+};
+
+// Invalidate successful entries and pending writes before the next account
+// renders. Nuxt keeps these entries after the old panels are unmounted.
+watch(() => me.value?.user?.id, clearPrivateData, { flush: "sync" });
+
+const onTelegramAuth = async (payload: TelegramAuthPayload) => {
+  if (changingSession.value) return;
+  changingSession.value = true;
+  try {
+    loginFailed.value = false;
+    logoutFailed.value = false;
+    const result = await loginWithTelegram(payload);
+    clearPrivateData();
+    me.value = result;
+    await refresh();
+  } catch (error) {
+    logOperationalError({
+      service: "WEB_CLIENT",
+      event: "TELEGRAM_LOGIN_FAILED",
+      error,
+    });
+    loginFailed.value = true;
+  } finally {
+    changingSession.value = false;
+  }
+};
+
+watchPostEffect((onCleanup) => {
+  if (
+    !import.meta.client ||
+    !botUsername ||
+    me.value?.user ||
+    !widgetHost.value
+  )
+    return;
+  const host = widgetHost.value;
 
   // The official widget calls a global function on successful auth.
-  (
-    window as Window & {
-      onTelegramAuth?: (payload: TelegramAuthPayload) => void;
-    }
-  ).onTelegramAuth = async (payload: TelegramAuthPayload) => {
-    try {
-      loginFailed.value = false;
-      await loginWithTelegram(payload);
-      await refresh();
-    } catch (error) {
-      console.error("Telegram login failed:", error);
-      loginFailed.value = true;
-    }
+  const authWindow = window as Window & {
+    onTelegramAuth?: (payload: TelegramAuthPayload) => void;
   };
+  authWindow.onTelegramAuth = onTelegramAuth;
 
   const script = document.createElement("script");
   script.async = true;
@@ -45,13 +81,37 @@ onMounted(() => {
   script.setAttribute("data-radius", "8");
   script.setAttribute("data-onauth", "onTelegramAuth(user)");
   script.setAttribute("data-request-access", "write");
-  widgetHost.value.appendChild(script);
+  host.appendChild(script);
+
+  onCleanup(() => {
+    host.replaceChildren();
+    if (authWindow.onTelegramAuth === onTelegramAuth) {
+      delete authWindow.onTelegramAuth;
+    }
+  });
 });
 
 const onLogout = async () => {
-  await logout();
-  await refresh();
+  if (changingSession.value) return;
+  changingSession.value = true;
+  logoutFailed.value = false;
+  try {
+    await logout();
+    clearPrivateData();
+    me.value = { user: null };
+  } catch (error) {
+    logOperationalError({
+      service: "WEB_CLIENT",
+      event: "LOGOUT_FAILED",
+      error,
+    });
+    logoutFailed.value = true;
+  } finally {
+    changingSession.value = false;
+  }
 };
+
+onUnmounted(clearPrivateData);
 
 const displayName = (user: NonNullable<MeResponse["user"]>) =>
   user.username ? `@${user.username}` : (user.firstName ?? user.telegramUserId);
@@ -66,13 +126,14 @@ const displayName = (user: NonNullable<MeResponse["user"]>) =>
         </svg>
         {{ displayName(me.user) }}
       </span>
-      <button type="button" class="tg-login__logout" @click="onLogout">
-        Sign out
+      <button type="button" class="tg-login__logout" :disabled="changingSession" @click="onLogout">
+        {{ changingSession ? "Signing out..." : "Sign out" }}
       </button>
+      <span v-if="logoutFailed" class="tg-login__error" role="alert">Sign out failed. Try again.</span>
     </template>
     <template v-else-if="botUsername">
       <div ref="widgetHost" class="tg-login__widget"></div>
-      <span v-if="loginFailed" class="tg-login__error">Login failed — try again</span>
+      <span v-if="loginFailed" class="tg-login__error" role="alert">Login failed. Try again.</span>
     </template>
     <!-- No bot username configured: render nothing, the dashboard stays usable. -->
   </div>
@@ -82,42 +143,45 @@ const displayName = (user: NonNullable<MeResponse["user"]>) =>
 .tg-login {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .tg-login__user {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
-  font-size: 0.85rem;
+  gap: var(--space-2);
+  font-size: var(--text-small);
   font-weight: 600;
-  color: var(--color-text, #e2e8f0);
+  color: var(--color-text-secondary);
 }
 
 .tg-login__icon {
   width: 1.05rem;
   height: 1.05rem;
-  color: #229ed9;
+  color: var(--color-telegram);
 }
 
 .tg-login__logout {
-  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-  background: transparent;
-  color: inherit;
-  font-size: 0.75rem;
-  padding: 0.3rem 0.7rem;
-  border-radius: 999px;
+  min-block-size: var(--control-height-compact);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
+  color: var(--color-text-secondary);
+  font-size: var(--text-caption);
+  padding-inline: var(--space-3);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  opacity: 0.75;
-  transition: opacity 0.15s ease;
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
 }
 
-.tg-login__logout:hover {
-  opacity: 1;
+.tg-login__logout:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  border-color: var(--color-border-strong);
 }
 
 .tg-login__error {
   font-size: 0.75rem;
-  color: #f87171;
+  color: var(--color-danger);
 }
 </style>

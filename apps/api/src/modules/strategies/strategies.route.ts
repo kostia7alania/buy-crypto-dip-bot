@@ -1,10 +1,13 @@
-import { strategyDefaults } from "@buy-crypto-dip-bot/config";
-import { schema } from "@buy-crypto-dip-bot/db";
+import { isAllowedSymbol, strategyDefaults } from "@buy-crypto-dip-bot/config";
+import { auditEventRow, schema } from "@buy-crypto-dip-bot/db";
 import { createBybitPublicClient } from "@buy-crypto-dip-bot/exchange-bybit";
-import { eq } from "drizzle-orm";
+import { AUDIT_SCHEMA_VERSION } from "@buy-crypto-dip-bot/shared-types";
+import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import * as v from "valibot";
 import { getDb } from "../../db.js";
+import { logApiError } from "../../operational-log.js";
+import { type AppEnv, requireUser } from "../auth/principal.middleware.js";
 
 const addStrategySchema = v.object({
   symbol: v.pipe(v.string(), v.regex(/^[A-Z0-9]{3,20}$/)),
@@ -23,21 +26,24 @@ const updateStrategySchema = v.object({
   ),
 });
 
-export const strategiesRoutes = new Hono()
+export const strategiesRoutes = new Hono<AppEnv>()
   .get("/", async (c) => {
+    const user = requireUser(c);
     try {
       const db = getDb();
       const list = await db
         .select()
         .from(schema.strategies)
+        .where(eq(schema.strategies.userId, user.userId))
         .orderBy(schema.strategies.symbol);
       return c.json(list);
     } catch (error) {
-      console.error("Failed to list strategies:", error);
+      logApiError("STRATEGY_LIST_FAILED", error, c.get("correlationId"));
       return c.json({ error: "INTERNAL_SERVER_ERROR" }, 500);
     }
   })
   .post("/", async (c) => {
+    const user = requireUser(c);
     try {
       const body = await c.req.json();
       const parsed = v.safeParse(addStrategySchema, body);
@@ -46,13 +52,22 @@ export const strategiesRoutes = new Hono()
       }
 
       const symbol = parsed.output.symbol.toUpperCase();
+      if (!isAllowedSymbol(symbol, process.env.ALLOWLIST_SYMBOLS)) {
+        return c.json({ error: "SYMBOL_NOT_ALLOWED" }, 400);
+      }
       const db = getDb();
 
-      // 1. Check if strategy already exists
+      // 1. Uniqueness is per user, not global: two people are both entitled
+      //    to their own BTCUSDT strategy.
       const existing = await db
         .select()
         .from(schema.strategies)
-        .where(eq(schema.strategies.symbol, symbol))
+        .where(
+          and(
+            eq(schema.strategies.userId, user.userId),
+            eq(schema.strategies.symbol, symbol),
+          ),
+        )
         .limit(1);
 
       if (existing.length > 0) {
@@ -72,24 +87,48 @@ export const strategiesRoutes = new Hono()
         return c.json({ error: "SYMBOL_NOT_FOUND_ON_EXCHANGE" }, 400);
       }
 
-      // 3. Create default strategy
-      const [newStrategy] = await db
-        .insert(schema.strategies)
-        .values({
-          name: `${symbol} Dip Buying Strategy`,
-          symbol,
-          mode: "DRY_RUN",
-          config: { ...strategyDefaults },
-        })
-        .returning();
+      // 3. Create default strategy, owned by the caller
+      const newStrategy = await db.transaction(async (tx) => {
+        const [created] = await tx
+          .insert(schema.strategies)
+          .values({
+            userId: user.userId,
+            name: `${symbol} Dip Buying Strategy`,
+            symbol,
+            mode: "DRY_RUN",
+            config: { ...strategyDefaults },
+          })
+          .returning();
+        if (!created) throw new Error("strategy insert returned no row");
+        await tx.insert(schema.auditEvents).values(
+          auditEventRow({
+            schemaVersion: AUDIT_SCHEMA_VERSION,
+            type: "STRATEGY_CREATED",
+            scope: "USER",
+            userId: user.userId,
+            actor: {
+              kind: "USER",
+              channel: user.sessionKind === "BOT_COMMAND" ? "TELEGRAM" : "WEB",
+              userId: user.userId,
+            },
+            reasonCode: "USER_REQUESTED",
+            correlationId: c.get("correlationId"),
+            subject: { type: "STRATEGY", id: created.id },
+            payloadClass: "TENANT_CONFIGURATION",
+            payload: { symbol: created.symbol, mode: "DRY_RUN" },
+          }),
+        );
+        return created;
+      });
 
       return c.json({ success: true, strategy: newStrategy });
-    } catch (error: any) {
-      console.error("Failed to add strategy:", error);
+    } catch (error) {
+      logApiError("STRATEGY_CREATE_FAILED", error, c.get("correlationId"));
       return c.json({ error: "INTERNAL_SERVER_ERROR" }, 500);
     }
   })
   .patch("/:id", async (c) => {
+    const user = requireUser(c);
     const id = c.req.param("id");
     try {
       const body = await c.req.json();
@@ -97,38 +136,103 @@ export const strategiesRoutes = new Hono()
       if (!parsed.success) {
         return c.json({ error: "INVALID_UPDATE_PAYLOAD" }, 400);
       }
+      const auditFields = [
+        ...(parsed.output.enabled !== undefined ? (["enabled"] as const) : []),
+        ...Object.keys(parsed.output.config ?? {}),
+      ] as Array<
+        | "enabled"
+        | "thresholdPercent"
+        | "suggestedQuoteAmount"
+        | "maxDailySpendUsdt"
+        | "maxWeeklySpendUsdt"
+        | "cooldownMinutes"
+      >;
+      if (auditFields.length === 0) {
+        return c.json({ error: "INVALID_UPDATE_PAYLOAD" }, 400);
+      }
 
       const db = getDb();
+      // Ownership is part of the lookup, so a strategy belonging to someone
+      // else is indistinguishable from one that does not exist. Returning 403
+      // here would confirm the id is real — itself a cross-tenant leak.
       const [existing] = await db
         .select()
         .from(schema.strategies)
-        .where(eq(schema.strategies.id, id))
+        .where(
+          and(
+            eq(schema.strategies.id, id),
+            eq(schema.strategies.userId, user.userId),
+          ),
+        )
         .limit(1);
 
       if (!existing) {
         return c.json({ error: "STRATEGY_NOT_FOUND" }, 404);
       }
 
-      const updates: any = {};
+      if (
+        parsed.output.enabled === true &&
+        !isAllowedSymbol(existing.symbol, process.env.ALLOWLIST_SYMBOLS)
+      ) {
+        return c.json({ error: "SYMBOL_NOT_ALLOWED" }, 400);
+      }
+
+      const updates: {
+        enabled?: boolean;
+        config?: Record<string, unknown>;
+      } = {};
       if (parsed.output.enabled !== undefined) {
         updates.enabled = parsed.output.enabled;
       }
       if (parsed.output.config !== undefined) {
+        const existingConfig =
+          typeof existing.config === "object" &&
+          existing.config !== null &&
+          !Array.isArray(existing.config)
+            ? (existing.config as Record<string, unknown>)
+            : {};
         updates.config = {
-          ...(existing.config as any),
+          ...existingConfig,
           ...parsed.output.config,
         };
       }
 
-      const [updated] = await db
-        .update(schema.strategies)
-        .set(updates)
-        .where(eq(schema.strategies.id, id))
-        .returning();
+      const updated = await db.transaction(async (tx) => {
+        const [row] = await tx
+          .update(schema.strategies)
+          .set(updates)
+          .where(
+            and(
+              eq(schema.strategies.id, id),
+              eq(schema.strategies.userId, user.userId),
+            ),
+          )
+          .returning();
+        if (!row) throw new Error("owned strategy disappeared during update");
+        await tx.insert(schema.auditEvents).values(
+          auditEventRow({
+            schemaVersion: AUDIT_SCHEMA_VERSION,
+            type: "STRATEGY_UPDATED",
+            scope: "USER",
+            userId: user.userId,
+            actor: {
+              kind: "USER",
+              channel: user.sessionKind === "BOT_COMMAND" ? "TELEGRAM" : "WEB",
+              userId: user.userId,
+            },
+            reasonCode: "USER_REQUESTED",
+            correlationId: c.get("correlationId"),
+            subject: { type: "STRATEGY", id: row.id },
+            payloadClass: "TENANT_CONFIGURATION",
+            payload: { fields: auditFields },
+          }),
+        );
+        return row;
+      });
 
       return c.json({ success: true, strategy: updated });
     } catch (error) {
-      console.error("Failed to update strategy:", error);
+      logApiError("STRATEGY_UPDATE_FAILED", error, c.get("correlationId"));
       return c.json({ error: "INTERNAL_SERVER_ERROR" }, 500);
     }
   });

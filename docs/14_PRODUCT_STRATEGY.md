@@ -1,122 +1,56 @@
-# Product Strategy & Competitive Landscape
+# Product model and delivery strategy
 
-_Written 2026-07-07 during infra hardening. A living document — revise as the
-market and product move._
+Reviewed: 2026-09-12. Source scope: [project status](23_PROJECT_STATUS.md).
 
-## One-line positioning
+## Product today
 
-**The risk-first, dry-run-first, Telegram-native dip-buying bot for CEX spot
-traders who are scared of trading bots.** We sell *trust and safety*, not
-strategy count.
+A self-hosted spot dip simulator for people who want to inspect automation
+before considering real exchange execution. Telegram is the interaction and
+notification surface; the Safety Ledger explains configured limits, decisions
+and local outcomes. `DRY_RUN`, backtest, benchmark context and auditability
+are the current product. No hosted tariff, SLA or private exchange execution
+is offered by this record.
 
-## The market has two camps (and a gap between them)
+## Recorded direction
 
-### Camp A — CEX automation platforms
-3Commas, Pionex, Bitsgap, TradeSanta, Cryptohopper.
+The approved 2026-08-20 cost-first decision keeps one Nuxt application:
+prerender public pages, render the private dashboard in the browser, and keep
+a dynamic server-only BFF. The target uses Hono Workers, Supabase PostgreSQL
+and Auth, Telegram webhook/OIDC, and bounded Cron/Queue work.
 
-- Connect to exchange APIs (Bybit/Binance/…), run DCA / grid / DIP / QFL bots.
-- Pricing: Pionex free (0.05% trade fee), others $15–$140/mo
-  ([CoinGape](https://coingape.com/best-crypto-trading-bots/),
-  [Bitsgap](https://bitsgap.com/)).
-- Web-dashboard-first. Feature-maximalist: Bitsgap alone ships Grid, DCA,
-  COMBO, BTD, LOOP, QFL. Steep learning curve; the UI assumes you already
-  trade.
-- **Weakness:** intimidating to beginners, web-centric, "wall of knobs",
-  paper-trading is a buried afterthought.
+A small MVP may fit provider free allowances, but domain-only running cost is
+a hypothesis. Database capacity/egress, CPU, queue retries, backups and
+availability can require paid infrastructure. The dated assumptions are in
+[the cost-first source document](15_COST_FIRST_SAAS_STRATEGY.md); verify vendor
+limits before sizing or cutover.
 
-### Camp B — Telegram-native on-chain bots
-Maestro, Trojan, Banana Gun, BonkBot.
+## Monetization hypothesis
 
-- Non-custodial DEX sniping of memecoins. 0.5–1% per-trade fees, no
-  subscription for the base tier.
-- Enormous traction: Trojan ~$25B lifetime volume / 2M users; Maestro
-  573k users
-  ([Breaking AC](https://breakingac.com/news/2026/apr/30/multi-chain-telegram-trading-bots-head-to-head-trojan-vs-banana-gun-vs-maestro/)).
-- **Weakness:** degen risk profile, memecoin casino, self-custody key risk,
-  zero "safety rails". The opposite of risk-first.
+First validate whether people return to inspect their simulated decisions.
+A future hosted subscription would charge for managed operation, useful
+history/export and reliable notification/recovery, subject to measured
+support and infrastructure costs. Pricing interviews and packaging tests are
+open work. No price, conversion result, user count or revenue is established
+by repository implementation.
 
-### The gap we sit in
-Nobody serves **"I hold BTC/ETH on Bybit, I want to auto-buy dips, and I am
-terrified of losing money to a bot I don't understand."** Camp A is too
-complex and web-bound; Camp B is too degen and on-chain. We are:
+Do not monetize bypassing risk controls or add custody, performance fees,
+leverage, meme coins or a strategy marketplace to this MVP.
 
-- **Telegram-native like Camp B** (the UX people actually adopt) …
-- **… but CEX-spot, DCA/dip, and risk-first like the safe end of Camp A.**
+## Delivery order
 
-## Why "risk-first + dry-run-first" is the wedge, not a limitation
+1. Finish the interrupted local safety fixes and preserve their evidence.
+2. Reconcile the newer personal-tenant/RLS implementation with the local
+   session, immutable audit, market-data and notification hardening.
+3. Prove the resulting revision and catalog, browser identity transitions,
+   operations and deployment readiness. Gate 1 must have one explicit verdict.
+4. Implement the cost-first runtime in bounded slices and verify a single
+   scheduler/bot delivery mode during cutover.
+5. Run customer discovery and measure healthy dry-run use with actual evidence
+   viewing. Hosted pricing remains unannounced until supported by evidence.
+6. Consider Bybit Demo, then any closed live pilot, only through their separate
+   safety and external approval gates. Live execution stays unavailable.
 
-Every credible source says the same onboarding path: **paper-trade 2–4 weeks
-→ live with 10–25% capital → scale**
-([CoinCentral](https://coincentral.com/auto-trading-bot-guide-to-crypto-bots-strategies-and-risk-management-in-2026/),
-[Bitsgap backtesting](https://bitsgap.com/blog/crypto-bot-backtesting-in-2026-what-it-shows-and-what-it-cannot-predict)).
-Competitors treat dry-run as a checkbox. **We make it the front door.** The
-product's entire first experience is a safe simulation with a visible PnL —
-the user builds trust before a cent is at risk. That is a marketing story, a
-retention mechanic, and a compliance posture in one.
-
-## Who I think we become (3 horizons)
-
-### Horizon 1 — "The safe dip bot" (now → 3 months)
-A single-tenant, self-hostable, Telegram-first DCA/dip bot on Bybit spot,
-dry-run by default, with an honest live dashboard. **Win = a user runs it for
-a month, sees the simulated PnL, and trusts it.** Everything already built
-serves this. Ship polish, not features.
-
-### Horizon 2 — "Prove it, then trade it" (3–9 months)
-- **Backtesting** on historical Bybit data (min 3 years, bull+bear+range) —
-  the #1 credibility feature competitors gatekeep behind paid tiers. Turn
-  our dry-run engine into a time-machine.
-- **Guarded live trading**: spot-only, per-strategy caps, the existing
-  RiskGuard as the gate, `/pause_all` kill switch. Live is opt-in, capped,
-  and reversible.
-- **Multi-user** via the Telegram identity already in the schema.
-
-### Horizon 3 — "The trust layer for retail automation" (9+ months)
-- Multiple safe strategies (QFL/base-drop, laddered DCA, rebalancing) — but
-  each shipped only after it survives backtest + dry-run gates the user can
-  see.
-- Optional managed hosting (the SaaS the repo was scaffolded for) for people
-  who won't self-host — priced against the $20–30 entry tier, undercutting on
-  simplicity.
-- Non-custodial ethos borrowed from Camp B: users hold their own Bybit API
-  keys (spot-only, no-withdrawal), we never custody funds.
-
-## What NOT to do (guardrails against scope creep)
-
-- No futures, leverage, martingale, memecoins — it contradicts the wedge and
-  the AGENTS.md rules.
-- Don't out-feature Bitsgap. Our moat is *fewer knobs, more trust*.
-- Don't chase Camp B volume/degen users — different product, different risk
-  appetite, regulatory minefield.
-
-## Near-term product backlog (ranked by trust-per-effort)
-
-1. ~~**PnL vs benchmark**~~ — ✅ Shipped 2026-07-07. `/performance` API +
-   dashboard PerformanceWidget + `/performance` bot command compare dip-DCA
-   against calendar-DCA and buy-and-hold over the same capital and window,
-   with a win/lag/mixed verdict.
-2. ~~**Backtesting MVP**~~ — ✅ Shipped 2026-07-08. Pure `runDipBacktest`
-   replay in strategy-engine (production rules over hourly candles),
-   paginated `/backtest` API (up to 120 days), dashboard BacktestWidget
-   with form + verdict, and the `/backtest` bot command.
-3. ~~**Onboarding wizard in Telegram**~~ — ✅ Shipped 2026-07-19. `/start`
-   shows a three-step inline-keyboard wizard (coin → dip threshold → buy
-   amount → confirm) that enables a dry-run strategy and writes an audit
-   event; chat id auto-stored. Stateless: step state lives in callback data.
-4. ~~**Daily digest**~~ — ✅ Shipped 2026-07-08. Runner sends a morning
-   Telegram summary (buys, spent, portfolio PnL) once per day at 06:00 UTC.
-5. ~~**Telegram Login on the dashboard**~~ — ✅ Shipped 2026-07-19
-   (ExecPlan 003). Official Login Widget in the dashboard header; the API
-   verifies the payload (HMAC per Telegram spec) and upserts the same
-   `users` row the bot writes, the BFF keeps a sealed session cookie.
-   Requires `NUXT_PUBLIC_TELEGRAM_BOT_USERNAME` + BotFather `/setdomain`.
-   Unlocks multi-user.
-
-Also shipped 2026-07-07: rich SEO landing pages (reusable LandingPage widget,
-8 unique keyword pages, JSON-LD FAQ + SoftwareApplication, OG/Twitter cards)
-turning the thin placeholder pages into a real acquisition asset.
-
-## Success metric to watch
-Not MRR yet. **Weeks-a-user-keeps-the-bot-running in dry-run.** If people
-leave it on and check the PnL, the trust thesis holds and everything else
-(live trading, hosting revenue) follows.
+The [backlog](../tasks/00_MASTER_PLAN.md) owns priorities. The old single-user
+"next three months" timeline and competitor price claims are historical
+research, not today's plan. Weeks of healthy use and returning evidence
+viewers are proposed success metrics; first-party reporting is still pending.

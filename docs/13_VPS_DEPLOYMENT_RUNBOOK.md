@@ -1,5 +1,7 @@
 # Production VPS Deployment Runbook
 
+> Recovery notice, 2026-09-12: this checkout and remote `becc46b` have different deployment workflows and database catalogs. Before using any release or rollback command, resolve the source/catalog and Gate 1 prerequisites in [project status](23_PROJECT_STATUS.md). The immutable-image/backup workflow exists in remote main; it has not been integrated here. No deployment was performed by this recovery.
+
 How **Buy Crypto Dip Bot** ships to the VPS. The server never builds anything — a 1GB
 box cannot build Nuxt. GitHub Actions builds a single Docker image; the VPS
 only pulls and restarts.
@@ -62,15 +64,22 @@ curl -fsSL https://raw.githubusercontent.com/kostia7alania/buy-crypto-dip-bot/ma
 
 cd /opt/buy-crypto-dip-bot
 curl -fsSL https://raw.githubusercontent.com/kostia7alania/buy-crypto-dip-bot/main/docker-compose.prod.yml -o docker-compose.yml
-nano .env    # fill TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID
+nano .env    # fill TELEGRAM_BOT_TOKEN; optionally set OPERATOR_TELEGRAM_USER_ID
 docker compose up -d
 docker compose ps    # db healthy, api/bot/web running
 curl -s localhost:8787/health
 ```
 
-The bootstrap generates strong `POSTGRES_PASSWORD` and `API_KEY` in
+The bootstrap generates strong `POSTGRES_PASSWORD`, `API_KEY`,
+`BOT_HEARTBEAT_SECRET`, and `SESSION_SECRET` values in
 `/opt/buy-crypto-dip-bot/.env` automatically. Postgres and the API are
 reachable only from the docker network / localhost.
+
+The Compose file passes an explicit allowlist of environment variables to
+each process. In particular, `BOT_HEARTBEAT_SECRET` is available only to the
+API and bot; the web BFF receives `API_KEY` but cannot forge bot readiness.
+After updating an older installation, rerun `scripts/vps-bootstrap.sh` once to
+generate a missing heartbeat secret before starting the new Compose stack.
 
 ### Edge proxy: Traefik (all projects on this VPS)
 
@@ -150,6 +159,10 @@ hide the origin IP.
 ## 8. Security checklist
 
 - [ ] `API_KEY` set in `/opt/buy-crypto-dip-bot/.env` (bootstrap does this)
+- [ ] `BOT_HEARTBEAT_SECRET` is at least 32 characters and is scoped only to
+      the API and bot containers (bootstrap and Compose do this)
+- [ ] `docker compose config` shows no `BOT_HEARTBEAT_SECRET` or
+      `TELEGRAM_BOT_TOKEN` under the `web` service
 - [ ] Rotate the VPS root password after sharing it anywhere; CI never uses it
 - [ ] SSH password auth disabled once key login is confirmed (step 1)
 - [ ] `ufw status` → only 22/80/443 (+ your own services) allowed

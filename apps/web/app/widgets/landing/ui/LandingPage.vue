@@ -38,8 +38,40 @@ const fallbackIcons: IconName[] = [
   "scale",
   "wallet",
 ];
+const statusGlossary = [
+  {
+    term: "Detected",
+    definition:
+      "A configured market condition matched. No risk approval or order is implied.",
+  },
+  {
+    term: "Approved",
+    definition:
+      "Risk checks passed for that recorded decision. This is not an exchange acceptance or fill.",
+  },
+  {
+    term: "Rejected",
+    definition:
+      "A limit, cooldown or other policy blocked the proposed dry-run action.",
+  },
+  {
+    term: "Simulated",
+    definition:
+      "A local DRY_RUN outcome. No exchange order, fill, fee or asset transfer occurred.",
+  },
+  {
+    term: "Accepted / Filled",
+    definition:
+      "Reserved for future external evidence. The current product does not emit these exchange states.",
+  },
+  {
+    term: "Unknown / Stale",
+    definition:
+      "Evidence is ambiguous or too old for a safe conclusion; the product must not present it as success.",
+  },
+];
 const iconFor = (f: { icon?: IconName }, i: number) =>
-  f.icon ?? fallbackIcons[i % fallbackIcons.length]!;
+  f.icon ?? fallbackIcons[i % fallbackIcons.length] ?? "shield";
 
 const config = useRuntimeConfig();
 const route = useRoute();
@@ -68,7 +100,8 @@ useSeoMeta({
   twitterDescription: props.description,
 });
 
-// Structured data: FAQ rich results + SoftwareApplication.
+// Structured data: FAQ rich results + SoftwareApplication. There is no Offer:
+// this repository does not currently sell a hosted product or tariff.
 useHead({
   script: [
     {
@@ -94,7 +127,6 @@ useHead({
           name: props.title,
           applicationCategory: "FinanceApplication",
           operatingSystem: "Web, Telegram",
-          offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
           description: props.description,
         }),
       ),
@@ -112,7 +144,7 @@ useHead({
         <p class="landing__subheadline">{{ props.subheadline }}</p>
         <div class="landing__cta">
           <NuxtLink to="/dashboard" class="landing__btn landing__btn--primary">
-            Watch it trade live
+            Open the dry-run console
           </NuxtLink>
           <a href="#how" class="landing__btn landing__btn--ghost">
             How it works
@@ -120,40 +152,51 @@ useHead({
         </div>
       </div>
 
-      <!-- Product visual: the dip, the buy, the rebound -->
-      <figure class="landing__chart" aria-hidden="true">
-        <svg viewBox="0 0 480 300" class="landing__chart-svg">
-          <!-- grid -->
-          <path
-            class="landing__chart-grid"
-            d="M0 60H480M0 120H480M0 180H480M0 240H480M60 0V300M120 0V300M180 0V300M240 0V300M300 0V300M360 0V300M420 0V300"
-          />
-          <!-- calendar DCA ghost line -->
-          <path
-            class="landing__chart-ghost"
-            d="M0 150 L480 118"
-          />
-          <!-- price path: slide, dip, rebound -->
-          <path
-            class="landing__chart-price"
-            d="M0 90 C60 95 90 110 130 150 C160 180 185 215 220 222 C250 227 270 205 300 175 C340 135 390 95 480 60"
-          />
-          <!-- buy marker at the dip -->
-          <circle class="landing__chart-pulse" cx="220" cy="222" r="16" />
-          <circle class="landing__chart-buy" cx="220" cy="222" r="7" />
-          <g class="landing__chart-tag" transform="translate(196, 248)">
-            <rect width="66" height="26" rx="7" />
-            <text x="33" y="17.5" text-anchor="middle">BUY</text>
-          </g>
-          <!-- result badge -->
-          <g class="landing__chart-badge" transform="translate(336, 26)">
-            <rect width="118" height="30" rx="8" />
-            <text x="59" y="20" text-anchor="middle">beats DCA ✓</text>
-          </g>
-        </svg>
-        <figcaption class="landing__chart-caption">
-          Dry-run simulation, benchmarked against calendar DCA
+      <figure class="landing__evidence" aria-labelledby="evidence-title">
+        <figcaption class="landing__evidence-header">
+          <span class="landing__evidence-kicker">Illustrative decision trace</span>
+          <strong id="evidence-title" class="landing__evidence-title">
+            A signal must leave evidence
+          </strong>
         </figcaption>
+        <ol class="landing__evidence-list">
+          <li class="landing__evidence-step landing__evidence-step--detected">
+            <span class="landing__evidence-icon" aria-hidden="true">
+              <UiIcon name="dip" :size="18" />
+            </span>
+            <div class="landing__evidence-copy">
+              <strong>Signal detected</strong>
+              <span>24h drawdown crossed the strategy threshold.</span>
+              <code>BTCUSDT · 14:32:08</code>
+            </div>
+            <span class="landing__evidence-status">Detected</span>
+          </li>
+          <li class="landing__evidence-step landing__evidence-step--approved">
+            <span class="landing__evidence-icon" aria-hidden="true">
+              <UiIcon name="shield" :size="18" />
+            </span>
+            <div class="landing__evidence-copy">
+              <strong>RiskGuard checked</strong>
+              <span>Daily cap, weekly cap and cooldown cleared.</span>
+              <code>LIMITS · 14:32:09</code>
+            </div>
+            <span class="landing__evidence-status">Approved</span>
+          </li>
+          <li class="landing__evidence-step landing__evidence-step--simulated">
+            <span class="landing__evidence-icon" aria-hidden="true">
+              <UiIcon name="audit" :size="18" />
+            </span>
+            <div class="landing__evidence-copy">
+              <strong>Dry-run order queued</strong>
+              <span>20 USDT simulated. No exchange funds touched.</span>
+              <code>DRY_RUN · 14:32:10</code>
+            </div>
+            <span class="landing__evidence-status">Simulated</span>
+          </li>
+        </ol>
+        <p class="landing__evidence-note">
+          Covered approvals, rejections and simulated orders stay on the record.
+        </p>
       </figure>
     </section>
 
@@ -173,6 +216,22 @@ useHead({
           <p class="landing__card-body">{{ f.body }}</p>
         </div>
       </div>
+    </section>
+
+    <section class="landing__section" aria-labelledby="status-glossary-title">
+      <h2 id="status-glossary-title" class="landing__section-title">
+        Safety Ledger status glossary
+      </h2>
+      <dl class="landing__glossary">
+        <div
+          v-for="entry in statusGlossary"
+          :key="entry.term"
+          class="landing__glossary-entry"
+        >
+          <dt>{{ entry.term }}</dt>
+          <dd>{{ entry.definition }}</dd>
+        </div>
+      </dl>
     </section>
 
     <section id="how" class="landing__section">
@@ -207,28 +266,54 @@ useHead({
 .landing {
   display: flex;
   flex-direction: column;
-  gap: 4.5rem;
-  padding-block: 3.5rem 5rem;
+  gap: var(--space-20);
+  padding-block: var(--space-16) var(--space-20);
 }
 
 /* ---- Hero ---------------------------------------------------------- */
 
 .landing__hero {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(22rem, 100%), 1fr));
-  gap: 2.5rem;
+  grid-template-columns: minmax(0, 0.9fr) minmax(25rem, 1.1fr);
+  gap: clamp(var(--space-8), 5vw, var(--space-16));
   align-items: center;
 }
 
 .landing__hero-copy {
   display: grid;
-  gap: 1.25rem;
+  gap: var(--space-5);
   justify-items: start;
+}
+
+.landing__glossary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.landing__glossary-entry {
+  padding: var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.landing__glossary dt {
+  color: var(--color-text-primary);
+  font-weight: 700;
+}
+
+.landing__glossary dd {
+  max-inline-size: 70ch;
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-secondary);
+  line-height: var(--line-body);
 }
 
 .landing__eyebrow {
   margin: 0;
-  color: var(--accent);
+  color: var(--color-action);
   font-size: var(--text-small);
   font-weight: 700;
   text-transform: uppercase;
@@ -239,38 +324,38 @@ useHead({
 .landing__headline {
   max-inline-size: 16ch;
   margin: 0;
-  font-size: var(--text-hero);
-  line-height: 1.04;
+  color: var(--color-text-primary);
+  font-size: var(--text-display);
+  line-height: var(--line-tight);
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.045em;
   overflow-wrap: break-word;
-  background: linear-gradient(135deg, #ffffff 30%, #a5f3fc 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  text-wrap: balance;
 }
 
 .landing__subheadline {
   max-inline-size: 40rem;
   margin: 0;
-  color: var(--text-2);
-  font-size: 1.15rem;
-  line-height: 1.65;
+  color: var(--color-text-secondary);
+  font-size: var(--text-body-lg);
+  line-height: var(--line-body);
   overflow-wrap: break-word;
 }
 
 .landing__cta {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-top: 0.25rem;
+  gap: var(--space-3);
+  margin-block-start: var(--space-1);
 }
 
 .landing__btn {
-  display: inline-block;
-  padding: 0.8rem 1.5rem;
-  border-radius: var(--radius-m);
-  font-weight: 650;
+  min-block-size: var(--control-height);
+  display: inline-flex;
+  align-items: center;
+  padding-inline: var(--space-5);
+  border-radius: var(--radius-sm);
+  font-weight: 700;
   text-decoration: none;
   transition:
     background var(--dur-fast) var(--ease-out),
@@ -283,154 +368,196 @@ useHead({
 }
 
 .landing__btn--primary {
-  background: var(--accent-soft);
-  color: var(--accent);
-  border: 1px solid var(--accent-border);
+  color: var(--color-canvas-deep);
+  background: var(--color-action);
+  border: 1px solid var(--color-action);
 }
 
 .landing__btn--primary:hover {
-  background: rgba(103, 232, 249, 0.22);
+  background: var(--color-action-strong);
+  border-color: var(--color-action-strong);
 }
 
 .landing__btn--ghost {
-  color: var(--text-3);
-  border: 1px solid transparent;
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
 }
 
 .landing__btn--ghost:hover {
-  color: var(--text-1);
-  border-color: var(--border-2);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-hover);
 }
 
-/* ---- Hero chart ----------------------------------------------------- */
+/* ---- Evidence rail -------------------------------------------------- */
 
-.landing__chart {
+.landing__evidence {
   margin: 0;
   display: grid;
-  gap: 0.6rem;
-  padding: 1.25rem 1.25rem 1rem;
-  border: 1px solid var(--border-1);
-  border-radius: var(--radius-l);
-  background: var(--surface-2);
+  gap: var(--space-5);
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
   box-shadow: var(--shadow-2);
 }
 
-.landing__chart-svg {
-  inline-size: 100%;
-  block-size: auto;
+.landing__evidence-header {
+  display: grid;
+  gap: var(--space-1);
+  padding-block-end: var(--space-4);
+  border-block-end: 1px solid var(--color-border-subtle);
 }
 
-.landing__chart-grid {
-  stroke: rgba(255, 255, 255, 0.045);
-  stroke-width: 1;
-  fill: none;
-}
-
-.landing__chart-ghost {
-  stroke: var(--text-4);
-  stroke-width: 2;
-  stroke-dasharray: 6 7;
-  fill: none;
-  opacity: 0.6;
-}
-
-.landing__chart-price {
-  stroke: var(--accent);
-  stroke-width: 3.5;
-  stroke-linecap: round;
-  fill: none;
-}
-
-.landing__chart-buy {
-  fill: var(--success);
-}
-
-.landing__chart-pulse {
-  fill: var(--success);
-  opacity: 0.18;
-}
-
-.landing__chart-tag rect {
-  fill: var(--success-soft);
-  stroke: rgba(74, 222, 128, 0.4);
-}
-
-.landing__chart-tag text {
-  fill: var(--success);
-  font-size: 13px;
-  font-weight: 700;
+.landing__evidence-kicker {
+  color: var(--color-text-subtle);
   font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
 }
 
-.landing__chart-badge rect {
-  fill: var(--surface-3);
-  stroke: var(--border-2);
+.landing__evidence-title {
+  color: var(--color-text-primary);
+  font-size: var(--text-panel-title);
+  line-height: var(--line-heading);
 }
 
-.landing__chart-badge text {
-  fill: var(--text-2);
-  font-size: 13.5px;
-  font-weight: 650;
+.landing__evidence-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.landing__chart-caption {
-  color: var(--text-4);
-  font-size: var(--text-tiny);
+.landing__evidence-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: start;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+}
+
+.landing__evidence-step:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset-block-start: calc(100% + 1px);
+  inset-inline-start: 2.05rem;
+  inline-size: 1px;
+  block-size: var(--space-2);
+  background: var(--color-border-strong);
+}
+
+.landing__evidence-icon {
+  inline-size: 2rem;
+  block-size: 2rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--color-action-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-action);
+  background: var(--color-action-soft);
+}
+
+.landing__evidence-copy {
+  min-inline-size: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.landing__evidence-copy strong {
+  color: var(--color-text-primary);
+  font-size: var(--text-small);
+}
+
+.landing__evidence-copy span {
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  line-height: 1.5;
+}
+
+.landing__evidence-copy code {
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  letter-spacing: 0.035em;
+}
+
+.landing__evidence-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-action-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-action);
+  background: var(--color-action-soft);
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.landing__evidence-status::before {
+  content: "";
+  inline-size: 0.375rem;
+  block-size: 0.375rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.landing__evidence-step--approved .landing__evidence-icon,
+.landing__evidence-step--approved .landing__evidence-status {
+  color: var(--color-success);
+  border-color: var(--color-success-border);
+  background: var(--color-success-soft);
+}
+
+.landing__evidence-step--simulated .landing__evidence-icon,
+.landing__evidence-step--simulated .landing__evidence-status {
+  color: var(--color-simulation);
+  border-color: var(--color-simulation-border);
+  background: var(--color-simulation-soft);
+}
+
+.landing__evidence-note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+  line-height: 1.5;
   text-align: center;
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .landing__chart-price {
-    stroke-dasharray: 720;
-    stroke-dashoffset: 720;
-    animation: draw-price 1.6s var(--ease-out) 0.2s forwards;
-  }
-
-  .landing__chart-buy,
-  .landing__chart-tag {
+  .landing__evidence-step {
     opacity: 0;
-    animation: pop-in 0.4s var(--ease-out) 1.1s forwards;
+    animation: evidence-in var(--duration-medium) var(--ease-standard) forwards;
   }
 
-  .landing__chart-badge {
-    opacity: 0;
-    animation: pop-in 0.4s var(--ease-out) 1.7s forwards;
+  .landing__evidence-step:nth-child(2) {
+    animation-delay: 120ms;
   }
 
-  .landing__chart-pulse {
-    transform-origin: 220px 222px;
-    animation: pulse-ring 2.4s ease-out 1.6s infinite;
+  .landing__evidence-step:nth-child(3) {
+    animation-delay: 240ms;
   }
 
-  @keyframes draw-price {
-    to {
-      stroke-dashoffset: 0;
-    }
-  }
-
-  @keyframes pop-in {
+  @keyframes evidence-in {
     from {
       opacity: 0;
-      translate: 0 6px;
+      translate: 0 var(--space-2);
     }
+
     to {
       opacity: 1;
       translate: 0 0;
-    }
-  }
-
-  @keyframes pulse-ring {
-    0% {
-      scale: 0.45;
-      opacity: 0.35;
-    }
-    70% {
-      scale: 1.15;
-      opacity: 0;
-    }
-    100% {
-      scale: 1.15;
-      opacity: 0;
     }
   }
 }
@@ -438,35 +565,36 @@ useHead({
 /* ---- Sections -------------------------------------------------------- */
 
 .landing__section-title {
-  margin: 0 0 1.75rem;
-  font-size: var(--text-h2);
+  margin: 0 0 var(--space-6);
+  font-size: var(--text-section-title);
   font-weight: 750;
   letter-spacing: -0.015em;
-  color: var(--text-1);
+  color: var(--color-text-primary);
+  text-wrap: balance;
 }
 
 /* Bento: first card spans two tracks on wide screens */
 .landing__bento {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr));
-  gap: 1.1rem;
+  gap: var(--space-3);
 }
 
 .landing__card {
   display: grid;
-  gap: 0.6rem;
+  gap: var(--space-2);
   align-content: start;
-  padding: 1.4rem;
-  border: 1px solid var(--border-1);
-  border-radius: var(--radius-m);
-  background: var(--surface-1);
+  padding: var(--space-5);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
   transition:
     border-color var(--dur-fast) var(--ease-out),
     transform var(--dur-fast) var(--ease-out);
 }
 
 .landing__card:hover {
-  border-color: var(--border-2);
+  border-color: var(--color-border-strong);
   transform: translateY(-2px);
 }
 
@@ -474,12 +602,12 @@ useHead({
   .landing__card--wide {
     grid-column: span 2;
     background:
-      radial-gradient(
-        120% 140% at 100% 0%,
-        rgba(103, 232, 249, 0.08),
-        transparent 55%
+      linear-gradient(
+        90deg,
+        var(--color-action-soft),
+        transparent 65%
       ),
-      var(--surface-1);
+      var(--color-surface-raised);
   }
 }
 
@@ -488,22 +616,22 @@ useHead({
   place-items: center;
   inline-size: 2.4rem;
   block-size: 2.4rem;
-  border-radius: var(--radius-s);
-  background: var(--accent-soft);
-  color: var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--color-action-soft);
+  color: var(--color-action);
 }
 
 .landing__card-title {
   margin: 0;
   font-size: var(--text-h3);
   font-weight: 700;
-  color: var(--text-1);
+  color: var(--color-text-primary);
 }
 
 .landing__card-body {
   margin: 0;
-  color: var(--text-3);
-  line-height: 1.6;
+  color: var(--color-text-muted);
+  line-height: var(--line-body);
   overflow-wrap: break-word;
 }
 
@@ -521,9 +649,9 @@ useHead({
 .landing__step {
   position: relative;
   display: flex;
-  gap: 1.1rem;
+  gap: var(--space-4);
   align-items: flex-start;
-  padding-block: 1.1rem;
+  padding-block: var(--space-4);
 }
 
 .landing__step:not(:last-child)::before {
@@ -533,7 +661,10 @@ useHead({
   inset-block-start: 3.4rem;
   inline-size: 2px;
   block-size: calc(100% - 2.9rem);
-  background: linear-gradient(var(--accent-border), var(--border-1));
+  background: linear-gradient(
+    var(--color-action-border),
+    var(--color-border-subtle)
+  );
 }
 
 .landing__step-num {
@@ -543,38 +674,38 @@ useHead({
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: var(--accent-soft);
-  border: 1px solid var(--accent-border);
-  color: var(--accent);
+  background: var(--color-action-soft);
+  border: 1px solid var(--color-action-border);
+  color: var(--color-action);
   font-weight: 750;
   font-family: var(--font-mono);
 }
 
 .landing__step-body {
   display: grid;
-  gap: 0.35rem;
-  padding-top: 0.45rem;
+  gap: var(--space-1);
+  padding-block-start: var(--space-2);
 }
 
 /* ---- FAQ -------------------------------------------------------------- */
 
 .landing__faqs {
   display: grid;
-  gap: 0.7rem;
+  gap: var(--space-3);
   max-inline-size: 52rem;
 }
 
 .landing__faq {
   padding: 0;
-  border: 1px solid var(--border-1);
-  border-radius: var(--radius-m);
-  background: var(--surface-2);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
   overflow: hidden;
   transition: border-color var(--dur-fast) var(--ease-out);
 }
 
 .landing__faq[open] {
-  border-color: var(--accent-border);
+  border-color: var(--color-action-border);
 }
 
 .landing__faq-q {
@@ -585,7 +716,7 @@ useHead({
   padding: 1rem 1.25rem;
   cursor: pointer;
   font-weight: 600;
-  color: var(--text-2);
+  color: var(--color-text-secondary);
   list-style: none;
   transition: color var(--dur-fast) var(--ease-out);
 }
@@ -595,25 +726,25 @@ useHead({
 }
 
 .landing__faq-q:hover {
-  color: var(--text-1);
+  color: var(--color-text-primary);
 }
 
 .landing__faq-chevron {
   flex-shrink: 0;
-  color: var(--text-4);
+  color: var(--color-text-subtle);
   transition: rotate var(--dur-med) var(--ease-out);
 }
 
 .landing__faq[open] .landing__faq-chevron {
   rotate: 180deg;
-  color: var(--accent);
+  color: var(--color-action);
 }
 
 .landing__faq-a {
   margin: 0;
   padding: 0 1.25rem 1.15rem;
-  color: var(--text-3);
-  line-height: 1.65;
+  color: var(--color-text-muted);
+  line-height: var(--line-body);
   overflow-wrap: break-word;
 }
 
@@ -650,6 +781,31 @@ useHead({
       animation-timeline: view();
       animation-range: entry 0% entry 45%;
     }
+  }
+}
+
+@media (max-width: 52rem) {
+  .landing__hero {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 34rem) {
+  .landing {
+    padding-block-start: var(--space-10);
+  }
+
+  .landing__evidence {
+    padding: var(--space-4);
+  }
+
+  .landing__evidence-step {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .landing__evidence-status {
+    grid-column: 2;
+    justify-self: start;
   }
 }
 </style>

@@ -1,10 +1,42 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { fetchAuditLogs } from "~/entities/audit";
+import { isUnauthenticated } from "~/shared/lib/http-error";
 
-const { data: audit, refresh: refreshAudit } = await useAsyncData("audit", () =>
-  fetchAuditLogs(),
+const emit = defineEmits<{
+  announce: [message: string];
+}>();
+
+const lastUpdatedAt = ref<Date | null>(null);
+const loadAudit = async () => {
+  const result = await fetchAuditLogs();
+  lastUpdatedAt.value = new Date();
+  return result;
+};
+
+const {
+  data: audit,
+  error,
+  status,
+  refresh: refreshAudit,
+} = await useAsyncData("audit", loadAudit);
+
+const visibleAudit = computed(() => (error.value ? [] : (audit.value ?? [])));
+const errorMessage = computed(() =>
+  isUnauthenticated(error.value)
+    ? "Your session is no longer authorized. Sign in again before loading private decision evidence."
+    : "Decision evidence could not be loaded. No empty or successful state is inferred.",
 );
+
+const retryAudit = async () => {
+  await refreshAudit();
+  emit(
+    "announce",
+    error.value
+      ? "Decision evidence is still unavailable."
+      : `${audit.value?.length ?? 0} decision records loaded.`,
+  );
+};
 
 let pollingInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -21,24 +53,52 @@ onUnmounted(() => {
 
 <template>
   <section class="audit-feed">
-    <h2 class="audit-feed__title">Audit Engine Feed</h2>
-    <div class="audit-feed__list">
-      <p v-if="!audit || audit.length === 0" class="audit-feed__empty">No audit logs received yet.</p>
-      <div v-for="log in audit" :key="log.id" class="audit-feed__item">
-        <header class="audit-feed__item-header">
-          <span class="audit-feed__action" :class="`audit-feed__action--${log.action.toLowerCase()}`">
-            {{ log.action }}
-          </span>
-          <span class="audit-feed__time">
-            <NuxtTime :datetime="log.createdAt" hour="2-digit" minute="2-digit" second="2-digit" />
-          </span>
-        </header>
-        <div class="audit-feed__payload">
-          <span class="audit-feed__payload-text">Entity: {{ log.entityType }} ({{ log.entityId.slice(0, 8) }}...)</span>
-          <pre class="audit-feed__json">{{ JSON.stringify(log.payload, null, 2) }}</pre>
-        </div>
+    <h2 id="audit-feed-title" class="audit-feed__title">Audit Engine Feed</h2>
+    <div
+      class="audit-feed__scroller"
+      role="region"
+      aria-labelledby="audit-feed-title"
+      :aria-busy="status === 'pending'"
+      tabindex="0"
+    >
+      <p v-if="status === 'pending' && !audit" class="audit-feed__empty">
+        Loading decision evidence…
+      </p>
+      <div v-else-if="error" class="audit-feed__empty audit-feed__error">
+        <p>{{ errorMessage }}</p>
+        <UiButton size="compact" @click="retryAudit">Retry decisions</UiButton>
       </div>
+      <p v-else-if="!audit || audit.length === 0" class="audit-feed__empty">
+        No decision records exist for this account yet.
+      </p>
+      <ol v-else class="audit-feed__list" role="list">
+        <li v-for="log in visibleAudit" :key="log.id" class="audit-feed__item">
+          <header class="audit-feed__item-header">
+            <span class="audit-feed__action" :class="`audit-feed__action--${log.type.toLowerCase()}`">
+              {{ log.type }}
+            </span>
+            <span class="audit-feed__time">
+              <NuxtTime :datetime="log.createdAt" hour="2-digit" minute="2-digit" second="2-digit" />
+            </span>
+          </header>
+          <div class="audit-feed__payload">
+            <span class="audit-feed__payload-text">Subject: {{ log.subject.type }} ({{ log.subject.id.slice(0, 8) }}...)</span>
+            <pre class="audit-feed__json">{{ JSON.stringify(log.payload, null, 2) }}</pre>
+          </div>
+        </li>
+      </ol>
     </div>
+    <p class="audit-feed__freshness">
+      Last successful refresh:
+      <NuxtTime
+        v-if="lastUpdatedAt"
+        :datetime="lastUpdatedAt"
+        hour="2-digit"
+        minute="2-digit"
+        second="2-digit"
+      />
+      <span v-else>not available</span>
+    </p>
   </section>
 </template>
 
@@ -46,37 +106,51 @@ onUnmounted(() => {
 .audit-feed {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  padding: 2rem;
-  background: rgba(15, 23, 42, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 1rem;
+  gap: var(--space-5);
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
 }
 
 .audit-feed__title {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 700;
-  color: #f1f5f9;
+  color: var(--color-text-primary);
+}
+
+.audit-feed__scroller {
+  max-block-size: 32rem;
+  overflow-y: auto;
+  padding-inline-end: var(--space-2);
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+
+.audit-feed__scroller:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 3px;
+  box-shadow: var(--focus-ring);
 }
 
 .audit-feed__list {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  max-height: 32rem;
-  overflow-y: auto;
-  padding-right: 0.5rem;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .audit-feed__item {
-  padding: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  border-radius: 0.5rem;
-  background: rgba(30, 41, 59, 0.2);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .audit-feed__item-header {
@@ -86,54 +160,87 @@ onUnmounted(() => {
 }
 
 .audit-feed__action {
-  font-size: 0.75rem;
+  font-size: var(--text-caption);
   font-weight: 700;
   padding: 0.125rem 0.375rem;
-  border-radius: 3px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-xs);
   text-transform: uppercase;
 }
 
 .audit-feed__action--signal_approved {
-  background: rgba(34, 197, 94, 0.15);
-  color: #4ade80;
+  background: var(--color-success-soft);
+  color: var(--color-success);
 }
 
 .audit-feed__action--dry_run_order_completed {
-  background: rgba(59, 130, 246, 0.15);
-  color: #60a5fa;
+  background: var(--color-simulation-soft);
+  color: var(--color-simulation);
 }
 
 .audit-feed__action--signal_rejected {
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
 }
 
 .audit-feed__time {
-  font-size: 0.75rem;
-  color: #64748b;
+  font-size: var(--text-caption);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
 }
 
 .audit-feed__payload-text {
   font-size: 0.8125rem;
-  color: #94a3b8;
+  color: var(--color-text-secondary);
 }
 
 .audit-feed__json {
   margin: 0.5rem 0 0;
   padding: 0.75rem;
-  background: rgba(15, 23, 42, 0.6);
-  border-radius: 4px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.75rem;
-  color: #cbd5e1;
+  background: var(--color-canvas-deep);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  color: var(--color-text-secondary);
   overflow-x: auto;
-  max-height: 8rem;
+  max-block-size: 8rem;
 }
 
 .audit-feed__empty {
+  margin: 0;
   text-align: center;
   padding: 3rem 1rem;
-  color: #64748b;
-  font-style: italic;
+  color: var(--color-text-subtle);
+}
+
+.audit-feed__error {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+}
+
+.audit-feed__error p,
+.audit-feed__freshness {
+  margin: 0;
+}
+
+.audit-feed__freshness {
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+}
+
+@media (max-width: 36rem) {
+  .audit-feed {
+    padding: var(--space-5);
+  }
+}
+
+@media (forced-colors: active) {
+  .audit-feed__scroller:focus-visible {
+    outline: 3px solid Highlight;
+    box-shadow: none;
+  }
 }
 </style>

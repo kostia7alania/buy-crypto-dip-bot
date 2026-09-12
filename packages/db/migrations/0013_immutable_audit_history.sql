@@ -1,0 +1,8 @@
+CREATE OR REPLACE FUNCTION prevent_audit_event_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RAISE EXCEPTION 'AUDIT_EVENT_IMMUTABLE';
+END;
+$$;

@@ -1,3 +1,4 @@
+import { isAllowedSymbol, strategyDefaults } from "@buy-crypto-dip-bot/config";
 import { createBybitPublicClient } from "@buy-crypto-dip-bot/exchange-bybit";
 import type { Candle } from "@buy-crypto-dip-bot/exchange-core";
 import {
@@ -6,6 +7,8 @@ import {
 } from "@buy-crypto-dip-bot/strategy-engine";
 import { Hono } from "hono";
 import * as v from "valibot";
+import { logApiError } from "../../operational-log.js";
+import type { AppEnv } from "../auth/principal.middleware.js";
 
 const querySchema = v.object({
   symbol: v.pipe(v.string(), v.regex(/^[A-Z0-9]{3,20}$/)),
@@ -38,12 +41,13 @@ async function fetchHourlyCandles(
   let end: number | undefined;
 
   while (pages.reduce((n, p) => n + p.length, 0) < needed) {
-    const page = await client.getKlines({
+    const snapshot = await client.getKlines({
       symbol,
       interval: "60",
       limit: BYBIT_PAGE_LIMIT,
       ...(end !== undefined ? { end } : {}),
     });
+    const page = snapshot.candles;
     if (page.length === 0) break;
     pages.push(page);
     // Next page: everything strictly before the oldest candle we have.
@@ -72,21 +76,24 @@ export interface BacktestResponse extends BacktestResult {
   };
 }
 
-export const backtestRoutes = new Hono().get("/", async (c) => {
+export const backtestRoutes = new Hono<AppEnv>().get("/", async (c) => {
   const q = c.req.query();
   const parsed = v.safeParse(querySchema, {
     symbol: (q.symbol ?? "BTCUSDT").toUpperCase(),
     days: Number(q.days ?? 30),
-    threshold: Number(q.threshold ?? 1),
-    amount: Number(q.amount ?? 20),
-    dailyCap: Number(q.dailyCap ?? 100),
-    weeklyCap: Number(q.weeklyCap ?? 500),
-    cooldown: Number(q.cooldown ?? 60),
+    threshold: Number(q.threshold ?? strategyDefaults.thresholdPercent),
+    amount: Number(q.amount ?? strategyDefaults.suggestedQuoteAmount),
+    dailyCap: Number(q.dailyCap ?? strategyDefaults.maxDailySpendUsdt),
+    weeklyCap: Number(q.weeklyCap ?? strategyDefaults.maxWeeklySpendUsdt),
+    cooldown: Number(q.cooldown ?? strategyDefaults.cooldownMinutes),
   });
   if (!parsed.success) {
     return c.json({ error: "INVALID_BACKTEST_PARAMS" }, 400);
   }
   const p = parsed.output;
+  if (!isAllowedSymbol(p.symbol, process.env.ALLOWLIST_SYMBOLS)) {
+    return c.json({ error: "SYMBOL_NOT_ALLOWED" }, 400);
+  }
 
   try {
     const candles = await fetchHourlyCandles(p.symbol, p.days);
@@ -115,7 +122,7 @@ export const backtestRoutes = new Hono().get("/", async (c) => {
     };
     return c.json(response);
   } catch (error) {
-    console.error("Backtest failed:", error);
+    logApiError("BACKTEST_FAILED", error, c.get("correlationId"));
     return c.json({ error: "BACKTEST_FAILED" }, 500);
   }
 });

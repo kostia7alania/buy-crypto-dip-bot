@@ -1,9 +1,14 @@
-export interface MarketTicker {
+export interface MarketDataFreshness {
+  sourceAt: string;
+  receivedAt: string;
+  ageMs: number;
+  ttlMs: number;
+}
+export interface MarketTicker extends MarketDataFreshness {
   symbol: string;
   lastPrice: number;
   high24h?: number;
   low24h?: number;
-  receivedAt: string;
 }
 export interface Candle {
   openTime: number; // ms epoch
@@ -11,6 +16,9 @@ export interface Candle {
   high: number;
   low: number;
   close: number;
+}
+export interface KlineSnapshot extends MarketDataFreshness {
+  candles: Candle[];
 }
 export interface KlineQuery {
   symbol: string;
@@ -22,7 +30,7 @@ export interface KlineQuery {
 }
 export interface ExchangeMarketDataPort {
   getTicker(symbol: string): Promise<MarketTicker>;
-  getKlines(query: KlineQuery): Promise<Candle[]>;
+  getKlines(query: KlineQuery): Promise<KlineSnapshot>;
 }
 export interface ExchangeTradingPort {
   createSpotOrder(): Promise<never>;

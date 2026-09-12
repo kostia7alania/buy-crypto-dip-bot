@@ -12,4 +12,6 @@ export const seoRoutes = [
   "/crypto-risk-management-bot",
   "/dca-bot-vs-grid-bot",
   "/crypto-paper-trading-bot",
+  "/privacy",
+  "/support",
 ] as const;

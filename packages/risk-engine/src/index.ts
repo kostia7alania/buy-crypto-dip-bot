@@ -14,15 +14,15 @@ export interface RiskGuardContext {
 export interface RiskGuardStatus {
   liveTradingEnabled: false;
   mode: "DRY_RUN";
-  allowedSymbols: readonly ["BTCUSDT"];
+  allowedSymbols: readonly string[];
   orderLikeActionsRequireApproval: true;
 }
 
-export const createDefaultRiskGuard = () => ({
+export const createDefaultRiskGuard = (allowedSymbols: readonly string[]) => ({
   getStatus: (): RiskGuardStatus => ({
     liveTradingEnabled: false,
     mode: "DRY_RUN",
-    allowedSymbols: ["BTCUSDT"],
+    allowedSymbols,
     orderLikeActionsRequireApproval: true,
   }),
   evaluate: (

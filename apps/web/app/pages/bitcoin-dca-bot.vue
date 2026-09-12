@@ -6,7 +6,7 @@ const features = [
   },
   {
     title: "Spot only, no leverage",
-    body: "Just spot Bitcoin. No futures, no liquidations, no margin calls — accumulation the boring, safe way.",
+    body: "The product policy permits spot-style dry-run decisions only. Futures, leverage, margin and liquidation-prone products are prohibited.",
   },
   {
     title: "Simulated first",
@@ -14,7 +14,7 @@ const features = [
   },
   {
     title: "Alerts you'll actually read",
-    body: "Telegram pings for every pending buy with a countdown, plus a /pnl command for your position.",
+    body: "After private /start enables delivery, eligible pending-order messages are queued with delivery evidence. Countdown edits are cosmetic; /pnl reports simulated valuation.",
   },
 ];
 const steps = [
@@ -28,7 +28,7 @@ const steps = [
   },
   {
     title: "Risk-checked buy",
-    body: "Spend caps and cooldown gate every order; a dry-run buy is scheduled with a cancel window.",
+    body: "Spend caps and cooldown gate each proposed reservation; an approved dry-run buy receives a database execution time.",
   },
   {
     title: "Watch it stack",
@@ -38,11 +38,11 @@ const steps = [
 const faqs = [
   {
     q: "Is this a good way to accumulate Bitcoin?",
-    a: "Dollar-cost averaging into dips is a common long-term accumulation approach. This bot automates it with spend caps and a dry-run mode to reduce risk.",
+    a: "It is one strategy hypothesis, not a recommendation. The dry-run and configured caps help inspect behavior, but they do not establish suitability or future performance.",
   },
   {
     q: "Does it hold my Bitcoin?",
-    a: "No. In live mode it trades on your own Bybit account with spot-only, no-withdrawal keys. It never custodies funds.",
+    a: "No. The shipped build simulates orders and has no private exchange-key path. Do not provide it withdrawal, transfer, margin, derivatives or any other exchange credential.",
   },
   {
     q: "Can it use leverage on Bitcoin?",
@@ -50,11 +50,11 @@ const faqs = [
   },
   {
     q: "What if Bitcoin keeps falling?",
-    a: "Daily and weekly spend limits cap how much it deploys, so a prolonged downtrend can't drain your budget.",
+    a: "Daily and weekly limits are checked before simulated reservations. They bound configured dry-run spend when the controls operate correctly; they do not remove market, configuration or software risk.",
   },
   {
     q: "Bitcoin DCA vs lump sum — which is better?",
-    a: "Lump sum wins in steadily rising markets; DCA wins psychologically and in volatile or falling markets by averaging your entry. Dip-triggered DCA aims to improve on calendar DCA by buying only when price is already down — and our dashboard benchmarks all three honestly.",
+    a: "Outcomes depend on the window, cash-flow timing, fees and market path. The dashboard compares simplified methods over a stated data window; it is not evidence that one method generally wins.",
   },
 ];
 </script>
@@ -62,9 +62,9 @@ const faqs = [
 <template>
   <LandingPage
     eyebrow="Bitcoin DCA Bot"
-    title="Bitcoin DCA Bot — Auto-Buy BTC Dips, Spot-Only & Free"
-    description="A risk-first Bitcoin DCA bot with a smarter DCA strategy: auto-buy BTC dips on Bybit spot with dry-run simulation, spend caps and Telegram alerts. No leverage."
-    headline="Stack Bitcoin on the dips, safely"
+    title="Bitcoin DCA Bot — Simulate BTC Dip Rules"
+    description="A dry-run Bitcoin DCA bot for simulating BTCUSDT dip rules using public Bybit prices, configured spend caps and optional Telegram delivery. No leverage or live orders."
+    headline="Inspect a Bitcoin dip rule before trusting it"
     subheadline="Automate BTC dollar-cost averaging with strict limits and a simulation-first workflow — spot only, no leverage, no drama."
     :features="features"
     :steps="steps"

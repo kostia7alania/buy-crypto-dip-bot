@@ -14,7 +14,8 @@
     "lint": "oxlint . && biome check .",
     "format": "biome format --write .",
     "test": "turbo test",
-    "check": "pnpm typecheck && pnpm lint && pnpm test",
+    "check:gate1-boundary": "node scripts/verify-gate1-boundary.mjs",
+    "check": "pnpm check:gate1-boundary && pnpm typecheck && pnpm lint && pnpm test",
     "clean": "turbo clean && rm -rf node_modules .turbo"
   },
   "devDependencies": {

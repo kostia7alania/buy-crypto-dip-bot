@@ -5,7 +5,8 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 // the hash is HMAC-SHA256 over the alphabetically sorted `key=value`
 // lines of every other field, keyed with SHA256(bot_token).
 
-export const TELEGRAM_AUTH_MAX_AGE_SECONDS = 24 * 60 * 60;
+export const TELEGRAM_AUTH_MAX_AGE_SECONDS = 5 * 60;
+export type TelegramLoginAbuseLimiter = "SOURCE" | "USER";
 
 export type TelegramLoginPayload = {
   id: number;
@@ -61,6 +62,27 @@ export const verifyTelegramLogin = (
 
   return { ok: true };
 };
+
+export const telegramLoginFingerprint = (
+  payload: TelegramLoginPayload,
+): string =>
+  createHash("sha256")
+    .update(`${buildDataCheckString(payload)}\nhash=${payload.hash}`)
+    .digest("hex");
+
+/**
+ * Produces the only identity written to login-abuse storage. HMAC rather than
+ * a plain hash matters for low-entropy inputs such as Telegram ids and IP
+ * pseudonyms, while the domain separator prevents reuse across limiter kinds.
+ */
+export const telegramLoginAbuseKey = (
+  secret: string,
+  limiter: TelegramLoginAbuseLimiter,
+  value: string,
+): string =>
+  createHmac("sha256", secret)
+    .update(`dipbot:telegram-login-abuse:v1:${limiter}\0${value}`)
+    .digest("hex");
 
 // Test helper mirroring what Telegram's servers do when signing a payload.
 export const signTelegramLogin = (

@@ -1,63 +1,78 @@
 # buy-crypto-dip-bot
 
-**Buy Crypto Dip Bot** — production-first crypto dip buying automation SaaS.
+Buy Crypto Dip Bot is a self-hosted, Telegram-oriented crypto dip simulator
+with a Nuxt dashboard, RiskGuard and auditable local orders. `DRY_RUN` is the
+only executable mode. It reads public Bybit spot data and accepts no private
+exchange credentials.
 
-Risk-first system for detecting crypto dips, validating every action through RiskGuard, creating dry-run orders by default, and notifying through Telegram and a Nuxt dashboard.
+## Start with the current state
 
-## Apps
+- [Project status and release blockers](docs/23_PROJECT_STATUS.md), reviewed 2026-09-12.
+- [Prioritized backlog and R001-R123 index](tasks/00_MASTER_PLAN.md).
+- [Product model](docs/14_PRODUCT_STRATEGY.md) and [architecture](docs/02_ARCHITECTURE.md).
+- [Cost-first target from main](docs/15_COST_FIRST_SAAS_STRATEGY.md).
+- [Plans and historical evidence](PLANS.md).
+- [Краткое введение на русском](README_FIRST_RU.md).
 
-- `apps/api` — Hono API, trading core, market data, signals, orders, audit.
-- `apps/web` — Nuxt 4 SEO pages, dashboard, small BFF.
-- `apps/bot` — Telegram bot with safe commands and alerts.
+The local Gate 1 recovery and the newer cost-first code in `origin/main` have
+**different migration and identity histories**. Read the status before
+integrating or deploying. Passing local checks is not a public multi-user
+launch approval. Gate 1 remains NO-GO.
 
-## Packages
+## Workspace
 
-- `packages/shared-types`
-- `packages/strategy-engine`
-- `packages/risk-engine`
-- `packages/exchange-core`
-- `packages/exchange-bybit`
-- `packages/db`
-- `packages/seo-keywords`
-- `packages/config`
-- `packages/test-utils`
+| Area | Responsibility |
+| --- | --- |
+| `apps/api` | Hono API, market data, runner, owned orders, audit and reporting |
+| `apps/web` | Nuxt 4 pages/dashboard and a small server-only BFF |
+| `apps/bot` | Telegram commands, onboarding and notification interaction |
+| `packages/config` | Strategy defaults and reviewed-symbol policy |
+| `packages/strategy-engine`, `packages/risk-engine` | Signal and risk evaluation |
+| `packages/exchange-core`, `packages/exchange-bybit` | Ports and public Bybit observations |
+| `packages/db`, `packages/shared-types` | PostgreSQL/Drizzle and shared contracts |
+| `packages/seo-keywords`, `packages/test-utils` | Page inventory and test support |
 
-## Quickstart
+## Local quickstart
+
+Use Node 26+ and pnpm 11. PostgreSQL 18 runs locally through Docker Compose;
+SQLite is not supported. Preserve any existing `.env` when setting up.
 
 ```bash
-# Node 26 (repo has .nvmrc / mise.toml)
-nvm use            # or: mise install
-
-cp .env.example .env   # fill TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID
-docker compose up -d   # local PostgreSQL
+nvm use
+cp .env.example .env # first setup only; configure Telegram for bot/login
 pnpm install
-pnpm dev               # api :8787, web :3000, bot
+docker compose up -d
+pnpm dev            # API :8787, web :3000, Telegram bot
 ```
 
-Migrations run automatically when the API starts. Default BTC/ETH/SOL
-dry-run strategies are seeded once and never overwritten afterwards.
+API startup validates configuration and completes migrations before serving.
+In this recovery checkout, operator seeding requires an existing user and
+`OPERATOR_TELEGRAM_USER_ID`; otherwise it creates no strategies. Private bot
+onboarding creates the caller's strategy. Web sign-in alone does not enable
+notifications. The newer main provisions personal tenants; see the source
+comparison before migrating existing data.
 
-## Commands
+## Checks
 
 ```bash
-pnpm install
-pnpm dev
+pnpm check # DRY_RUN boundary, typecheck, lint, workspace tests
 pnpm build
-pnpm typecheck
-pnpm lint
-pnpm test
-pnpm check
+# Separate lane; use an isolated disposable PostgreSQL 18 database:
+pnpm --filter @buy-crypto-dip-bot/db test:postgres18
 ```
+
+The PostgreSQL lane requires `POSTGRES18_TEST_URL`; `pnpm check` can pass with
+that optional lane skipped. Tests and build are necessary evidence, not a
+substitute for account isolation, restore and deployment verification.
 
 ## Deployment
 
-`git push` to `main` is the deploy. GitHub Actions builds one Docker image
-(api/bot/web) and pushes it to GHCR; the VPS pulls and restarts — it never
-builds. Controlled by GitHub secrets `VPS_HOST` / `VPS_USER` / `VPS_PASSWORD`
-and the `DEPLOY_ENABLED` variable (the safety switch).
+The repository contains a VPS/GHCR deployment workflow; `DEPLOY_ENABLED` is
+its deployment switch. Cloudflare Workers and Supabase are the recorded
+**target**, with cutover still pending. There is no available hosted tariff,
+SLA, Demo order path or live trading mode.
 
-Full procedure, one-time server bootstrap, rollback, and the security
-checklist: [docs/13_VPS_DEPLOYMENT_RUNBOOK.md](docs/13_VPS_DEPLOYMENT_RUNBOOK.md).
-
-⚠️ This repo is **public**: real tokens live only in GitHub secrets and the
-server's `/opt/buy-crypto-dip-bot/.env` — never in code, compose files, or workflows.
+See [the deployment runbook](docs/13_VPS_DEPLOYMENT_RUNBOOK.md) and current
+status before any release. The working checkout and remote main currently
+have different release workflows. Keep real credentials outside source and
+browser bundles; SSH uses `VPS_SSH_KEY`, not a password secret.

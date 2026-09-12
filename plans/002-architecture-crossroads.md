@@ -1,5 +1,7 @@
 # ExecPlan 002 — Lean Core Dry-Run Trading Loop
 
+> Historical single-user plan. Its implementation sequence is superseded by [the current product model](../docs/14_PRODUCT_STRATEGY.md) and [master backlog](../tasks/00_MASTER_PLAN.md).
+
 This plan pivots to a lean, single-tenant MVP focused on building the core business logic (fetching prices, evaluating strategies/risk, and creating dry-run orders) before adding secondary complexities like user accounts, multi-tenancy, or SaaS billing.
 
 ## 1. Scope of the Lean MVP

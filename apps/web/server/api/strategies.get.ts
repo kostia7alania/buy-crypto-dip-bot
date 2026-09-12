@@ -1,8 +1,11 @@
-export default defineEventHandler(async () => {
+import { requireCaller } from "../utils/session.js";
+
+export default defineEventHandler(async (event) => {
+  const { apiSessionToken } = await requireCaller(event);
   try {
-    return await apiFetch("/strategies");
+    return await apiFetchAsForEvent(event, apiSessionToken, "/strategies");
   } catch (error) {
-    console.error("Failed to fetch strategies from API:", error);
-    return [];
+    logWebError(event, "STRATEGY_LIST_FAILED", error);
+    throw upstreamError(error, "STRATEGIES_UNAVAILABLE");
   }
 });

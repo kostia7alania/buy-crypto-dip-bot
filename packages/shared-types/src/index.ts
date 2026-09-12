@@ -1,4 +1,6 @@
 export type TradingMode = "DRY_RUN" | "LIVE";
+export * from "./audit.js";
+export * from "./operational-log.js";
 export type OrderSide = "BUY" | "SELL";
 export type RiskDecisionStatus = "APPROVED" | "REJECTED";
 export interface StrategyConfig {

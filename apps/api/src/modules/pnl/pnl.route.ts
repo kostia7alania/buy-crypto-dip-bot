@@ -3,6 +3,8 @@ import { createBybitPublicClient } from "@buy-crypto-dip-bot/exchange-bybit";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { getDb } from "../../db.js";
+import { logApiError } from "../../operational-log.js";
+import { type AppEnv, requireUser } from "../auth/principal.middleware.js";
 
 export interface SymbolPnl {
   symbol: string;
@@ -30,12 +32,23 @@ type Db = ReturnType<typeof getDb>;
 
 // Unrealized PnL of the simulated portfolio: what the dry-run purchases
 // would be worth right now. Shared by the /pnl route and the daily digest.
-export async function computePnlReport(db: Db): Promise<PnlReport> {
+//
+// `userId` is mandatory and has no default on purpose. A financial aggregate
+// with an optional owner is one forgotten argument away from showing one user
+// another user's portfolio, so every caller has to say whose money this is.
+export async function computePnlReport(
+  db: Db,
+  userId: string,
+): Promise<PnlReport> {
   const completedBuys = await db
     .select()
     .from(schema.orders)
     .where(
-      and(eq(schema.orders.status, "COMPLETED"), eq(schema.orders.side, "BUY")),
+      and(
+        eq(schema.orders.userId, userId),
+        eq(schema.orders.status, "COMPLETED"),
+        eq(schema.orders.side, "BUY"),
+      ),
     );
 
   const bySymbol = new Map<string, { spent: number; qty: number; n: number }>();
@@ -62,7 +75,7 @@ export async function computePnlReport(db: Db): Promise<PnlReport> {
     try {
       currentPrice = (await client.getTicker(symbol)).lastPrice;
     } catch (error) {
-      console.error(`PnL: failed to fetch ticker for ${symbol}:`, error);
+      logApiError("PNL_TICKER_FETCH_FAILED", error);
       continue;
     }
     const currentValue = acc.qty * currentPrice;
@@ -97,11 +110,12 @@ export async function computePnlReport(db: Db): Promise<PnlReport> {
   };
 }
 
-export const pnlRoutes = new Hono().get("/", async (c) => {
+export const pnlRoutes = new Hono<AppEnv>().get("/", async (c) => {
+  const user = requireUser(c);
   try {
-    return c.json(await computePnlReport(getDb()));
+    return c.json(await computePnlReport(getDb(), user.userId));
   } catch (error) {
-    console.error("Failed to compute PnL:", error);
+    logApiError("PNL_COMPUTE_FAILED", error, c.get("correlationId"));
     return c.json({ error: "INTERNAL_SERVER_ERROR" }, 500);
   }
 });

@@ -109,9 +109,9 @@ const verdict = computed(() => {
         <span>Buy amount USDT</span>
         <input v-model.number="amount" type="number" min="1" class="bt__input" required />
       </label>
-      <button type="submit" class="bt__run" :disabled="loading">
+      <UiButton type="submit" variant="primary" :disabled="loading">
         {{ loading ? "Replaying…" : "Run backtest" }}
-      </button>
+      </UiButton>
     </form>
 
     <p v-if="error" class="bt__error">{{ error }}</p>
@@ -176,11 +176,11 @@ const verdict = computed(() => {
 .bt {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  padding: 2rem;
-  background: var(--surface-2);
-  border: 1px solid var(--border-1);
-  border-radius: var(--radius-l);
+  gap: var(--space-5);
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
 }
 
 .bt__header {
@@ -192,12 +192,12 @@ const verdict = computed(() => {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 700;
-  color: var(--text-1);
+  color: var(--color-text-primary);
 }
 
 .bt__hint {
   margin: 0;
-  color: var(--text-4);
+  color: var(--color-text-subtle);
   font-size: var(--text-small);
 }
 
@@ -216,44 +216,25 @@ const verdict = computed(() => {
 }
 
 .bt__input {
-  background: var(--surface-3);
-  border: 1px solid var(--border-1);
-  border-radius: var(--radius-s);
-  color: var(--text-1);
-  padding: 0.45rem 0.6rem;
+  min-block-size: var(--control-height);
+  background: var(--color-canvas-deep);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  padding-inline: var(--space-3);
   font-size: var(--text-small);
   inline-size: 9rem;
   transition: border-color var(--dur-fast) var(--ease-out);
 }
 
-.bt__input:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
-.bt__run {
-  padding: 0.5rem 1.1rem;
-  border-radius: var(--radius-s);
-  font-weight: 650;
-  cursor: pointer;
-  background: var(--accent-soft);
-  color: var(--accent);
-  border: 1px solid var(--accent-border);
-  transition: background var(--dur-fast) var(--ease-out);
-}
-
-.bt__run:hover:not(:disabled) {
-  background: rgba(103, 232, 249, 0.22);
-}
-
-.bt__run:disabled {
-  opacity: 0.6;
-  cursor: wait;
+.bt__input:focus-visible {
+  border-color: var(--color-action);
+  background: var(--color-surface);
 }
 
 .bt__error {
   margin: 0;
-  color: var(--danger);
+  color: var(--color-danger);
   font-size: var(--text-small);
 }
 
@@ -272,19 +253,19 @@ const verdict = computed(() => {
   display: grid;
   gap: 0.25rem;
   padding: 0.9rem 1rem;
-  border: 1px solid var(--border-1);
-  border-radius: var(--radius-m);
-  background: var(--surface-1);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
 }
 
 .bt__stat dt {
-  color: var(--text-4);
+  color: var(--color-text-subtle);
   font-size: var(--text-tiny);
 }
 
 .bt__stat dd {
   margin: 0;
-  color: var(--text-1);
+  color: var(--color-text-primary);
   font-weight: 700;
 }
 
@@ -292,9 +273,9 @@ const verdict = computed(() => {
   display: grid;
   gap: 0.5rem;
   padding: 1rem 1.1rem;
-  border: 1px solid var(--border-1);
-  border-radius: var(--radius-m);
-  background: var(--surface-1);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
 }
 
 .bt__bench-row {
@@ -302,7 +283,7 @@ const verdict = computed(() => {
   justify-content: space-between;
   gap: 1rem;
   font-size: var(--text-small);
-  color: var(--text-3);
+  color: var(--color-text-muted);
 }
 
 .bt__verdict {
@@ -311,22 +292,39 @@ const verdict = computed(() => {
   font-size: var(--text-small);
 }
 
-.bt__green {
-  color: var(--success) !important;
+.bt__stat .bt__green,
+.bt__bench .bt__green,
+.bt__verdict.bt__green {
+  color: var(--color-success);
 }
 
-.bt__red {
-  color: var(--danger) !important;
+.bt__stat .bt__red,
+.bt__bench .bt__red,
+.bt__verdict.bt__red {
+  color: var(--color-danger);
 }
 
-.bt__mixed {
-  color: var(--warning) !important;
+.bt__stat .bt__mixed,
+.bt__bench .bt__mixed,
+.bt__verdict.bt__mixed {
+  color: var(--color-warning);
 }
 
 .bt__disclaimer {
   margin: 0;
-  color: var(--text-4);
+  color: var(--color-text-subtle);
   font-size: var(--text-tiny);
   line-height: 1.5;
+}
+
+@media (max-width: 36rem) {
+  .bt {
+    padding: var(--space-5);
+  }
+
+  .bt__field,
+  .bt__input {
+    inline-size: 100%;
+  }
 }
 </style>

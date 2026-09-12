@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   signTelegramLogin,
   TELEGRAM_AUTH_MAX_AGE_SECONDS,
+  telegramLoginAbuseKey,
+  telegramLoginFingerprint,
   verifyTelegramLogin,
 } from "./auth.service.js";
 
@@ -74,5 +76,27 @@ describe("verifyTelegramLogin", () => {
       ok: false,
       reason: "STALE_AUTH_DATE",
     });
+  });
+
+  it("derives a stable non-reversible replay fingerprint", () => {
+    const payload = validPayload();
+    expect(telegramLoginFingerprint(payload)).toMatch(/^[0-9a-f]{64}$/);
+    expect(telegramLoginFingerprint(payload)).toBe(
+      telegramLoginFingerprint(payload),
+    );
+    expect(telegramLoginFingerprint(payload)).not.toContain(payload.hash);
+  });
+
+  it("derives domain-separated HMAC abuse keys", () => {
+    const source = telegramLoginAbuseKey(BOT_TOKEN, "SOURCE", "source-token");
+    const user = telegramLoginAbuseKey(BOT_TOKEN, "USER", "source-token");
+
+    expect(source).toMatch(/^[0-9a-f]{64}$/);
+    expect(source).toBe(
+      telegramLoginAbuseKey(BOT_TOKEN, "SOURCE", "source-token"),
+    );
+    expect(source).not.toBe(user);
+    expect(source).not.toContain("source-token");
+    expect(source).not.toContain(BOT_TOKEN);
   });
 });

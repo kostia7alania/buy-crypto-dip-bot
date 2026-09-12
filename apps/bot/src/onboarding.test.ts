@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildAmountKeyboard,
   buildCoinKeyboard,
@@ -13,7 +13,18 @@ import {
 const callbackDataOf = (kb: { inline_keyboard: unknown[][] }) =>
   kb.inline_keyboard.flat().map((b: any) => b.callback_data as string);
 
+afterEach(() => vi.unstubAllEnvs());
+
 describe("parseWizardCallback", () => {
+  it("keeps the keyboard and forged callbacks inside the deployment subset", () => {
+    vi.stubEnv("ALLOWLIST_SYMBOLS", "ETHUSDT,PEPEUSDT");
+    expect(callbackDataOf(buildCoinKeyboard())).toEqual([
+      "wiz:threshold:ETHUSDT",
+      "wiz:cancel",
+    ]);
+    expect(parseWizardCallback("wiz:apply:BTCUSDT:1:10")).toBeNull();
+    expect(parseWizardCallback("wiz:apply:PEPEUSDT:1:10")).toBeNull();
+  });
   it("parses each step with valid values", () => {
     expect(parseWizardCallback("wiz:coin")).toEqual({ step: "coin" });
     expect(parseWizardCallback("wiz:cancel")).toEqual({ step: "cancel" });

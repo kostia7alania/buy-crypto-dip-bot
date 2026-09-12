@@ -1,40 +1,121 @@
+import { getAllowedSymbols, isAllowedSymbol } from "@buy-crypto-dip-bot/config";
 import { schema } from "@buy-crypto-dip-bot/db";
 import { createBybitPublicClient } from "@buy-crypto-dip-bot/exchange-bybit";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { Bot } from "grammy";
+import {
+  type BotCaller,
+  getSessionTokenFor,
+  requireCallbackCaller,
+  requireCaller,
+} from "./caller.js";
+import {
+  bindPrivateNotificationTarget,
+  toggleOwnedStrategy,
+  updateOwnedStrategyConfig,
+} from "./command.repository.js";
 import { getDb } from "./db.js";
 import { registerOnboardingWizard, startKeyboard } from "./onboarding.js";
+import {
+  botCorrelationId,
+  logBotError,
+  logBotEvent,
+} from "./operational-log.js";
+import {
+  claimOwnedPendingOrder,
+  setEnabledForCaller,
+} from "./order.repository.js";
+import { fetchServiceApi } from "./runtime-config.js";
+import {
+  escapeTelegramHtml,
+  escapeTelegramMarkdown,
+} from "./telegram-format.js";
+
+// Calls a user-scoped API route as the given caller. The service key proves
+// the request came from the bot; the session token names the human it is for.
+const fetchAsUser = async (
+  caller: BotCaller,
+  path: string,
+  updateId: number,
+  init: RequestInit = {},
+) => {
+  const correlationId = botCorrelationId(updateId);
+  const token = await getSessionTokenFor(caller, correlationId);
+  try {
+    return await fetchServiceApi(path, {
+      ...init,
+      headers: {
+        ...init.headers,
+        "x-user-session": token,
+        "x-request-id": correlationId,
+      },
+    });
+  } finally {
+    // A bot credential is a one-request lease. Revoking it through the API
+    // records the same command correlation and actor provenance atomically;
+    // a failed cleanup remains bounded by BOT_SESSION_TTL_MS.
+    try {
+      const revocation = await fetchServiceApi("/auth/logout", {
+        method: "POST",
+        headers: {
+          "x-user-session": token,
+          "x-request-id": correlationId,
+        },
+      });
+      if (!revocation.ok) {
+        logBotEvent("BOT_SESSION_REVOCATION_RETRY_REQUIRED", "WARN", updateId);
+      }
+    } catch (error) {
+      logBotError("BOT_SESSION_REVOCATION_FAILED", error, updateId);
+    }
+  }
+};
 
 export const createBot = (token: string) => {
   const bot = new Bot(token);
+
+  bot.catch((failure) => {
+    logBotError(
+      "UPDATE_HANDLER_FAILED",
+      failure.error,
+      failure.ctx.update.update_id,
+    );
+  });
 
   registerOnboardingWizard(bot);
 
   bot.command("start", async (ctx) => {
     const chatId = ctx.chat.id;
 
+    // `/start` cannot use requireCaller — it is the command that *creates* the
+    // user. But it writes telegram_chat_id, which is now the delivery address
+    // for every one of that user's order, risk and digest notifications. Doing
+    // that from a group would silently redirect their entire trading activity
+    // into a room full of other people, so registration is private-chat only.
+    if (ctx.chat.type !== "private") {
+      return ctx.reply(
+        "🔒 Message me directly to set up — I keep each person's strategies and alerts private.",
+      );
+    }
+
     // Register/refresh the user keyed by Telegram id — the same identity
     // the web dashboard will authenticate with (Telegram Login / initData).
     try {
-      const db = getDb();
-      await db
-        .insert(schema.users)
-        .values({
+      await bindPrivateNotificationTarget(
+        getDb(),
+        {
           telegramUserId: String(ctx.from?.id ?? chatId),
           telegramChatId: String(chatId),
           username: ctx.from?.username ?? null,
           firstName: ctx.from?.first_name ?? null,
-        })
-        .onConflictDoUpdate({
-          target: schema.users.telegramUserId,
-          set: {
-            telegramChatId: String(chatId),
-            username: ctx.from?.username ?? null,
-            firstName: ctx.from?.first_name ?? null,
-          },
-        });
+        },
+        botCorrelationId(ctx.update.update_id),
+      );
     } catch (err) {
-      console.error("Failed to register user on /start:", err);
+      logBotError("START_REGISTRATION_FAILED", err, ctx.update.update_id);
+      return ctx.reply(
+        "❌ I could not securely enable notifications for this chat. Please try /start again.",
+      );
     }
 
     const msg =
@@ -43,8 +124,7 @@ export const createBot = (token: string) => {
       `no real money is ever spent by default.\n\n` +
       `Tap the button below to set up your first dip strategy in ` +
       `three quick steps.\n\n` +
-      `Your Chat ID: \`${chatId}\`\n` +
-      `For notifications, set in \`.env\`: \`TELEGRAM_CHAT_ID=${chatId}\``;
+      `Alerts about your strategies come straight to this chat.`;
 
     return ctx.reply(msg, {
       parse_mode: "Markdown",
@@ -53,22 +133,31 @@ export const createBot = (token: string) => {
   });
 
   bot.command("status", async (ctx) => {
+    const caller = await requireCaller(ctx);
+    if (!caller) return;
+
     try {
       const db = getDb();
 
-      // 1. Get active strategies count
+      // 1. This caller's active strategies
       const activeStrategies = await db
         .select()
         .from(schema.strategies)
-        .where(eq(schema.strategies.enabled, true));
+        .where(
+          and(
+            eq(schema.strategies.userId, caller.id),
+            eq(schema.strategies.enabled, true),
+          ),
+        );
 
-      // 2. Query today's orders & spent amount
+      // 2. This caller's orders & spend in the last 24h
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
       const ordersToday = await db
         .select()
         .from(schema.orders)
         .where(
           and(
+            eq(schema.orders.userId, caller.id),
             eq(schema.orders.status, "COMPLETED"),
             gte(schema.orders.createdAt, oneDayAgo),
           ),
@@ -81,6 +170,7 @@ export const createBot = (token: string) => {
         .from(schema.orders)
         .where(
           and(
+            eq(schema.orders.userId, caller.id),
             eq(schema.orders.status, "COMPLETED"),
             gte(schema.orders.createdAt, oneDayAgo),
           ),
@@ -98,7 +188,7 @@ export const createBot = (token: string) => {
 
       return ctx.reply(msg, { parse_mode: "Markdown" });
     } catch (error) {
-      console.error("Failed to fetch status for bot command:", error);
+      logBotError("STATUS_COMMAND_FAILED", error, ctx.update.update_id);
       return ctx.reply(
         "❌ Failed to query database status. Is Postgres running?",
       );
@@ -106,34 +196,46 @@ export const createBot = (token: string) => {
   });
 
   bot.command("settings", async (ctx) => {
+    const caller = await requireCaller(ctx);
+    if (!caller) return;
+
     try {
       const db = getDb();
-      const strategiesList = await db.select().from(schema.strategies);
+      const strategiesList = await db
+        .select()
+        .from(schema.strategies)
+        .where(eq(schema.strategies.userId, caller.id));
       if (strategiesList.length === 0) {
-        return ctx.reply("❌ No strategies found in database.");
+        return ctx.reply(
+          "📭 You have no strategies yet. Use /start to set one up.",
+        );
       }
 
-      let msg = `⚙️ *Buy Crypto Dip Bot Settings*\n\n`;
+      let msg = `⚙️ <b>Buy Crypto Dip Bot Settings</b>\n\n`;
       for (const strategy of strategiesList) {
-        const config = strategy.config as any;
+        const config = strategy.config as {
+          thresholdPercent?: unknown;
+          suggestedQuoteAmount?: unknown;
+          maxDailySpendUsdt?: unknown;
+        };
         msg +=
-          `• *${strategy.symbol}* (${strategy.name})\n` +
-          `  └ Status: ${strategy.enabled ? "🟢 *Enabled*" : "🔴 *Disabled*"}\n` +
-          `  └ Dip Threshold: \`${config.thresholdPercent}%\`\n` +
-          `  └ Buy Amount: \`${config.suggestedQuoteAmount} USDT\`\n` +
-          `  └ Daily Spend Limit: \`${config.maxDailySpendUsdt} USDT\`\n\n`;
+          `• <b>${escapeTelegramHtml(strategy.symbol)}</b> (${escapeTelegramHtml(strategy.name)})\n` +
+          `  └ Status: ${strategy.enabled ? "🟢 <b>Enabled</b>" : "🔴 <b>Disabled</b>"}\n` +
+          `  └ Dip Threshold: <code>${escapeTelegramHtml(String(config.thresholdPercent))}%</code>\n` +
+          `  └ Buy Amount: <code>${escapeTelegramHtml(String(config.suggestedQuoteAmount))} USDT</code>\n` +
+          `  └ Daily Spend Limit: <code>${escapeTelegramHtml(String(config.maxDailySpendUsdt))} USDT</code>\n\n`;
       }
 
       msg +=
-        `*How to update settings:*\n` +
-        `• \`/set_threshold <symbol> <percent>\` - e.g. \`/set_threshold ETHUSDT 1.5\`\n` +
-        `• \`/set_amount <symbol> <usdt>\` - e.g. \`/set_amount SOLUSDT 50\`\n` +
-        `• \`/set_limit <symbol> <usdt>\` - e.g. \`/set_limit BTCUSDT 100\`\n` +
-        `• \`/toggle <symbol>\` - Toggle strategy status`;
+        `<b>How to update settings:</b>\n` +
+        `• <code>/set_threshold &lt;symbol&gt; &lt;percent&gt;</code> - e.g. <code>/set_threshold ETHUSDT 1.5</code>\n` +
+        `• <code>/set_amount &lt;symbol&gt; &lt;usdt&gt;</code> - e.g. <code>/set_amount SOLUSDT 50</code>\n` +
+        `• <code>/set_limit &lt;symbol&gt; &lt;usdt&gt;</code> - e.g. <code>/set_limit BTCUSDT 100</code>\n` +
+        `• <code>/toggle &lt;symbol&gt;</code> - Toggle strategy status`;
 
-      return ctx.reply(msg, { parse_mode: "Markdown" });
+      return ctx.reply(msg, { parse_mode: "HTML" });
     } catch (error) {
-      console.error("Failed to fetch settings:", error);
+      logBotError("SETTINGS_COMMAND_FAILED", error, ctx.update.update_id);
       return ctx.reply("❌ Failed to read settings from database.");
     }
   });
@@ -142,6 +244,11 @@ export const createBot = (token: string) => {
   bot.command("backtest", async (ctx) => {
     const parts = ctx.match?.trim().split(/\s+/).filter(Boolean) ?? [];
     const symbol = (parts[0] ?? "BTCUSDT").toUpperCase();
+    if (!isAllowedSymbol(symbol, process.env.ALLOWLIST_SYMBOLS)) {
+      return ctx.reply(
+        `Pair not supported. Available pairs: ${getAllowedSymbols(process.env.ALLOWLIST_SYMBOLS).join(", ") || "none"}.`,
+      );
+    }
     const days = Number(parts[1] ?? 30);
     const threshold = Number(parts[2] ?? 1.5);
     const amount = Number(parts[3] ?? 20);
@@ -167,16 +274,16 @@ export const createBot = (token: string) => {
     }
 
     try {
-      const apiUrl = process.env.API_URL ?? "http://localhost:8787";
-      const apiKey = process.env.API_KEY;
       const qs = new URLSearchParams({
         symbol,
         days: String(days),
         threshold: String(threshold),
         amount: String(amount),
       });
-      const response = await fetch(`${apiUrl}/backtest?${qs}`, {
-        headers: apiKey ? { "x-api-key": apiKey } : {},
+      const response = await fetchServiceApi(`/backtest?${qs}`, {
+        headers: {
+          "x-request-id": botCorrelationId(ctx.update.update_id),
+        },
       });
       if (!response.ok) throw new Error(`API ${response.status}`);
       const d = (await response.json()) as {
@@ -194,7 +301,7 @@ export const createBot = (token: string) => {
 
       const sign = (n: number) => (n >= 0 ? "+" : "");
       let msg =
-        `🧪 *Backtest: ${symbol}, last ${days} days*\n` +
+        `🧪 *Backtest: ${escapeTelegramMarkdown(symbol)}, last ${days} days*\n` +
         `_dip ≥ ${threshold}%, ${amount} USDT per buy_\n\n` +
         `• *Buys:* \`${d.tradeCount}\`\n` +
         `• *Invested:* \`${d.spentUsdt.toFixed(2)} USDT\`\n` +
@@ -226,72 +333,73 @@ export const createBot = (token: string) => {
       }
       return ctx.reply(msg, { parse_mode: "Markdown" });
     } catch (error) {
-      console.error("Backtest command failed:", error);
+      logBotError("BACKTEST_COMMAND_FAILED", error, ctx.update.update_id);
       if (progress) {
         await ctx.api
           .deleteMessage(ctx.chat.id, progress.message_id)
           .catch(() => {});
       }
       return ctx.reply(
-        `❌ Backtest failed for *${symbol}*. Check the symbol and try again.`,
+        `❌ Backtest failed for *${escapeTelegramMarkdown(symbol)}*. Check the symbol and try again.`,
         { parse_mode: "Markdown" },
       );
     }
   });
 
-  // Kill switch: instantly pause every strategy (audited).
+  // Kill switch: instantly pause the caller's own strategies (audited).
+  // Scoped to one user on purpose — a kill switch that stops other people's
+  // bots would be a denial-of-service button, not a safety feature.
   bot.command("pause_all", async (ctx) => {
+    const caller = await requireCaller(ctx);
+    if (!caller) return;
+
     try {
-      const db = getDb();
-      const updated = await db
-        .update(schema.strategies)
-        .set({ enabled: false })
-        .returning();
-      await db.insert(schema.auditEvents).values({
-        entityType: "strategy",
-        entityId: "ALL",
-        action: "ALL_STRATEGIES_PAUSED",
-        payload: { count: updated.length, via: "telegram" },
-      });
+      const count = await setEnabledForCaller(
+        getDb(),
+        caller.id,
+        false,
+        botCorrelationId(ctx.update.update_id),
+      );
       return ctx.reply(
-        `⏸ *All strategies paused* (${updated.length}).\nNo new orders will be created. Resume with /resume_all`,
+        `⏸ *Your strategies are paused* (${count}).\nNo new orders will be created. Resume with /resume_all`,
         { parse_mode: "Markdown" },
       );
     } catch (error) {
-      console.error("Failed to pause all strategies:", error);
+      logBotError("PAUSE_STRATEGIES_FAILED", error, ctx.update.update_id);
       return ctx.reply("❌ Failed to pause strategies.");
     }
   });
 
   bot.command("resume_all", async (ctx) => {
+    const caller = await requireCaller(ctx);
+    if (!caller) return;
+
     try {
-      const db = getDb();
-      const updated = await db
-        .update(schema.strategies)
-        .set({ enabled: true })
-        .returning();
-      await db.insert(schema.auditEvents).values({
-        entityType: "strategy",
-        entityId: "ALL",
-        action: "ALL_STRATEGIES_RESUMED",
-        payload: { count: updated.length, via: "telegram" },
-      });
-      return ctx.reply(`▶️ *All strategies resumed* (${updated.length}).`, {
+      const count = await setEnabledForCaller(
+        getDb(),
+        caller.id,
+        true,
+        botCorrelationId(ctx.update.update_id),
+      );
+      return ctx.reply(`▶️ *Your strategies are resumed* (${count}).`, {
         parse_mode: "Markdown",
       });
     } catch (error) {
-      console.error("Failed to resume strategies:", error);
+      logBotError("RESUME_STRATEGIES_FAILED", error, ctx.update.update_id);
       return ctx.reply("❌ Failed to resume strategies.");
     }
   });
 
   bot.command("performance", async (ctx) => {
+    const caller = await requireCaller(ctx);
+    if (!caller) return;
+
     try {
-      const apiUrl = process.env.API_URL ?? "http://localhost:8787";
-      const apiKey = process.env.API_KEY;
-      const response = await fetch(`${apiUrl}/performance`, {
-        headers: apiKey ? { "x-api-key": apiKey } : {},
-      });
+      const response = await fetchAsUser(
+        caller,
+        "/performance",
+        ctx.update.update_id,
+      );
       if (!response.ok) throw new Error(`API ${response.status}`);
       const data = (await response.json()) as {
         positions: Array<{
@@ -314,25 +422,24 @@ export const createBot = (token: string) => {
           p.actual.pnlPercent >= p.calendarDca.pnlPercent &&
           p.actual.pnlPercent >= p.hold.pnlPercent;
         msg +=
-          `${won ? "🏆" : "•"} *${p.symbol}*\n` +
+          `${won ? "🏆" : "•"} *${escapeTelegramMarkdown(p.symbol)}*\n` +
           `  └ Dip buying: \`${p2(p.actual.pnlPercent)}\`\n` +
           `  └ Calendar DCA: \`${p2(p.calendarDca.pnlPercent)}\`\n` +
           `  └ Buy & hold: \`${p2(p.hold.pnlPercent)}\`\n\n`;
       }
       return ctx.reply(msg, { parse_mode: "Markdown" });
     } catch (error) {
-      console.error("Failed to fetch performance:", error);
+      logBotError("PERFORMANCE_COMMAND_FAILED", error, ctx.update.update_id);
       return ctx.reply("❌ Failed to fetch performance from the API.");
     }
   });
 
   bot.command("pnl", async (ctx) => {
+    const caller = await requireCaller(ctx);
+    if (!caller) return;
+
     try {
-      const apiUrl = process.env.API_URL ?? "http://localhost:8787";
-      const apiKey = process.env.API_KEY;
-      const response = await fetch(`${apiUrl}/pnl`, {
-        headers: apiKey ? { "x-api-key": apiKey } : {},
-      });
+      const response = await fetchAsUser(caller, "/pnl", ctx.update.update_id);
       if (!response.ok) throw new Error(`API ${response.status}`);
       const data = (await response.json()) as {
         positions: Array<{
@@ -361,7 +468,7 @@ export const createBot = (token: string) => {
       let msg = `💼 *Simulated Portfolio PnL*\n\n`;
       for (const p of data.positions) {
         msg +=
-          `• *${p.symbol}* (${p.orders} buys)\n` +
+          `• *${escapeTelegramMarkdown(p.symbol)}* (${p.orders} buys)\n` +
           `  └ Invested: \`${p.spentUsdt.toFixed(2)} USDT\`\n` +
           `  └ Avg buy: \`$${p.avgBuyPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}\` → now \`$${p.currentPrice.toLocaleString()}\`\n` +
           `  └ PnL: \`${sign(p.pnlUsdt)}${p.pnlUsdt.toFixed(2)} USDT (${sign(p.pnlPercent)}${p.pnlPercent.toFixed(2)}%)\`\n\n`;
@@ -370,13 +477,18 @@ export const createBot = (token: string) => {
 
       return ctx.reply(msg, { parse_mode: "Markdown" });
     } catch (error) {
-      console.error("Failed to fetch PnL:", error);
+      logBotError("PNL_COMMAND_FAILED", error, ctx.update.update_id);
       return ctx.reply("❌ Failed to fetch PnL from the API.");
     }
   });
 
   bot.command("price", async (ctx) => {
     const symbol = ctx.match?.trim().toUpperCase() || "BTCUSDT";
+    if (!isAllowedSymbol(symbol, process.env.ALLOWLIST_SYMBOLS)) {
+      return ctx.reply(
+        `Pair not supported. Available pairs: ${getAllowedSymbols(process.env.ALLOWLIST_SYMBOLS).join(", ") || "none"}.`,
+      );
+    }
     try {
       const client = createBybitPublicClient({
         baseUrl: "https://api.bybit.com",
@@ -387,7 +499,7 @@ export const createBot = (token: string) => {
         : null;
 
       const msg =
-        `💲 *${symbol}*\n\n` +
+        `💲 *${escapeTelegramMarkdown(symbol)}*\n\n` +
         `• *Price:* \`$${ticker.lastPrice.toLocaleString()}\`\n` +
         `• *24h High:* \`$${(ticker.high24h ?? ticker.lastPrice).toLocaleString()}\`\n` +
         `• *24h Low:* \`$${(ticker.low24h ?? ticker.lastPrice).toLocaleString()}\`\n` +
@@ -397,9 +509,9 @@ export const createBot = (token: string) => {
 
       return ctx.reply(msg, { parse_mode: "Markdown" });
     } catch (error) {
-      console.error(`Failed to fetch price for ${symbol}:`, error);
+      logBotError("PRICE_COMMAND_FAILED", error, ctx.update.update_id);
       return ctx.reply(
-        `❌ Could not fetch price for *${symbol}*. Is the symbol correct? (e.g. /price ETHUSDT)`,
+        `❌ Could not fetch price for *${escapeTelegramMarkdown(symbol)}*. Is the symbol correct? (e.g. /price ETHUSDT)`,
         { parse_mode: "Markdown" },
       );
     }
@@ -424,38 +536,35 @@ export const createBot = (token: string) => {
       );
     }
 
+    const caller = await requireCaller(ctx);
+    if (!caller) return;
+
     try {
-      const db = getDb();
-      const existing = await db
-        .select()
-        .from(schema.strategies)
-        .where(eq(schema.strategies.symbol, symbol))
-        .limit(1);
-      const [strategy] = existing;
-      if (!strategy) {
-        return ctx.reply(`❌ Strategy for symbol *${symbol}* not found.`, {
-          parse_mode: "Markdown",
-        });
+      const result = await updateOwnedStrategyConfig(
+        getDb(),
+        caller.id,
+        symbol,
+        "thresholdPercent",
+        val,
+        botCorrelationId(ctx.update.update_id),
+      );
+      if (result.outcome === "NOT_FOUND") {
+        return ctx.reply(
+          `❌ Strategy for symbol *${escapeTelegramMarkdown(symbol)}* not found.`,
+          {
+            parse_mode: "Markdown",
+          },
+        );
       }
 
-      const newConfig = {
-        ...(strategy.config as any),
-        thresholdPercent: val,
-      };
-
-      await db
-        .update(schema.strategies)
-        .set({ config: newConfig })
-        .where(eq(schema.strategies.id, strategy.id));
-
       return ctx.reply(
-        `✅ Dip threshold for *${symbol}* updated to *${val}%*`,
+        `✅ Dip threshold for *${escapeTelegramMarkdown(symbol)}* updated to *${val}%*`,
         {
           parse_mode: "Markdown",
         },
       );
     } catch (error) {
-      console.error(error);
+      logBotError("THRESHOLD_UPDATE_FAILED", error, ctx.update.update_id);
       return ctx.reply("❌ Failed to update threshold.");
     }
   });
@@ -477,38 +586,35 @@ export const createBot = (token: string) => {
       return ctx.reply("❌ Please provide a valid amount greater than 1.");
     }
 
+    const caller = await requireCaller(ctx);
+    if (!caller) return;
+
     try {
-      const db = getDb();
-      const existing = await db
-        .select()
-        .from(schema.strategies)
-        .where(eq(schema.strategies.symbol, symbol))
-        .limit(1);
-      const [strategy] = existing;
-      if (!strategy) {
-        return ctx.reply(`❌ Strategy for symbol *${symbol}* not found.`, {
-          parse_mode: "Markdown",
-        });
+      const result = await updateOwnedStrategyConfig(
+        getDb(),
+        caller.id,
+        symbol,
+        "suggestedQuoteAmount",
+        val,
+        botCorrelationId(ctx.update.update_id),
+      );
+      if (result.outcome === "NOT_FOUND") {
+        return ctx.reply(
+          `❌ Strategy for symbol *${escapeTelegramMarkdown(symbol)}* not found.`,
+          {
+            parse_mode: "Markdown",
+          },
+        );
       }
 
-      const newConfig = {
-        ...(strategy.config as any),
-        suggestedQuoteAmount: val,
-      };
-
-      await db
-        .update(schema.strategies)
-        .set({ config: newConfig })
-        .where(eq(schema.strategies.id, strategy.id));
-
       return ctx.reply(
-        `✅ Buy amount for *${symbol}* updated to *${val} USDT*`,
+        `✅ Buy amount for *${escapeTelegramMarkdown(symbol)}* updated to *${val} USDT*`,
         {
           parse_mode: "Markdown",
         },
       );
     } catch (error) {
-      console.error(error);
+      logBotError("BUY_AMOUNT_UPDATE_FAILED", error, ctx.update.update_id);
       return ctx.reply("❌ Failed to update buy amount.");
     }
   });
@@ -530,38 +636,35 @@ export const createBot = (token: string) => {
       return ctx.reply("❌ Please provide a valid limit greater than 1.");
     }
 
+    const caller = await requireCaller(ctx);
+    if (!caller) return;
+
     try {
-      const db = getDb();
-      const existing = await db
-        .select()
-        .from(schema.strategies)
-        .where(eq(schema.strategies.symbol, symbol))
-        .limit(1);
-      const [strategy] = existing;
-      if (!strategy) {
-        return ctx.reply(`❌ Strategy for symbol *${symbol}* not found.`, {
-          parse_mode: "Markdown",
-        });
+      const result = await updateOwnedStrategyConfig(
+        getDb(),
+        caller.id,
+        symbol,
+        "maxDailySpendUsdt",
+        val,
+        botCorrelationId(ctx.update.update_id),
+      );
+      if (result.outcome === "NOT_FOUND") {
+        return ctx.reply(
+          `❌ Strategy for symbol *${escapeTelegramMarkdown(symbol)}* not found.`,
+          {
+            parse_mode: "Markdown",
+          },
+        );
       }
 
-      const newConfig = {
-        ...(strategy.config as any),
-        maxDailySpendUsdt: val,
-      };
-
-      await db
-        .update(schema.strategies)
-        .set({ config: newConfig })
-        .where(eq(schema.strategies.id, strategy.id));
-
       return ctx.reply(
-        `✅ Daily spend limit for *${symbol}* updated to *${val} USDT*`,
+        `✅ Daily spend limit for *${escapeTelegramMarkdown(symbol)}* updated to *${val} USDT*`,
         {
           parse_mode: "Markdown",
         },
       );
     } catch (error) {
-      console.error(error);
+      logBotError("DAILY_LIMIT_UPDATE_FAILED", error, ctx.update.update_id);
       return ctx.reply("❌ Failed to update daily limit.");
     }
   });
@@ -575,63 +678,69 @@ export const createBot = (token: string) => {
       );
     }
 
+    const caller = await requireCaller(ctx);
+    if (!caller) return;
+
     try {
-      const db = getDb();
-      const existing = await db
-        .select()
-        .from(schema.strategies)
-        .where(eq(schema.strategies.symbol, symbol))
-        .limit(1);
-      const [strategy] = existing;
-      if (!strategy) {
-        return ctx.reply(`❌ Strategy for symbol *${symbol}* not found.`, {
-          parse_mode: "Markdown",
-        });
+      const result = await toggleOwnedStrategy(
+        getDb(),
+        caller.id,
+        symbol,
+        botCorrelationId(ctx.update.update_id),
+      );
+      if (result.outcome === "NOT_FOUND") {
+        return ctx.reply(
+          `❌ Strategy for symbol *${escapeTelegramMarkdown(symbol)}* not found.`,
+          {
+            parse_mode: "Markdown",
+          },
+        );
       }
 
-      const nextStatus = !strategy.enabled;
-
-      await db
-        .update(schema.strategies)
-        .set({ enabled: nextStatus })
-        .where(eq(schema.strategies.id, strategy.id));
-
       return ctx.reply(
-        `✅ Strategy for *${symbol}* updated to: ${nextStatus ? "🟢 *Enabled*" : "🔴 *Disabled*"}`,
+        `✅ Strategy for *${escapeTelegramMarkdown(symbol)}* updated to: ${result.enabled ? "🟢 *Enabled*" : "🔴 *Disabled*"}`,
         {
           parse_mode: "Markdown",
         },
       );
     } catch (error) {
-      console.error(error);
+      logBotError("STRATEGY_TOGGLE_FAILED", error, ctx.update.update_id);
       return ctx.reply("❌ Failed to toggle strategy status.");
     }
   });
 
-  const handleAddPair = async (ctx: any, symbol: string) => {
+  const handleAddPair = async (ctx: any, symbol: string, caller: BotCaller) => {
+    if (!isAllowedSymbol(symbol, process.env.ALLOWLIST_SYMBOLS)) {
+      return ctx.reply(
+        `Pair not supported. Available pairs: ${getAllowedSymbols(process.env.ALLOWLIST_SYMBOLS).join(", ") || "none"}.`,
+      );
+    }
     let loadingMsg: any;
     try {
       loadingMsg = await ctx.reply(
-        `⏳ Validating <b>${symbol}</b> on Bybit Spot server...`,
+        `⏳ Validating <b>${escapeTelegramHtml(symbol)}</b> on Bybit Spot server...`,
         { parse_mode: "HTML" },
       );
       await ctx.replyWithChatAction("typing");
     } catch (err) {
-      console.error("Failed to send loading status:", err);
+      logBotError("ADD_PAIR_LOADING_STATUS_FAILED", err, ctx.update.update_id);
     }
 
     try {
-      // Call Hono API server
-      const apiUrl = process.env.API_URL ?? "http://localhost:8787";
-      const apiKey = process.env.API_KEY;
-      const response = await fetch(`${apiUrl}/strategies`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(apiKey ? { "x-api-key": apiKey } : {}),
+      // Call Hono API server as the caller, so the new strategy is created
+      // under their ownership rather than as an ownerless global row.
+      const response = await fetchAsUser(
+        caller,
+        "/strategies",
+        ctx.update.update_id,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ symbol }),
         },
-        body: JSON.stringify({ symbol }),
-      });
+      );
 
       if (loadingMsg) {
         await ctx.api
@@ -650,14 +759,14 @@ export const createBot = (token: string) => {
             );
           case "STRATEGY_ALREADY_EXISTS":
             return ctx.reply(
-              `❌ Strategy for <b>${symbol}</b> already exists.`,
+              `❌ Strategy for <b>${escapeTelegramHtml(symbol)}</b> already exists.`,
               {
                 parse_mode: "HTML",
               },
             );
           case "SYMBOL_NOT_FOUND_ON_EXCHANGE":
             return ctx.reply(
-              `❌ Symbol <b>${symbol}</b> was not found on Bybit Spot market.`,
+              `❌ Symbol <b>${escapeTelegramHtml(symbol)}</b> was not found on Bybit Spot market.`,
               { parse_mode: "HTML" },
             );
           default:
@@ -677,14 +786,14 @@ export const createBot = (token: string) => {
 
       return ctx.reply(
         `<b>✅ Strategy Added Successfully</b>\n\n` +
-          `• <b>Name:</b> ${data.strategy.name}\n` +
-          `• <b>Symbol:</b> ${data.strategy.symbol}\n` +
-          `• <b>Mode:</b> ${data.strategy.mode}\n\n` +
+          `• <b>Name:</b> ${escapeTelegramHtml(data.strategy.name)}\n` +
+          `• <b>Symbol:</b> ${escapeTelegramHtml(data.strategy.symbol)}\n` +
+          `• <b>Mode:</b> ${escapeTelegramHtml(data.strategy.mode)}\n\n` +
           `Default parameters configured: threshold 1.0%, buy amount 20 USDT, daily limit 300 USDT.`,
         { parse_mode: "HTML" },
       );
     } catch (error) {
-      console.error("Failed to add strategy via API:", error);
+      logBotError("ADD_PAIR_FAILED", error, ctx.update.update_id);
       if (loadingMsg) {
         await ctx.api
           .deleteMessage(ctx.chat.id, loadingMsg.message_id)
@@ -707,55 +816,56 @@ export const createBot = (token: string) => {
       );
     }
 
-    return handleAddPair(ctx, symbol);
+    const caller = await requireCaller(ctx);
+    if (!caller) return;
+
+    return handleAddPair(ctx, symbol, caller);
   });
 
   bot.callbackQuery(/^cancel_order:(.+)$/, async (ctx) => {
     const orderId = ctx.match[1];
     if (!orderId) return ctx.answerCallbackQuery("❌ Order ID missing.");
 
+    const caller = await requireCallbackCaller(ctx);
+    if (!caller) return;
+
     try {
       const db = getDb();
-      const [order] = await db
-        .select()
-        .from(schema.orders)
-        .where(eq(schema.orders.id, orderId))
-        .limit(1);
+      const result = await claimOwnedPendingOrder(
+        db,
+        orderId,
+        caller.id,
+        "CANCELLED",
+        botCorrelationId(ctx.update.update_id),
+      );
 
-      if (!order) {
+      if (result.outcome === "NOT_FOUND") {
         return ctx.answerCallbackQuery("❌ Order not found.");
       }
-
-      if (order.status === "COMPLETED") {
-        return ctx.answerCallbackQuery("⚠️ Too late! Order already executed.");
+      if (result.outcome === "SYMBOL_NOT_ALLOWED") {
+        return ctx.answerCallbackQuery(
+          "Pair is no longer supported. Cancel this order instead.",
+        );
       }
-      if (order.status === "CANCELLED") {
-        return ctx.answerCallbackQuery("ℹ️ Order already cancelled.");
+      if (result.outcome === "ALREADY_SETTLED") {
+        return ctx.answerCallbackQuery(
+          result.status === "COMPLETED"
+            ? "⚠️ Too late! Order already executed."
+            : "ℹ️ Order already cancelled.",
+        );
       }
 
-      // Update order status to CANCELLED
-      await db
-        .update(schema.orders)
-        .set({ status: "CANCELLED" })
-        .where(eq(schema.orders.id, orderId));
-
-      await db.insert(schema.auditEvents).values({
-        entityType: "order",
-        entityId: order.id,
-        action: "DRY_RUN_ORDER_CANCELLED",
-        payload: { order: { ...order, status: "CANCELLED" } },
-      });
-
+      const order = result.order;
       await ctx.answerCallbackQuery("❌ Order cancelled successfully!");
       return ctx.editMessageText(
-        `❌ *Dry-Run Order Cancelled*\n\n` +
-          `• *Symbol:* ${order.symbol}\n` +
-          `• *Amount:* ${order.quoteAmount} USDT\n` +
-          `• *Status:* Cancelled by user`,
-        { parse_mode: "Markdown" },
+        `❌ <b>Dry-Run Order Cancelled</b>\n\n` +
+          `• <b>Symbol:</b> ${escapeTelegramHtml(order.symbol)}\n` +
+          `• <b>Amount:</b> ${order.quoteAmount} USDT\n` +
+          `• <b>Status:</b> Cancelled by user`,
+        { parse_mode: "HTML" },
       );
     } catch (err) {
-      console.error("Failed to cancel order:", err);
+      logBotError("ORDER_CANCEL_FAILED", err, ctx.update.update_id);
       return ctx.answerCallbackQuery("❌ Failed to cancel order.");
     }
   });
@@ -764,59 +874,63 @@ export const createBot = (token: string) => {
     const orderId = ctx.match[1];
     if (!orderId) return ctx.answerCallbackQuery("❌ Order ID missing.");
 
+    const caller = await requireCallbackCaller(ctx);
+    if (!caller) return;
+
     try {
       const db = getDb();
-      const [order] = await db
-        .select()
-        .from(schema.orders)
-        .where(eq(schema.orders.id, orderId))
-        .limit(1);
+      const result = await claimOwnedPendingOrder(
+        db,
+        orderId,
+        caller.id,
+        "COMPLETED",
+        botCorrelationId(ctx.update.update_id),
+      );
 
-      if (!order) {
+      if (result.outcome === "NOT_FOUND") {
         return ctx.answerCallbackQuery("❌ Order not found.");
       }
-
-      if (order.status === "COMPLETED") {
-        return ctx.answerCallbackQuery("ℹ️ Order already executed.");
+      if (result.outcome === "SYMBOL_NOT_ALLOWED") {
+        return ctx.answerCallbackQuery(
+          "Pair is no longer supported. Cancel this order instead.",
+        );
       }
-      if (order.status === "CANCELLED") {
-        return ctx.answerCallbackQuery("⚠️ Too late! Order already cancelled.");
+      if (result.outcome === "ALREADY_SETTLED") {
+        return ctx.answerCallbackQuery(
+          result.status === "CANCELLED"
+            ? "⚠️ Too late! Order already cancelled."
+            : "ℹ️ Order already executed.",
+        );
       }
 
-      // Update order status to COMPLETED
-      await db
-        .update(schema.orders)
-        .set({ status: "COMPLETED" })
-        .where(eq(schema.orders.id, orderId));
+      const order = result.order;
 
       // Fetch strategy details for the text
       const [strategy] = await db
         .select()
         .from(schema.strategies)
-        .where(eq(schema.strategies.id, order.strategyId ?? ""))
+        .where(
+          and(
+            eq(schema.strategies.id, order.strategyId ?? ""),
+            eq(schema.strategies.userId, caller.id),
+          ),
+        )
         .limit(1);
 
       const strategyName = strategy?.name ?? "Dip Buying Strategy";
 
-      await db.insert(schema.auditEvents).values({
-        entityType: "order",
-        entityId: order.id,
-        action: "DRY_RUN_ORDER_COMPLETED",
-        payload: { order: { ...order, status: "COMPLETED" } },
-      });
-
       await ctx.answerCallbackQuery("⚡ Order executed now!");
       return ctx.editMessageText(
-        `🎉 *Dry-Run Order Executed*\n\n` +
-          `• *Strategy:* ${strategyName}\n` +
-          `• *Symbol:* ${order.symbol}\n` +
-          `• *Price:* $${Number(order.price).toLocaleString()}\n` +
-          `• *Amount:* ${order.quoteAmount} USDT\n` +
-          `• *Status:* Simulated Purchase (Force Executed)`,
-        { parse_mode: "Markdown" },
+        `🎉 <b>Dry-Run Order Executed</b>\n\n` +
+          `• <b>Strategy:</b> ${escapeTelegramHtml(strategyName)}\n` +
+          `• <b>Symbol:</b> ${escapeTelegramHtml(order.symbol)}\n` +
+          `• <b>Price:</b> $${Number(order.price).toLocaleString()}\n` +
+          `• <b>Amount:</b> ${order.quoteAmount} USDT\n` +
+          `• <b>Status:</b> Simulated Purchase (Force Executed)`,
+        { parse_mode: "HTML" },
       );
     } catch (err) {
-      console.error("Failed to execute order:", err);
+      logBotError("ORDER_EXECUTE_FAILED", err, ctx.update.update_id);
       return ctx.answerCallbackQuery("❌ Failed to execute order.");
     }
   });
@@ -828,7 +942,9 @@ export const createBot = (token: string) => {
     ) {
       const symbol = ctx.message.text?.trim().toUpperCase();
       if (!symbol) return ctx.reply("❌ Please enter a valid symbol.");
-      return handleAddPair(ctx, symbol);
+      const caller = await requireCaller(ctx);
+      if (!caller) return;
+      return handleAddPair(ctx, symbol, caller);
     }
 
     return ctx.reply(
@@ -868,10 +984,7 @@ export const createBot = (token: string) => {
     ])
     .catch((err) => {
       // Quietly log command registration failure (e.g. in tests or invalid token)
-      console.warn(
-        "Telegram command registration skipped/failed:",
-        err.message,
-      );
+      logBotError("COMMAND_REGISTRATION_FAILED", err);
     });
 
   return bot;

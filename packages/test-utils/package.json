@@ -12,11 +12,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
-  "dependencies": {},
   "devDependencies": {
-    "typescript": "catalog:",
-    "vitest": "catalog:",
+    "@types/node": "catalog:",
     "tsdown": "catalog:",
-    "@types/node": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }

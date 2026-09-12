@@ -1,13 +1,23 @@
 import { createBot } from "./bot.js";
+import { startBotHeartbeat } from "./heartbeat.js";
+import { logBotError, logBotEvent } from "./operational-log.js";
+import { resolveBotRuntimeConfig } from "./runtime-config.js";
 
-const token = process.env.TELEGRAM_BOT_TOKEN;
+const config = resolveBotRuntimeConfig();
+const token = config.telegramBotToken;
 
 if (!token) {
-  console.log("TELEGRAM_BOT_TOKEN is not set. Bot is not started.");
+  logBotEvent("BOT_NOT_CONFIGURED", "WARN");
   process.exit(0);
 }
 
-console.log(
-  "🤖 Buy Crypto Dip Bot Telegram Bot successfully started and listening...",
-);
-await createBot(token).start();
+logBotEvent("BOT_STARTING");
+const stopHeartbeat = startBotHeartbeat();
+try {
+  await createBot(token).start();
+} catch (error) {
+  logBotError("BOT_STARTUP_FAILED", error);
+  process.exitCode = 1;
+} finally {
+  stopHeartbeat();
+}

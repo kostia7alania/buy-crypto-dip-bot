@@ -1,8 +1,6 @@
-export interface AuditLog {
+import type { AuditEventV1 } from "@buy-crypto-dip-bot/shared-types";
+
+export type AuditLog = AuditEventV1 & {
   id: string;
-  action: string;
-  entityType: string;
-  entityId: string;
-  payload: Record<string, unknown>;
   createdAt: string;
-}
+};

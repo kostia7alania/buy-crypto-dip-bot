@@ -13,7 +13,8 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@buy-crypto-dip-bot/exchange-core": "workspace:*"
+    "@buy-crypto-dip-bot/exchange-core": "workspace:*",
+    "valibot": "catalog:"
   },
   "devDependencies": {
     "typescript": "catalog:",

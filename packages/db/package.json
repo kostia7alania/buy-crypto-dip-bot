@@ -3,28 +3,38 @@
   "private": true,
   "type": "module",
   "exports": {
-    "types": "./src/index.ts",
-    "import": "./dist/index.mjs",
-    "default": "./dist/index.mjs"
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
+    },
+    "./testing": {
+      "types": "./src/testing.ts",
+      "import": "./src/testing.ts",
+      "default": "./src/testing.ts"
+    }
   },
   "scripts": {
     "build": "tsdown src/index.ts --format esm --out-dir dist --no-dts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
+    "test:postgres18": "REQUIRE_POSTGRES18_TEST=1 vitest run src/postgres18-contract.test.ts",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "db:verify-legacy-decision": "node scripts/validate-legacy-decision.mjs"
   },
   "dependencies": {
+    "@buy-crypto-dip-bot/shared-types": "workspace:*",
     "drizzle-orm": "catalog:",
-    "pg": "catalog:",
-    "@buy-crypto-dip-bot/shared-types": "workspace:*"
+    "pg": "catalog:"
   },
   "devDependencies": {
-    "typescript": "catalog:",
-    "vitest": "catalog:",
-    "tsdown": "catalog:",
+    "@electric-sql/pglite": "^0.5.4",
     "@types/node": "catalog:",
+    "@types/pg": "^8.11.10",
     "drizzle-kit": "catalog:",
-    "@types/pg": "^8.11.10"
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }

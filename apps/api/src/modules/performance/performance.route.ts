@@ -4,14 +4,18 @@ import { compareToBenchmarks } from "@buy-crypto-dip-bot/strategy-engine";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { getDb } from "../../db.js";
+import { logApiError } from "../../operational-log.js";
+import { type AppEnv, requireUser } from "../auth/principal.middleware.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_DAYS = 200; // Bybit kline page size
 
 // Compares actual dip-buying against naive calendar-DCA and buy-and-hold
 // baselines over the same window and capital — the core "is buying the dip
-// actually working?" answer.
-export const performanceRoutes = new Hono().get("/", async (c) => {
+// actually working?" answer. Always scoped to the caller: a benchmark computed
+// over everyone's orders would be nobody's real result.
+export const performanceRoutes = new Hono<AppEnv>().get("/", async (c) => {
+  const user = requireUser(c);
   try {
     const db = getDb();
     const completedBuys = await db
@@ -19,6 +23,7 @@ export const performanceRoutes = new Hono().get("/", async (c) => {
       .from(schema.orders)
       .where(
         and(
+          eq(schema.orders.userId, user.userId),
           eq(schema.orders.status, "COMPLETED"),
           eq(schema.orders.side, "BUY"),
         ),
@@ -61,14 +66,14 @@ export const performanceRoutes = new Hono().get("/", async (c) => {
           MAX_DAYS,
           Math.max(1, Math.ceil((Date.now() - acc.firstMs) / DAY_MS)),
         );
-        const candles = await client.getKlines({
+        const snapshot = await client.getKlines({
           symbol,
           interval: "D",
           limit: days,
         });
-        closes = candles.map((k) => k.close);
+        closes = snapshot.candles.map((k) => k.close);
       } catch (error) {
-        console.error(`Performance: data fetch failed for ${symbol}:`, error);
+        logApiError("PERFORMANCE_MARKET_FETCH_FAILED", error);
         continue;
       }
 
@@ -92,7 +97,7 @@ export const performanceRoutes = new Hono().get("/", async (c) => {
     positions.sort((a, b) => b.spentUsdt - a.spentUsdt);
     return c.json({ positions });
   } catch (error) {
-    console.error("Failed to compute performance:", error);
+    logApiError("PERFORMANCE_COMPUTE_FAILED", error, c.get("correlationId"));
     return c.json({ error: "INTERNAL_SERVER_ERROR" }, 500);
   }
 });

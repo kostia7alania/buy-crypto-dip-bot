@@ -2,19 +2,19 @@
 const features = [
   {
     title: "Catches sharp drops",
-    body: "When price gaps down from its 24h high, the bot is already watching — and can act faster than you can.",
+    body: "The runner polls reviewed public symbols and can record a dry-run decision when the observed drop crosses the configured threshold.",
   },
   {
     title: "Bounded by design",
-    body: "A flash crash won't drain your account: daily and weekly caps limit total exposure automatically.",
+    body: "Daily and weekly caps are checked before simulated reservation. They reduce configured exposure but do not remove software, data or market risk.",
   },
   {
     title: "Cancel window",
-    body: "Even in fast markets, every buy is announced with a countdown so you stay in control.",
+    body: "Eligible private-chat messages can include a cosmetic countdown. Delivery failure does not pause or control database-driven simulated execution.",
   },
   {
-    title: "Kill switch",
-    body: "One /pause_all command in Telegram instantly halts every strategy if you want to sit out.",
+    title: "Audited pause command",
+    body: "The /pause_all command requests an owner-scoped strategy update and records the committed transition. Its result must be confirmed rather than assumed instant.",
   },
 ];
 const steps = [
@@ -38,19 +38,19 @@ const steps = [
 const faqs = [
   {
     q: "Can a bot really catch a flash crash?",
-    a: "A bot reacts on every price tick without hesitation, so it can act on sudden drops faster than manual trading — within your pre-set rules.",
+    a: "This runner polls on an interval rather than every market tick. It may observe a sudden drop, but network latency, polling cadence and stale data can cause a miss or delayed decision.",
   },
   {
     q: "Isn't buying a crash risky?",
-    a: "That's why this bot is risk-first: spend caps, a cooldown and a dry-run mode bound the downside so you can test the idea safely.",
+    a: "Buying a crash is risky. Spend checks, a cooldown and dry-run evidence help inspect the rule without placing exchange orders; they do not prove the strategy or bound market loss in a future live system.",
   },
   {
     q: "What if the crash keeps going?",
-    a: "Daily and weekly limits cap total spend, and the /pause_all kill switch stops everything instantly if you choose to.",
+    a: "Daily and weekly limits are checked before simulated reservations. /pause_all requests an owner-scoped disable operation whose confirmed result is recorded; neither control predicts the market path.",
   },
   {
     q: "Do I need to watch the market?",
-    a: "No. The bot watches continuously and alerts you in Telegram, so you don't have to sit at the screen.",
+    a: "The self-hosted runner polls while its process and dependencies are healthy. Telegram delivery is optional and can fail, so readiness and delivery evidence still need monitoring.",
   },
 ];
 </script>
@@ -61,7 +61,7 @@ const faqs = [
     title="Flash Crash Crypto Bot"
     description="A risk-first flash-crash bot that buys sharp crypto drops on Bybit spot within strict spend limits, with a dry-run mode, cancel window and kill switch."
     headline="Be ready for the flash crash"
-    subheadline="Automatically buy sharp drops on Bybit spot — bounded by hard limits, a cancel window and an instant kill switch, tested safely in dry-run first."
+    subheadline="Evaluate sharp-drop rules on reviewed public Bybit data with configured limits, dry-run evidence and an audited pause control."
     :features="features"
     :steps="steps"
     :faqs="faqs"

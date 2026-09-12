@@ -83,11 +83,11 @@ const pnlClass = (n: number) =>
 .pnl {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  padding: 2rem;
-  background: rgba(15, 23, 42, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 1rem;
+  gap: var(--space-5);
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
 }
 
 .pnl__header {
@@ -95,14 +95,14 @@ const pnlClass = (n: number) =>
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 .pnl__title {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 700;
-  color: #f1f5f9;
+  color: var(--color-text-primary);
 }
 
 .pnl__total {
@@ -110,30 +110,32 @@ const pnlClass = (n: number) =>
   font-weight: 800;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
 }
 
 .pnl__empty {
   margin: 0;
   text-align: center;
-  padding: 2rem 1rem;
-  color: #64748b;
-  font-style: italic;
+  padding: var(--space-8) var(--space-4);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-subtle);
 }
 
 .pnl__grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
-  gap: 1.25rem;
+  gap: var(--space-4);
 }
 
 .pnl__card {
-  padding: 1.25rem;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  background: rgba(30, 41, 59, 0.25);
-  border-radius: 0.75rem;
+  padding: var(--space-5);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-raised);
+  border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .pnl__card-header {
@@ -144,23 +146,26 @@ const pnlClass = (n: number) =>
 
 .pnl__symbol {
   font-weight: 800;
-  color: #f8fafc;
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
 }
 
 .pnl__badge {
   font-size: 0.6875rem;
   font-weight: 700;
   padding: 0.125rem 0.5rem;
-  border-radius: 9999px;
-  background: rgba(103, 232, 249, 0.1);
-  color: #67e8f9;
+  border: 1px solid var(--color-simulation-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-simulation-soft);
+  color: var(--color-simulation);
+  font-family: var(--font-mono);
 }
 
 .pnl__rows {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .pnl__row {
@@ -170,26 +175,41 @@ const pnlClass = (n: number) =>
 }
 
 .pnl__row dt {
-  color: #64748b;
+  color: var(--color-text-subtle);
 }
 
 .pnl__row dd {
   margin: 0;
-  color: #cbd5e1;
+  color: var(--color-text-secondary);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+  text-align: end;
 }
 
 .pnl__row--main {
-  padding-top: 0.5rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-block-start: var(--space-2);
+  border-block-start: 1px solid var(--color-border-subtle);
 }
 
-.pnl__value--green {
-  color: #4ade80 !important;
+.pnl__total.pnl__value--green,
+.pnl__row .pnl__value--green {
+  color: var(--color-success);
 }
 
-.pnl__value--red {
-  color: #f87171 !important;
+.pnl__total.pnl__value--red,
+.pnl__row .pnl__value--red {
+  color: var(--color-danger);
+}
+
+@media (max-width: 36rem) {
+  .pnl {
+    padding: var(--space-5);
+  }
+
+  .pnl__row {
+    align-items: start;
+    gap: var(--space-4);
+  }
 }
 </style>

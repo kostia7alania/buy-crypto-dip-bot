@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { computed } from "vue";
+
 interface StrategyConfigData {
   thresholdPercent: number;
   suggestedQuoteAmount: number;
@@ -20,6 +22,8 @@ const props = defineProps<{
   strategy: Strategy;
   isEditing: boolean;
   editForm: StrategyConfigData | null;
+  isToggling: boolean;
+  toggleStatus?: { kind: "confirmed" | "failed"; message: string } | null;
 }>();
 
 const emit = defineEmits<{
@@ -28,6 +32,46 @@ const emit = defineEmits<{
   (e: "save"): void;
   (e: "cancel"): void;
 }>();
+
+const projectedMaximum = computed(() => {
+  const config = props.editForm ?? props.strategy.config;
+  const perBuy = Number(config.suggestedQuoteAmount);
+  const cooldown = Number(config.cooldownMinutes);
+  const dailyCap = Number(config.maxDailySpendUsdt);
+  const weeklyCap = Number(config.maxWeeklySpendUsdt);
+
+  if (
+    !Number.isFinite(perBuy) ||
+    !Number.isFinite(cooldown) ||
+    !Number.isFinite(dailyCap) ||
+    !Number.isFinite(weeklyCap) ||
+    perBuy <= 0 ||
+    cooldown <= 0 ||
+    dailyCap < 0 ||
+    weeklyCap < 0
+  ) {
+    return null;
+  }
+
+  const dailyOrderLimit = Math.min(
+    Math.floor(dailyCap / perBuy),
+    Math.ceil(1440 / cooldown),
+  );
+  const weeklyOrderLimit = Math.min(
+    Math.floor(weeklyCap / perBuy),
+    Math.ceil(10080 / cooldown),
+  );
+
+  return {
+    dailyOrders: dailyOrderLimit,
+    dailySpend: dailyOrderLimit * perBuy,
+    weeklyOrders: weeklyOrderLimit,
+    weeklySpend: weeklyOrderLimit * perBuy,
+  };
+});
+
+const formatUsdt = (value: number) =>
+  new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);
 </script>
 
 <template>
@@ -39,14 +83,29 @@ const emit = defineEmits<{
       </div>
       <div class="strategy-card__toggle-container">
         <span class="strategy-card__toggle-label">
-          {{ props.strategy.enabled ? 'Active' : 'Paused' }}
+          {{ props.isToggling ? 'Updating…' : (props.strategy.enabled ? 'Active' : 'Paused') }}
         </span>
         <UiSwitch
           :checked="props.strategy.enabled"
+          :label="`${props.strategy.enabled ? 'Pause' : 'Activate'} ${props.strategy.symbol} strategy`"
+          :disabled="props.isToggling"
           @change="emit('toggle')"
         />
       </div>
     </div>
+
+    <p class="strategy-card__mode">
+      Mode <strong>{{ props.strategy.mode }}</strong> · No exchange order
+    </p>
+
+    <p
+      v-if="props.toggleStatus"
+      class="strategy-card__toggle-status"
+      :class="`strategy-card__toggle-status--${props.toggleStatus.kind}`"
+      :role="props.toggleStatus.kind === 'failed' ? 'alert' : 'status'"
+    >
+      {{ props.toggleStatus.message }}
+    </p>
 
     <!-- Configuration Fields -->
     <div class="strategy-card__config-form">
@@ -58,6 +117,7 @@ const emit = defineEmits<{
             type="number"
             step="0.1"
             suffix="%"
+            aria-label="Dip threshold percentage"
           />
         </div>
         <span v-else class="strategy-card__config-value strategy-card__config-value--cyan">
@@ -72,6 +132,7 @@ const emit = defineEmits<{
             v-model="props.editForm.suggestedQuoteAmount"
             type="number"
             suffix="USDT"
+            aria-label="Suggested buy amount in USDT"
           />
         </div>
         <span v-else class="strategy-card__config-value">
@@ -86,6 +147,7 @@ const emit = defineEmits<{
             v-model="props.editForm.maxDailySpendUsdt"
             type="number"
             suffix="USDT"
+            aria-label="Daily spend limit in USDT"
           />
         </div>
         <span v-else class="strategy-card__config-value">
@@ -100,6 +162,7 @@ const emit = defineEmits<{
             v-model="props.editForm.maxWeeklySpendUsdt"
             type="number"
             suffix="USDT"
+            aria-label="Weekly spend limit in USDT"
           />
         </div>
         <span v-else class="strategy-card__config-value">
@@ -114,6 +177,7 @@ const emit = defineEmits<{
             v-model="props.editForm.cooldownMinutes"
             type="number"
             suffix="min"
+            aria-label="Cooldown in minutes"
           />
         </div>
         <span v-else class="strategy-card__config-value">
@@ -122,33 +186,56 @@ const emit = defineEmits<{
       </div>
     </div>
 
+    <aside
+      v-if="props.isEditing"
+      class="strategy-card__preview"
+    >
+      <strong>Pre-save DRY_RUN preview</strong>
+      <p v-if="projectedMaximum">
+        At most {{ projectedMaximum.dailyOrders }} configured buys / {{
+          formatUsdt(projectedMaximum.dailySpend)
+        }} USDT per rolling 24h, and {{ projectedMaximum.weeklyOrders }} buys /
+        {{ formatUsdt(projectedMaximum.weeklySpend) }} USDT per rolling 7d.
+      </p>
+      <p v-else>
+        Enter positive per-buy and cooldown values plus non-negative caps to
+        calculate a projection.
+      </p>
+      <p>
+        This upper bound assumes continuously eligible signals and correctly
+        operating controls. It is not a forecast or exchange-spend promise.
+      </p>
+    </aside>
+
     <!-- Edit Actions -->
     <div class="strategy-card__actions">
       <div v-if="props.isEditing" class="strategy-card__edit-buttons">
-        <button @click="emit('save')" class="ui-button ui-button--primary ui-button--sm">Save 💾</button>
-        <button @click="emit('cancel')" class="ui-button ui-button--secondary ui-button--sm">Cancel</button>
+        <UiButton variant="primary" size="compact" @click="emit('save')">
+          Save
+        </UiButton>
+        <UiButton size="compact" @click="emit('cancel')">Cancel</UiButton>
       </div>
-      <button @click="emit('edit')" v-else class="ui-button ui-button--secondary ui-button--sm ui-button--block">
-        Configure ⚙️
-      </button>
+      <UiButton v-else size="compact" block @click="emit('edit')">
+        Configure
+      </UiButton>
     </div>
   </div>
 </template>
 
 <style scoped>
 .strategy-card {
-  padding: 1.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  background: rgba(30, 41, 59, 0.25);
-  border-radius: 0.75rem;
+  padding: var(--space-5);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-raised);
+  border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  transition: border-color 0.25s;
+  gap: var(--space-5);
+  transition: border-color var(--duration-fast) var(--ease-standard);
 }
 
 .strategy-card:hover {
-  border-color: rgba(255, 255, 255, 0.1);
+  border-color: var(--color-border-strong);
 }
 
 .strategy-card__header {
@@ -161,30 +248,58 @@ const emit = defineEmits<{
   margin: 0;
   font-size: 1.25rem;
   font-weight: 800;
-  color: #f8fafc;
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
 }
 
 .strategy-card__subtitle {
   font-size: 0.75rem;
-  color: #64748b;
+  color: var(--color-text-subtle);
+}
+
+.strategy-card__mode {
+  margin: calc(var(--space-2) * -1) 0 0;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+}
+
+.strategy-card__mode strong {
+  color: var(--color-simulation);
+}
+
+.strategy-card__toggle-status {
+  margin: calc(var(--space-2) * -1) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-success-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-success-soft);
+  color: var(--color-success);
+  font-size: var(--text-caption);
+}
+
+.strategy-card__toggle-status--failed {
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
 }
 
 .strategy-card__toggle-container {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .strategy-card__toggle-label {
   font-size: 0.75rem;
-  color: #94a3b8;
+  color: var(--color-text-muted);
   font-weight: 500;
 }
 
 .strategy-card__config-form {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .strategy-card__config-row {
@@ -195,72 +310,52 @@ const emit = defineEmits<{
 }
 
 .strategy-card__config-label {
-  color: #64748b;
+  color: var(--color-text-subtle);
   font-weight: 500;
 }
 
 .strategy-card__config-value {
-  color: #cbd5e1;
+  color: var(--color-text-secondary);
   font-weight: 600;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .strategy-card__config-value--cyan {
-  color: #67e8f9 !important;
+  color: var(--color-action);
 }
 
 .strategy-card__input-wrapper {
   max-width: 6.5rem;
 }
 
+.strategy-card__preview {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-simulation-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-simulation-soft);
+  color: var(--color-text-secondary);
+  font-size: var(--text-caption);
+  line-height: 1.5;
+}
+
+.strategy-card__preview strong {
+  color: var(--color-simulation);
+}
+
+.strategy-card__preview p {
+  margin: 0;
+}
+
 .strategy-card__actions {
-  margin-top: 0.5rem;
+  margin-block-start: var(--space-2);
 }
 
 .strategy-card__edit-buttons {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
-}
-
-.ui-button {
-  padding: 0.4rem 0.8rem;
-  border-radius: 6px;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: 1px solid transparent;
-  text-align: center;
-}
-
-.ui-button--sm {
-  padding: 0.3rem 0.6rem;
-  font-size: 0.75rem;
-}
-
-.ui-button--block {
-  width: 100%;
-}
-
-.ui-button--primary {
-  background: rgba(103, 232, 249, 0.1);
-  color: #67e8f9;
-  border-color: rgba(103, 232, 249, 0.25);
-}
-
-.ui-button--primary:hover:not(:disabled) {
-  background: rgba(103, 232, 249, 0.2);
-  border-color: rgba(103, 232, 249, 0.4);
-}
-
-.ui-button--secondary {
-  background: rgba(255, 255, 255, 0.04);
-  color: #94a3b8;
-  border-color: rgba(255, 255, 255, 0.08);
-}
-
-.ui-button--secondary:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #f1f5f9;
+  gap: var(--space-2);
 }
 </style>

@@ -1,9 +1,14 @@
-import { riskDefaults, strategyDefaults } from "@buy-crypto-dip-bot/config";
-import { schema } from "@buy-crypto-dip-bot/db";
-import { eq } from "drizzle-orm";
+import {
+  isAllowedSymbol,
+  riskDefaults,
+  strategyDefaults,
+} from "@buy-crypto-dip-bot/config";
 import type { Bot } from "grammy";
 import { InlineKeyboard } from "grammy";
+import { requireCallbackCaller } from "./caller.js";
+import { applyOwnedOnboardingStrategy } from "./command.repository.js";
 import { getDb } from "./db.js";
+import { botCorrelationId, logBotError } from "./operational-log.js";
 
 // The onboarding wizard is stateless: every step encodes its accumulated
 // choices in the callback data (`wiz:<step>:...args`), so no session storage
@@ -38,7 +43,7 @@ export const parseWizardCallback = (data: string): WizardStep | null => {
   if (parts[0] !== "wiz") return null;
 
   const isCoin = (s: string | undefined): s is string =>
-    s !== undefined && (WIZARD_COINS as readonly string[]).includes(s);
+    s !== undefined && isAllowedSymbol(s, process.env.ALLOWLIST_SYMBOLS);
   const isThreshold = (n: number) =>
     (WIZARD_THRESHOLDS as readonly number[]).includes(n);
   const isAmount = (n: number) =>
@@ -82,6 +87,7 @@ const coinLabel = (symbol: string) => symbol.replace(/USDT$/, "");
 export const buildCoinKeyboard = () => {
   const kb = new InlineKeyboard();
   for (const symbol of WIZARD_COINS) {
+    if (!isAllowedSymbol(symbol, process.env.ALLOWLIST_SYMBOLS)) continue;
     kb.text(coinLabel(symbol), `wiz:threshold:${symbol}`);
   }
   return kb.row().text("✖️ Cancel", "wiz:cancel");
@@ -180,55 +186,27 @@ export const registerOnboardingWizard = (bot: Bot) => {
         );
 
       case "apply": {
+        // Only the "apply" step writes anything, so this is the one step that
+        // needs an identified owner. Earlier steps just redraw a keyboard.
+        const caller = await requireCallbackCaller(ctx);
+        if (!caller) return;
+
         try {
           const db = getDb();
-          const [existing] = await db
-            .select()
-            .from(schema.strategies)
-            .where(eq(schema.strategies.symbol, parsed.symbol))
-            .limit(1);
+          const correlationId = botCorrelationId(ctx.update.update_id);
 
-          const configPatch = {
-            thresholdPercent: parsed.thresholdPercent,
-            suggestedQuoteAmount: parsed.amountUsdt,
-          };
-
-          let strategyId: string;
-          if (existing) {
-            await db
-              .update(schema.strategies)
-              .set({
-                enabled: true,
-                config: { ...(existing.config as object), ...configPatch },
-              })
-              .where(eq(schema.strategies.id, existing.id));
-            strategyId = existing.id;
-          } else {
-            // Wizard coins come from the risk allowlist, so no exchange
-            // validation round-trip is needed here (unlike /add_pair).
-            const [created] = await db
-              .insert(schema.strategies)
-              .values({
-                name: `${parsed.symbol} Dip Buying Strategy`,
-                symbol: parsed.symbol,
-                mode: "DRY_RUN",
-                config: { ...strategyDefaults, ...configPatch },
-              })
-              .returning();
-            if (!created) throw new Error("insert returned no row");
-            strategyId = created.id;
-          }
-
-          await db.insert(schema.auditEvents).values({
-            entityType: "strategy",
-            entityId: strategyId,
-            action: "STRATEGY_ONBOARDED",
-            payload: {
+          // Wizard coins come from the risk allowlist, so no exchange
+          // validation round-trip is needed here (unlike /add_pair).
+          await applyOwnedOnboardingStrategy(
+            db,
+            caller.id,
+            {
               symbol: parsed.symbol,
-              ...configPatch,
-              via: "telegram_wizard",
+              thresholdPercent: parsed.thresholdPercent,
+              amountUsdt: parsed.amountUsdt,
             },
-          });
+            correlationId,
+          );
 
           return ctx.editMessageText(
             `🎉 *You're set — watching ${parsed.symbol} for dips*\n\n` +
@@ -242,7 +220,11 @@ export const registerOnboardingWizard = (bot: Bot) => {
             { parse_mode: "Markdown" },
           );
         } catch (error) {
-          console.error("Onboarding wizard failed to save strategy:", error);
+          logBotError(
+            "ONBOARDING_STRATEGY_SAVE_FAILED",
+            error,
+            ctx.update.update_id,
+          );
           return ctx.editMessageText(
             "❌ Could not save the strategy. Is the database running? Try /start again.",
           );

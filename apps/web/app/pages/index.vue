@@ -2,18 +2,18 @@
 const features = [
   {
     icon: "shield" as const,
-    title: "It can't spend more than you allow",
-    body: "You set a daily and a weekly budget. The bot physically cannot exceed them — not in a crash, not on a bug, not ever. That's the whole point.",
+    title: "Configured spend limits are checked first",
+    body: "RiskGuard checks per-buy, daily and weekly limits before a dry-run order is reserved. These software controls reduce exposure but cannot rule out defects or bad configuration.",
   },
   {
     icon: "dip" as const,
-    title: "Practice mode, on by default",
-    body: "It trades with pretend money against real prices until you say otherwise. Watch it work for a few weeks. If the numbers convince you — and only then — go live.",
+    title: "Practice mode, and only practice mode",
+    body: "It records simulated orders from public Bybit prices. That is everything it does today. Exchange credentials and live order placement are not available.",
   },
   {
     icon: "send" as const,
-    title: "Lives in your Telegram",
-    body: "Every planned buy pings you with a countdown. One tap to cancel, one tap to buy now. No new app, no tab to keep open.",
+    title: "Private Telegram delivery, when enabled",
+    body: "Signing in does not enable alerts. Start the bot in a private chat first; eligible messages are queued with delivered, retry and failed evidence. Countdown edits are cosmetic.",
   },
   {
     icon: "scale" as const,
@@ -22,13 +22,13 @@ const features = [
   },
   {
     icon: "audit" as const,
-    title: "Every decision on the record",
-    body: "Why it bought, why it didn't, what got blocked by your limits — all logged, all visible. No black box.",
+    title: "Covered decisions leave tenant-scoped evidence",
+    body: "Implemented signal, risk, strategy and simulated-order transitions write audit records you can inspect. Coverage remains versioned rather than assumed universal.",
   },
   {
     icon: "open" as const,
-    title: "Free, open, yours",
-    body: "Open source, no subscription, and it never holds your money. Run it on your own server if you like.",
+    title: "Self-hosted dry-run software",
+    body: "There is no hosted subscription or exchange-account connection today. Running the repository yourself still carries infrastructure and operating costs.",
   },
 ];
 
@@ -43,7 +43,7 @@ const steps = [
   },
   {
     title: "A dip hits — you get a heads-up",
-    body: "Telegram message, 15-second countdown. Do nothing and the (simulated) buy goes through. Not feeling it? Tap cancel.",
+    body: "If private-chat delivery is enabled, a queued Telegram message can offer cancel or execute-now controls. Delivery and countdown edits are not prerequisites for the database-driven simulated execution.",
   },
   {
     title: "The numbers tell the story",
@@ -54,27 +54,31 @@ const steps = [
 const faqs = [
   {
     q: "Is this a real trading bot or a simulation?",
-    a: "Both. It starts in practice mode — real prices, pretend money — so you can judge it risk-free. Live trading on Bybit spot is opt-in, capped by your limits, and can be paused with one command.",
+    a: "A dry-run simulation today. It uses public Bybit price observations and simulated funds. It does not prove fills, fees, slippage, liquidity, latency or reconciliation, and live trading is unavailable.",
   },
   {
     q: "How do I know the strategy actually works?",
-    a: "You watch it prove itself. The dashboard compares its dip-buying against 'buy a bit every day' and 'buy once and hold' with the same money over the same period. If it lags, you'll see that too — honesty is the feature.",
+    a: "Treat the dashboard as limited evidence, not proof. It compares dip-buying with simplified calendar-DCA and buy-and-hold baselines over a data window; fees, slippage, fill behavior and missing data can change real outcomes.",
   },
   {
     q: "Is it safe to connect my exchange account?",
-    a: "You don't have to — practice mode needs no account at all. Going live uses Bybit API keys that can only trade spot and can never withdraw, so the bot physically cannot move funds out.",
+    a: "There is nothing to connect today. The shipped path reads public prices and has no private exchange credential or order-submission path. Do not give this build withdrawal, transfer, margin or derivatives permission.",
   },
   {
     q: "Does it trade memecoins or use leverage?",
-    a: "No, and it never will. No futures, no leverage, no martingale doubling-down, no memecoins. Boring by design — that's what keeps the risk bounded.",
+    a: "No. The current product policy prohibits futures, leverage, martingale, withdrawals and meme-coin trading. Policy and software controls reduce exposure but do not eliminate risk.",
   },
   {
     q: "How much does it cost?",
-    a: "Nothing. It's free and open source. If you enable live trading you pay your exchange's normal trading fees — that's it.",
+    a: "No hosted plan or tariff is offered. A self-hosted install has infrastructure and operating costs. Dry-run orders do not charge exchange trading fees, which is also one reason their results are not equivalent to live execution.",
   },
   {
     q: "Which exchange does it work with?",
-    a: "Bybit spot, with BTC, ETH and SOL set up out of the box. You can add any Bybit spot pair from Telegram.",
+    a: "Public Bybit spot market data, with BTCUSDT, ETHUSDT and SOLUSDT in the default reviewed allowlist. A stored strategy does not make an arbitrary symbol supported.",
+  },
+  {
+    q: "What works today?",
+    a: "As of 2 August 2026: self-hosted DRY_RUN strategy evaluation, spend checks, simulated order evidence, a tenant-scoped dashboard and optional private-chat notifications. Hosted SaaS, private exchange keys, Demo orders and live trading are not offered.",
   },
 ];
 </script>
@@ -82,10 +86,10 @@ const faqs = [
 <template>
   <LandingPage
     eyebrow="Buy Crypto Dip Bot"
-    title="Buy Crypto Dip Bot — Risk-First Crypto DCA Bot, Free"
-    description="A free crypto DCA bot that buys the dip safely: paper-trade first on live Bybit prices, hard spend limits, honest benchmarks, Telegram alerts. Built for beginners who don't trust bots."
+    title="Buy Crypto Dip Bot — Risk-First Dry-Run Crypto DCA"
+    description="A self-hosted dry-run crypto DCA bot using public Bybit prices, configurable spend limits, benchmark views and optional Telegram delivery. No exchange keys or live orders."
     headline="The dip-buying bot for people who don't trust bots"
-    subheadline="It practices with pretend money until you're convinced, never spends past your limits, and shows you honestly whether it beats doing nothing. All from Telegram."
+    subheadline="Inspect simulated decisions, configured limits and benchmark evidence before trusting an automation. No exchange keys and no live orders."
     :features="features"
     :steps="steps"
     :faqs="faqs"

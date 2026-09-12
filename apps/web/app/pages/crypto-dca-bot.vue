@@ -6,15 +6,15 @@ const features = [
   },
   {
     title: "Simulation before real money",
-    body: "DCA runs in dry-run mode first so you can validate the strategy on live prices with zero risk.",
+    body: "DCA runs only in dry-run mode so you can inspect simulated decisions on public prices without placing exchange orders. That does not eliminate model or software risk.",
   },
   {
     title: "Hard spend limits",
-    body: "Daily and weekly USDT caps stop the bot from over-averaging in a prolonged downtrend.",
+    body: "Daily and weekly USDT caps are checked before simulated reservation. They limit configured outlay when controls operate correctly.",
   },
   {
-    title: "Runs 24/7 in Telegram",
-    body: "The market never sleeps; neither does the bot. You just get alerts and a dashboard.",
+    title: "Self-hosted runner and optional Telegram delivery",
+    body: "The runner evaluates while its process and dependencies are healthy. Eligible private-chat notifications are queued separately and can fail or retry.",
   },
 ];
 const steps = [
@@ -24,7 +24,7 @@ const steps = [
   },
   {
     title: "The bot watches prices",
-    body: "It checks Bybit spot every tick and triggers a buy when the drop from the 24h high meets your threshold.",
+    body: "Each runner interval reads reviewed Bybit spot data and records a signal when the observed drop meets the threshold; risk checks still decide whether to reserve a dry-run order.",
   },
   {
     title: "RiskGuard approves",
@@ -32,7 +32,7 @@ const steps = [
   },
   {
     title: "Review the results",
-    body: "Track average buy price and unrealized PnL and decide when to go live.",
+    body: "Track simulated average buy price and unrealized PnL, and judge the strategy on its record rather than a promise.",
   },
 ];
 const faqs = [
@@ -42,19 +42,19 @@ const faqs = [
   },
   {
     q: "Is DCA safer than lump-sum buying?",
-    a: "DCA spreads risk across time and removes emotion. This bot adds spend caps and a dry-run mode so you can prove the approach before committing capital.",
+    a: "DCA spreads entry timing but can underperform or keep buying into decline. Configured caps and dry-run evidence help inspect behavior; they do not prove suitability or future performance.",
   },
   {
     q: "Can I DCA into multiple coins?",
-    a: "Yes. Add a strategy per symbol (BTC, ETH, SOL and more) each with its own threshold, amount and limits.",
+    a: "The default reviewed allowlist is BTCUSDT, ETHUSDT and SOLUSDT. A stored arbitrary symbol is not evidence of supported market data or future execution capability.",
   },
   {
     q: "Do I need to keep my computer on?",
-    a: "No. It runs on a server and talks to you through Telegram and a web dashboard.",
+    a: "The self-hosted server process must remain healthy. Telegram is optional, requires private /start for eligibility and delivery can fail or retry.",
   },
   {
-    q: "What are the best DCA bot settings?",
-    a: "Start conservative: a 1–2% dip threshold, a small fixed buy amount, daily and weekly spend caps you can afford, and a cooldown of at least an hour. Then tune based on dry-run results, not gut feeling.",
+    q: "What settings should I use?",
+    a: "There is no universal setting. Choose a bounded amount you can model, document the hypothesis and inspect dry-run decisions across multiple conditions. This product does not provide personal financial advice.",
   },
 ];
 </script>
@@ -62,10 +62,10 @@ const faqs = [
 <template>
   <LandingPage
     eyebrow="Crypto DCA Bot"
-    title="Best Crypto DCA Bot for Beginners — Dry-Run First & Free"
-    description="Looking for the best crypto DCA bot? Ours dollar-cost averages into dips on Bybit spot with dry-run mode, hard spend caps and Telegram alerts — free."
+    title="Crypto DCA Bot for Inspectable Dry-Run Decisions"
+    description="A self-hosted dry-run crypto DCA bot with reviewed Bybit spot inputs, configured spend checks, simulated order evidence and optional Telegram delivery."
     headline="A crypto DCA bot built for people who don't trust bots"
-    subheadline="Automate DCA into the dips with strict limits and a simulation-first workflow — averaging done safely, not blindly."
+    subheadline="Inspect dip-DCA decisions, configured limits and simulation assumptions before trusting the workflow."
     :features="features"
     :steps="steps"
     :faqs="faqs"

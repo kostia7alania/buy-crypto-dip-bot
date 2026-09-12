@@ -1,4 +1,7 @@
+import { requireCaller } from "../utils/session.js";
+
 export default defineEventHandler(async (event) => {
+  const { apiSessionToken } = await requireCaller(event);
   const body = (await readBody(event)) as {
     id: string;
     enabled?: boolean;
@@ -13,12 +16,19 @@ export default defineEventHandler(async (event) => {
 
   const { id, ...updates } = body;
   try {
-    return await apiFetch(`/strategies/${id}`, {
-      method: "PATCH",
-      body: updates,
-    });
+    // Ownership is enforced by the API against the session principal — the
+    // BFF must never be the thing that decides whose strategy this is.
+    return await apiFetchAsForEvent(
+      event,
+      apiSessionToken,
+      `/strategies/${id}`,
+      {
+        method: "PATCH",
+        body: updates,
+      },
+    );
   } catch (error: any) {
-    console.error(`Failed to update strategy ${id} via API:`, error);
+    logWebError(event, "STRATEGY_UPDATE_FAILED", error);
     throw createError({
       statusCode: error.status || 500,
       statusMessage: error.data?.error || "Internal Server Error",

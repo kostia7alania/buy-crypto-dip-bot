@@ -1,8 +1,11 @@
-export default defineEventHandler(async () => {
+import { requireCaller } from "../utils/session.js";
+
+export default defineEventHandler(async (event) => {
+  const { apiSessionToken } = await requireCaller(event);
   try {
-    return await apiFetch("/audit");
+    return await apiFetchAsForEvent(event, apiSessionToken, "/audit");
   } catch (error) {
-    console.error("Failed to fetch audit events from API:", error);
-    return [];
+    logWebError(event, "AUDIT_FETCH_FAILED", error);
+    throw upstreamError(error, "AUDIT_UNAVAILABLE");
   }
 });

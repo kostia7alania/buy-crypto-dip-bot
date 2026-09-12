@@ -23,9 +23,15 @@ services:
     image: ghcr.io/kostia7alania/buy-crypto-dip-bot:latest
     command: ["node", "apps/api/dist/server.mjs"]
     restart: unless-stopped
-    env_file: .env
     environment:
+      APP_RUNTIME: non-local
       POSTGRES_CONNECTION_STRING: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/dipbot
+      API_KEY: ${API_KEY:?set in .env}
+      BOT_HEARTBEAT_SECRET: ${BOT_HEARTBEAT_SECRET:?set in .env}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?set in .env}
+      OPERATOR_TELEGRAM_USER_ID: ${OPERATOR_TELEGRAM_USER_ID:-}
+      ALLOWLIST_SYMBOLS: &symbol-policy ${ALLOWLIST_SYMBOLS-BTCUSDT,ETHUSDT,SOLUSDT}
+      EXECUTION_MODE: DRY_RUN
       PORT: "8787"
     depends_on:
       db:
@@ -38,10 +44,14 @@ services:
     image: ghcr.io/kostia7alania/buy-crypto-dip-bot:latest
     command: ["node", "apps/bot/dist/index.mjs"]
     restart: unless-stopped
-    env_file: .env
     environment:
+      APP_RUNTIME: non-local
       POSTGRES_CONNECTION_STRING: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/dipbot
       API_URL: http://api:8787
+      ALLOWLIST_SYMBOLS: *symbol-policy
+      API_KEY: ${API_KEY:?set in .env}
+      BOT_HEARTBEAT_SECRET: ${BOT_HEARTBEAT_SECRET:?set in .env}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?set in .env}
     depends_on:
       db:
         condition: service_healthy
@@ -50,9 +60,14 @@ services:
     image: ghcr.io/kostia7alania/buy-crypto-dip-bot:latest
     command: ["node", "apps/web/.output/server/index.mjs"]
     restart: unless-stopped
-    env_file: .env
     environment:
+      APP_RUNTIME: non-local
       API_URL: http://api:8787
+      API_KEY: ${API_KEY:?set in .env}
+      SESSION_SECRET: ${SESSION_SECRET:?set in .env}
+      NUXT_PUBLIC_TELEGRAM_BOT_USERNAME: ${NUXT_PUBLIC_TELEGRAM_BOT_USERNAME:-}
+      NUXT_PUBLIC_SITE_URL: ${NUXT_PUBLIC_SITE_URL:-https://buy-crypto-dip-bot.com}
+      NUXT_PUBLIC_GA_ID: ${NUXT_PUBLIC_GA_ID:-}
       NITRO_PORT: "3000"
       NITRO_HOST: 0.0.0.0
     depends_on:

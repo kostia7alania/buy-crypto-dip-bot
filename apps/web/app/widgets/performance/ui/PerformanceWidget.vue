@@ -110,89 +110,92 @@ const barWidth = (value: number, p: PerformancePosition) => {
 .perf {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  padding: 2rem;
-  background: rgba(15, 23, 42, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 1rem;
+  gap: var(--space-5);
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
 }
 
 .perf__title {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 700;
-  color: #f1f5f9;
+  color: var(--color-text-primary);
 }
 
 .perf__subtitle {
   margin: 0.35rem 0 0;
   font-size: 0.875rem;
-  color: #64748b;
+  color: var(--color-text-subtle);
 }
 
 .perf__empty {
   margin: 0;
   text-align: center;
-  padding: 2rem 1rem;
-  color: #64748b;
-  font-style: italic;
+  padding: var(--space-8) var(--space-4);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-subtle);
 }
 
 .perf__grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(18rem, 100%), 1fr));
-  gap: 1.25rem;
+  gap: var(--space-4);
 }
 
 .perf__card {
-  padding: 1.25rem;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 0.75rem;
-  background: rgba(30, 41, 59, 0.25);
+  padding: var(--space-5);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 .perf__card-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 
 .perf__symbol {
   font-weight: 800;
-  color: #f8fafc;
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
 }
 
 .perf__badge {
   font-size: 0.6875rem;
   font-weight: 700;
   padding: 0.15rem 0.55rem;
-  border-radius: 9999px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-pill);
 }
 
 .perf__badge--win {
-  background: rgba(74, 222, 128, 0.15);
-  color: #4ade80;
+  background: var(--color-success-soft);
+  color: var(--color-success);
 }
 
 .perf__badge--lag {
-  background: rgba(248, 113, 113, 0.15);
-  color: #f87171;
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
 }
 
 .perf__badge--mixed {
-  background: rgba(250, 204, 21, 0.15);
-  color: #fde68a;
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
 }
 
 .perf__legs {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .perf__leg-top {
@@ -203,11 +206,11 @@ const barWidth = (value: number, p: PerformancePosition) => {
 }
 
 .perf__leg-name {
-  color: #94a3b8;
+  color: var(--color-text-muted);
 }
 
 .perf__leg-name--primary {
-  color: #67e8f9;
+  color: var(--color-action);
   font-weight: 700;
 }
 
@@ -217,35 +220,41 @@ const barWidth = (value: number, p: PerformancePosition) => {
 }
 
 .perf__pnl--green {
-  color: #4ade80;
+  color: var(--color-success);
 }
 
 .perf__pnl--red {
-  color: #f87171;
+  color: var(--color-danger);
 }
 
 .perf__bar {
   height: 6px;
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--color-border-subtle);
   overflow: hidden;
 }
 
 .perf__bar-fill {
   height: 100%;
   border-radius: 3px;
-  background: rgba(148, 163, 184, 0.5);
-  transition: width 0.4s;
+  background: var(--color-text-subtle);
+  transition: width var(--duration-medium) var(--ease-standard);
 }
 
 .perf__bar-fill--primary {
-  background: #67e8f9;
+  background: var(--color-action);
 }
 
 .perf__foot {
   font-size: 0.75rem;
-  color: #64748b;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-  padding-top: 0.75rem;
+  color: var(--color-text-subtle);
+  border-block-start: 1px solid var(--color-border-subtle);
+  padding-block-start: var(--space-3);
+}
+
+@media (max-width: 36rem) {
+  .perf {
+    padding: var(--space-5);
+  }
 }
 </style>

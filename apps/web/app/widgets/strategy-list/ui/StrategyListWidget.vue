@@ -8,6 +8,10 @@ import {
   updateStrategy,
 } from "~/entities/strategy";
 
+const emit = defineEmits<{
+  announce: [message: string];
+}>();
+
 const { data: strategies, refresh: refreshStrategies } = await useAsyncData(
   "strategies",
   () => fetchStrategies(),
@@ -30,6 +34,24 @@ onUnmounted(() => {
 // Editing state for strategy config
 const editingId = ref<string | null>(null);
 const editForm = ref<StrategyConfigData | null>(null);
+const togglingId = ref<string | null>(null);
+const mutationStatus = ref<{
+  kind: "confirmed" | "failed";
+  message: string;
+} | null>(null);
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message) return error.message;
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "statusMessage" in error &&
+    typeof error.statusMessage === "string"
+  ) {
+    return error.statusMessage;
+  }
+  return fallback;
+};
 
 const startEdit = (strategy: Strategy) => {
   editingId.value = strategy.id;
@@ -41,10 +63,19 @@ const cancelEdit = () => {
   editForm.value = null;
 };
 
-const saveEdit = async (strategyId: string) => {
+const publishMutationStatus = (
+  kind: "confirmed" | "failed",
+  message: string,
+) => {
+  mutationStatus.value = { kind, message };
+  emit("announce", message);
+};
+
+const saveEdit = async (strategy: Strategy) => {
   if (!editForm.value) return;
+  mutationStatus.value = null;
   try {
-    await updateStrategy(strategyId, {
+    await updateStrategy(strategy.id, {
       config: {
         thresholdPercent: Number(editForm.value.thresholdPercent),
         suggestedQuoteAmount: Number(editForm.value.suggestedQuoteAmount),
@@ -56,29 +87,54 @@ const saveEdit = async (strategyId: string) => {
     editingId.value = null;
     editForm.value = null;
     await refreshStrategies();
-  } catch (error: any) {
-    alert(`Failed to save strategy: ${error.statusMessage || error.message}`);
+    publishMutationStatus(
+      "confirmed",
+      `${strategy.symbol} limits and threshold were saved.`,
+    );
+  } catch (error: unknown) {
+    publishMutationStatus(
+      "failed",
+      `${strategy.symbol} was not saved: ${getErrorMessage(error, "Unknown error")}`,
+    );
   }
 };
 
 const toggleStrategy = async (strategy: Strategy) => {
+  if (togglingId.value) return;
+  togglingId.value = strategy.id;
+  const nextEnabled = !strategy.enabled;
+  mutationStatus.value = null;
   try {
     await updateStrategy(strategy.id, {
-      enabled: !strategy.enabled,
+      enabled: nextEnabled,
     });
     await refreshStrategies();
-  } catch (error: any) {
-    alert(`Failed to toggle strategy: ${error.statusMessage || error.message}`);
+    publishMutationStatus(
+      "confirmed",
+      nextEnabled
+        ? `${strategy.symbol} is active. New eligible signals may be evaluated.`
+        : `${strategy.symbol} is paused. New signals stop; an existing pending DRY_RUN keeps its recorded execution time unless canceled separately.`,
+    );
+  } catch (error: unknown) {
+    const message = getErrorMessage(
+      error,
+      "The strategy state was not changed.",
+    );
+    publishMutationStatus(
+      "failed",
+      `${strategy.symbol} was not updated: ${message}`,
+    );
+  } finally {
+    togglingId.value = null;
   }
 };
 
 // Add custom trading pair state
 const newSymbol = ref("");
-const addError = ref("");
 const isAdding = ref(false);
 
 const addCustomPair = async () => {
-  addError.value = "";
+  mutationStatus.value = null;
   const symbol = newSymbol.value.trim().toUpperCase();
   if (!symbol) return;
 
@@ -87,9 +143,13 @@ const addCustomPair = async () => {
     await createStrategy(symbol);
     newSymbol.value = "";
     await refreshStrategies();
-  } catch (error: any) {
-    addError.value =
-      error.statusMessage || error.message || "Failed to add strategy";
+    publishMutationStatus(
+      "confirmed",
+      `${symbol} was added in DRY_RUN mode. Review its caps before activation.`,
+    );
+  } catch (error: unknown) {
+    const message = getErrorMessage(error, "Failed to add strategy");
+    publishMutationStatus("failed", `${symbol} was not added: ${message}`);
   } finally {
     isAdding.value = false;
   }
@@ -102,20 +162,32 @@ const addCustomPair = async () => {
       <h2 class="strategy-list__title">Active Trading Strategies</h2>
       <!-- Add Custom Pair Form inline -->
       <form @submit.prevent="addCustomPair" class="strategy-list__add-form">
-        <input
-          v-model="newSymbol"
-          type="text"
-          placeholder="e.g. LTCUSDT"
-          class="ui-input strategy-list__add-input"
-          required
-          :disabled="isAdding"
-        />
-        <button type="submit" class="ui-button ui-button--primary" :disabled="isAdding">
-          {{ isAdding ? 'Adding...' : 'Add Coin ➕' }}
-        </button>
-        <span v-if="addError" class="strategy-list__error">{{ addError }}</span>
+        <label class="strategy-list__field">
+          <span>Pair symbol</span>
+          <UiInput
+            v-model="newSymbol"
+            type="text"
+            placeholder="e.g. LTCUSDT"
+            class="strategy-list__add-input"
+            aria-label="Trading pair symbol"
+            required
+            :disabled="isAdding"
+          />
+        </label>
+        <UiButton type="submit" variant="primary" :disabled="isAdding">
+          {{ isAdding ? 'Adding…' : 'Add pair' }}
+        </UiButton>
       </form>
     </div>
+
+    <p
+      v-if="mutationStatus"
+      class="strategy-list__mutation-status"
+      :class="`strategy-list__mutation-status--${mutationStatus.kind}`"
+    >
+      <strong>{{ mutationStatus.kind === 'failed' ? 'Not changed:' : 'Confirmed:' }}</strong>
+      {{ mutationStatus.message }}
+    </p>
 
     <div class="strategy-list__grid">
       <StrategyCard
@@ -124,9 +196,10 @@ const addCustomPair = async () => {
         :strategy="strategy"
         :is-editing="editingId === strategy.id"
         :edit-form="editForm"
+        :is-toggling="togglingId === strategy.id"
         @toggle="toggleStrategy(strategy)"
         @edit="startEdit(strategy)"
-        @save="saveEdit(strategy.id)"
+        @save="saveEdit(strategy)"
         @cancel="cancelEdit"
       />
     </div>
@@ -137,11 +210,11 @@ const addCustomPair = async () => {
 .strategy-list {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  padding: 2rem;
-  background: rgba(15, 23, 42, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 1rem;
+  gap: var(--space-5);
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
 }
 
 .strategy-list__header-actions {
@@ -149,75 +222,78 @@ const addCustomPair = async () => {
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 1.5rem;
+  gap: var(--space-6);
 }
 
 .strategy-list__title {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 700;
-  color: #f1f5f9;
+  color: var(--color-text-primary);
 }
 
 .strategy-list__add-form {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
+}
+
+.strategy-list__field {
+  display: grid;
+  gap: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
 }
 
 .strategy-list__add-input {
-  max-width: 12rem;
+  max-inline-size: 12rem;
 }
 
-.strategy-list__error {
-  color: #f87171;
-  font-size: 0.8125rem;
-  margin-left: 0.5rem;
+.strategy-list__mutation-status {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-success-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-success-soft);
+  color: var(--color-text-secondary);
+  font-size: var(--text-caption);
+}
+
+.strategy-list__mutation-status--failed {
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-soft);
+}
+
+.strategy-list__mutation-status strong {
+  color: var(--color-text-primary);
 }
 
 .strategy-list__grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
-  gap: 1.5rem;
-  margin-top: 1rem;
+  gap: var(--space-4);
+  margin-block-start: var(--space-2);
 }
 
-.ui-input {
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 6px;
-  color: #f1f5f9;
-  padding: 0.375rem 0.625rem;
-  font-size: 0.875rem;
-  width: 100%;
-  transition: border-color 0.2s;
+@media (max-width: 42rem) {
+  .strategy-list {
+    padding: var(--space-5);
+  }
+
+  .strategy-list__add-form {
+    inline-size: 100%;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .strategy-list__add-input {
+    max-inline-size: none;
+  }
 }
 
-.ui-input:focus {
-  outline: none;
-  border-color: #67e8f9;
-}
-
-.ui-button {
-  padding: 0.4rem 0.8rem;
-  border-radius: 6px;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: 1px solid transparent;
-  text-align: center;
-  white-space: nowrap;
-}
-
-.ui-button--primary {
-  background: rgba(103, 232, 249, 0.1);
-  color: #67e8f9;
-  border-color: rgba(103, 232, 249, 0.25);
-}
-
-.ui-button--primary:hover:not(:disabled) {
-  background: rgba(103, 232, 249, 0.2);
-  border-color: rgba(103, 232, 249, 0.4);
+@media (forced-colors: active) {
+  .strategy-list__mutation-status {
+    border-color: CanvasText;
+  }
 }
 </style>

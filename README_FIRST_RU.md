@@ -1,29 +1,27 @@
-# buy-crypto-dip-bot — production-first старт
+# Buy Crypto Dip Bot: с чего продолжать
 
-Crypto-only SaaS **Buy Crypto Dip Bot** для risk-first покупки просадок.
+Состояние сверено 12 сентября 2026. Это self-hosted симулятор покупки просадок
+с Telegram, веб-панелью, ограничениями и журналом решений. Реальных ордеров
+он не отправляет, биржевые ключи ему не нужны.
 
-## Стек
+- [Статус, готовность и блокеры](docs/23_PROJECT_STATUS.md).
+- [Актуальный бэклог](tasks/00_MASTER_PLAN.md).
+- [Модель продукта](docs/14_PRODUCT_STRATEGY.md).
+- [Архитектура и различия двух версий](docs/02_ARCHITECTURE.md).
+- [Cost-first направление из main](docs/15_COST_FIRST_SAAS_STRATEGY.md).
 
-- Node.js 26+ как production runtime.
-- pnpm 11 без Corepack, через `mise` или глобальную установку.
-- PostgreSQL как production DB.
-- SQLite только local/dev/test adapter.
-- Nuxt 4 SSR/SSG + маленький BFF.
-- Hono API.
-- Valibot.
-- Drizzle.
-- FSD-lite для web.
-- Vertical slices для API.
-- Ports/adapters для бирж.
-- Audit-first.
-- `.codex/skills/*` для AI-агентов.
-- `PLANS.md` + `plans/*` для больших задач.
+В локальной копии есть большой пакет Gate 1: пользовательские сессии,
+изоляция данных, неизменяемый аудит, очередь уведомлений и Safety Ledger.
+В GitHub main уже есть отдельная реализация personal tenants, RLS,
+статических публичных страниц и единого dashboard snapshot. Эти два пакета
+пока не объединены. У них разные миграции с номером `0002`.
 
-## Запуск
+При продолжении сначала сохранить и проверить обе версии, затем переносить
+полезные изменения на актуальную main через согласованную миграцию.
+Gate 1 остаётся NO-GO до проверки итоговой версии. Workers, Supabase OIDC,
+webhook, Cron и Queues пока находятся в бэклоге.
 
-```bash
-./SETUP_SCRIPT.sh
-pnpm dev
-```
-
-Первый task для Codex: `CODEX_TASK_0.md`.
+Локальный стек: Node 26+, pnpm 11, PostgreSQL 18, Nuxt 4, Hono, Valibot и
+Drizzle. SQLite больше не используется. Запуск и команды проверки находятся
+в [README](README.md). Файлы стартового scaffolding сохраняются как история,
+они больше не задают очередность работ.

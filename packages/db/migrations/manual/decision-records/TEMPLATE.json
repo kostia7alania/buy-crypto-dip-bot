@@ -1,0 +1,30 @@
+{
+  "recordVersion": 1,
+  "decisionId": "legacy-owner-YYYYMMDD-environment",
+  "environmentLabel": "non-secret environment label",
+  "sourceCatalog": "0002_left_pride",
+  "targetCatalog": "0014_bouncy_zuras",
+  "verificationReportSha256": "replace-with-64-lowercase-hex-characters",
+  "counts": {
+    "ownerlessStrategies": 0,
+    "ownerlessOrders": 0,
+    "ordersWithoutStrategy": 0,
+    "mismatchedOrders": 0,
+    "orphanedOrders": 0,
+    "duplicateStrategies": 0,
+    "invalidStrategyModes": 0,
+    "invalidOrderModes": 0
+  },
+  "unresolvedItems": [],
+  "backup": {
+    "reference": "non-secret backup inventory reference",
+    "createdAt": "2026-08-02T00:00:00.000Z",
+    "restoreOrIntegrityCheckedAt": "2026-08-02T00:00:00.000Z"
+  },
+  "auditHistoryDisposition": "PRESERVE_AS_V0",
+  "approver": {
+    "name": "responsible human",
+    "role": "operator or data owner",
+    "approvedAt": "2026-08-02T00:00:00.000Z"
+  }
+}

@@ -5,8 +5,8 @@ const features = [
     body: "Turn 'buy the dip' from a meme into a rule: a defined threshold, a fixed size and enforced limits.",
   },
   {
-    title: "Every buy is auditable",
-    body: "Signals, approvals, rejections and orders are all logged and visible in a real-time feed.",
+    title: "Owned decisions leave evidence",
+    body: "Covered signal, risk, strategy and simulated-order transitions write tenant-scoped audit records. The feed is evidence, not a claim that every possible failure is captured.",
   },
   {
     title: "Cooldown between buys",
@@ -14,7 +14,7 @@ const features = [
   },
   {
     title: "Dry-run proof",
-    body: "Validate the dip-buying edge on live prices before enabling real trades.",
+    body: "Validate the dip-buying edge on live prices with simulated orders — the only kind the bot places today.",
   },
 ];
 const steps = [
@@ -46,11 +46,11 @@ const faqs = [
   },
   {
     q: "Can I see why it did or didn't buy?",
-    a: "Yes. Every signal, RiskGuard decision and order is written to an audit log you can read on the dashboard.",
+    a: "The implemented signal, risk and simulated-order paths write tenant-scoped audit records that the dashboard can show. Audit coverage remains versioned and must not be generalized to unimplemented paths.",
   },
   {
     q: "Is it safe to run unattended?",
-    a: "It runs dry-run by default and, in live mode, is bounded by spend caps and a cooldown, with a /pause_all kill switch in Telegram.",
+    a: "The current build simulates buys only. Configured spend checks, cooldown and an audited pause operation reduce unattended exposure, but do not remove data, software, configuration or strategy risk.",
   },
 ];
 </script>
@@ -58,10 +58,10 @@ const faqs = [
 <template>
   <LandingPage
     eyebrow="Crypto Dip Buying Bot"
-    title="Buy the Dip Bot — Automated Crypto Dip Buying, Free"
-    description="A buy-the-dip bot done right: threshold-based dip detection on Bybit spot, cooldown, full audit logs, dry-run mode and Telegram alerts. Free to run."
+    title="Buy the Dip Bot — Dry-Run Crypto Dip Rules"
+    description="A self-hosted dry-run dip bot: threshold-based signals on reviewed Bybit spot data, cooldown, tenant-scoped audit evidence and optional Telegram delivery."
     headline="Turn 'buy the dip' into a disciplined rule"
-    subheadline="Systematic dip buying with cooldowns, audit logs and hard limits — and a dry-run mode to prove the edge before you risk capital."
+    subheadline="Systematic dry-run decisions with cooldowns, audit evidence and configured limits—useful for inspection, not proof of an edge."
     :features="features"
     :steps="steps"
     :faqs="faqs"

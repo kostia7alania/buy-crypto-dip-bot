@@ -1,20 +1,20 @@
 <script setup lang="ts">
 const features = [
   {
-    title: "RiskGuard on every action",
-    body: "No order exists until it passes spend caps, an allowlist and a cooldown. Risk checks are not optional.",
+    title: "RiskGuard before dry-run reservation",
+    body: "A simulated order is reserved only after the implemented spend, allowlist and cooldown checks pass for that decision.",
   },
   {
     title: "Dry-run by default",
-    body: "The safest setting is the default: simulate everything until you explicitly choose to go live.",
+    body: "Everything is simulated. This avoids exchange order submission but does not eliminate software, data, configuration or interpretation risk.",
   },
   {
     title: "Spend caps you set",
-    body: "Daily and weekly USDT limits per strategy put a hard ceiling on exposure.",
+    body: "Daily and weekly USDT limits per strategy bound configured simulated outlay when the controls operate correctly.",
   },
   {
-    title: "Instant kill switch",
-    body: "Pause every strategy with one Telegram command, and see every decision in the audit log.",
+    title: "Audited pause operation",
+    body: "The Telegram pause command requests an owner-scoped update and records the committed state transition. Confirmation matters; it is not described as instantaneous.",
   },
 ];
 const steps = [
@@ -32,21 +32,21 @@ const steps = [
   },
   {
     title: "You stay in control",
-    body: "Cancel pending buys, pause everything, or review the full audit trail at any time.",
+    body: "Request pending-buy cancellation, pause owned strategies, or review the tenant-scoped audit feed.",
   },
 ];
 const faqs = [
   {
     q: "Is a crypto trading bot safe?",
-    a: "Only as safe as its limits. A bot without spend caps can drain an account on a bug or a bad market. This bot is built the other way around: dry-run by default, hard daily/weekly caps, spot-only keys with no withdrawal permission, and a one-command kill switch.",
+    a: "No trading automation is inherently safe. This shipped build is DRY_RUN-only and has no private exchange-key path. Configured caps and an audited pause operation reduce exposure but do not eliminate defects or bad decisions.",
   },
   {
     q: "Is a Telegram crypto bot safe?",
-    a: "Telegram is just the interface — safety depends on what the bot can do. This bot never asks for withdrawal-enabled keys, never custodies funds, and every action it takes is capped and logged.",
+    a: "Telegram is an identity and optional delivery interface. The shipped product asks for no exchange keys and places no exchange orders. Delivery can fail, and audit coverage is limited to implemented, versioned paths.",
   },
   {
     q: "What does 'risk-first' actually mean here?",
-    a: "Every order must pass RiskGuard — spend caps, an allowlist and a cooldown — and the system defaults to dry-run. Safety is the default, not an add-on.",
+    a: "The product is DRY_RUN-only and checks configured spend caps, the reviewed allowlist and cooldown before simulated reservation. These controls are inspectable but cannot ensure safety.",
   },
   {
     q: "How do spend limits work?",
@@ -54,11 +54,11 @@ const faqs = [
   },
   {
     q: "Can I halt trading immediately?",
-    a: "Yes. The /pause_all command in Telegram disables every strategy at once, and /resume_all re-enables them.",
+    a: "The owner-scoped /pause_all and /resume_all commands request atomic strategy updates with audit evidence. Treat only the confirmed result as effective.",
   },
   {
     q: "Is there a record of what the bot did?",
-    a: "Every signal, approval, rejection and order is written to an append-only audit log visible on the dashboard.",
+    a: "Implemented signal, risk, strategy and simulated-order transitions write tenant-scoped audit records. The current feed does not justify claiming coverage for every possible event or failure.",
   },
 ];
 </script>
@@ -66,10 +66,10 @@ const faqs = [
 <template>
   <LandingPage
     eyebrow="Crypto Risk Management Bot"
-    title="Is a Crypto Bot Safe? A Risk-Management-First Trading Bot"
-    description="Is a crypto trading bot safe? This one is built risk-first: every order passes spend caps, allowlist and cooldown; dry-run by default, audit logs, kill switch."
+    title="Crypto Bot Risk Controls — Inspect the Dry-Run Evidence"
+    description="A DRY_RUN-only crypto bot with configured spend checks, a reviewed allowlist, cooldown, tenant-scoped audit evidence and an audited pause operation."
     headline="Risk management is the product, not a feature"
-    subheadline="Every order passes RiskGuard — spend caps, allowlist and cooldown — with dry-run by default, full audit logs and an instant kill switch."
+    subheadline="Inspect configured RiskGuard checks, tenant-scoped evidence and confirmed pause transitions without exchange keys or live orders."
     :features="features"
     :steps="steps"
     :faqs="faqs"

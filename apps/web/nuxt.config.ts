@@ -1,8 +1,24 @@
+import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 
 export default defineNuxtConfig({
   compatibilityDate: "2026-07-04",
   devtools: { enabled: true },
+  nitro: {
+    errorHandler: fileURLToPath(
+      new URL("./server/error-handler.ts", import.meta.url),
+    ),
+  },
+  routeRules: {
+    "/**": {
+      headers: {
+        "Permissions-Policy":
+          "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "X-Content-Type-Options": "nosniff",
+      },
+    },
+  },
   typescript: { strict: true },
   components: [
     { path: "~/widgets", pattern: "**/ui/**", pathPrefix: false },
@@ -43,7 +59,7 @@ export default defineNuxtConfig({
           href: "/apple-touch-icon.png",
         },
       ],
-      meta: [{ name: "theme-color", content: "#101214" }],
+      meta: [{ name: "theme-color", content: "#0b100e" }],
     },
   },
   vite: {

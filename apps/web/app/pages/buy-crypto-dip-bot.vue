@@ -5,16 +5,16 @@ const features = [
     body: "The bot measures the drop from the 24-hour high and buys when your threshold is hit — no staring at charts.",
   },
   {
-    title: "Cancel any buy in time",
-    body: "Each pending buy is announced in Telegram with a live countdown so you can cancel or execute instantly.",
+    title: "Optional pending-order controls",
+    body: "Eligible private-chat notifications can expose cancel or execute-now controls. Delivery and countdown edits are recorded separately and do not control due-order execution.",
   },
   {
-    title: "Never over-commits",
-    body: "Daily and weekly caps plus a cooldown keep dip-buying disciplined during deep drawdowns.",
+    title: "Configured limits before reservation",
+    body: "Daily and weekly caps plus a cooldown are checked before a dry-run order is reserved. These controls cannot ensure a strategy outcome.",
   },
   {
     title: "Trust before you trade",
-    body: "Dry-run mode simulates every buy and shows PnL so you know the strategy works first.",
+    body: "Dry-run records simulated buys and valuation evidence so you can inspect behavior and limitations; it cannot prove that the strategy works with real capital.",
   },
 ];
 const steps = [
@@ -42,11 +42,11 @@ const faqs = [
   },
   {
     q: "Can I stop a buy I don't like?",
-    a: "Yes. Every pending buy is posted to Telegram with Cancel and Buy Now buttons and a countdown before it executes.",
+    a: "Only when private /start has enabled an eligible delivery binding and Telegram accepts the message. Cancel and execute-now controls are optional; database execution does not depend on countdown delivery.",
   },
   {
     q: "What stops it from buying all the way down?",
-    a: "RiskGuard enforces daily and weekly spend limits and a cooldown between buys, so it can't over-average in a crash.",
+    a: "RiskGuard checks daily and weekly spend limits plus a cooldown before reservation. Those configured controls bound simulated spend when operating correctly; they do not make a crash strategy safe or profitable.",
   },
   {
     q: "Is my money at risk while testing?",
@@ -60,8 +60,8 @@ const faqs = [
     eyebrow="Buy Crypto Dip Bot"
     title="Buy Crypto Dip Bot"
     description="Automatically buy crypto dips on Bybit spot with a risk-first bot: 24h-high dip detection, spend caps, dry-run mode and Telegram alerts."
-    headline="Buy every crypto dip — without the stress"
-    subheadline="Automated dip buying with a cancel window, hard spend limits and a simulation-first workflow you can actually trust."
+    headline="Inspect a rule for buying crypto dips"
+    subheadline="Dry-run dip decisions with configured limits, optional notification controls and evidence you can review before trusting the automation."
     :features="features"
     :steps="steps"
     :faqs="faqs"
