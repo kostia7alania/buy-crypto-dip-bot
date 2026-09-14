@@ -1,26 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from "vue";
-import { fetchPnl } from "~/entities/pnl";
+import { computed } from "vue";
+import type { PnlReport } from "~/entities/pnl";
 import { formatMoney } from "~/shared/lib/number-format";
 
-const { data: pnl, refresh: refreshPnl } = await useAsyncData("pnl", () =>
-  fetchPnl(),
-);
+const props = defineProps<{ pnl?: PnlReport; error?: unknown }>();
 
-let pollingInterval: ReturnType<typeof setInterval> | null = null;
-
-onMounted(() => {
-  pollingInterval = setInterval(() => {
-    refreshPnl();
-  }, 15000);
-});
-
-onUnmounted(() => {
-  if (pollingInterval) clearInterval(pollingInterval);
-});
-
-const totals = computed(() => pnl.value?.totals ?? null);
-const positions = computed(() => pnl.value?.positions ?? []);
+const totals = computed(() => props.pnl?.totals ?? null);
+const positions = computed(() => props.pnl?.positions ?? []);
 
 const money = (value: number) => formatMoney(value);
 const sign = (n: number) => (n >= 0 ? "+" : "");
@@ -39,7 +25,9 @@ const pnlClass = (n: number) =>
       </div>
     </div>
 
-    <p v-if="positions.length === 0" class="pnl__empty">
+    <p v-if="props.error" class="pnl__empty">Portfolio data is unavailable.</p>
+    <p v-else-if="!props.pnl" class="pnl__empty">Loading portfolio data...</p>
+    <p v-else-if="positions.length === 0" class="pnl__empty">
       No simulated purchases yet — PnL appears after the first executed dry-run order.
     </p>
 

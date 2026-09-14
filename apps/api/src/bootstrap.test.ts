@@ -38,7 +38,7 @@ describe("API bootstrap ordering", () => {
       database: "ready",
       runner: "ready",
       bot: "starting",
-      schemaVersion: "0014_bouncy_zuras",
+      schemaVersion: "gate1_tenants_v1",
     });
 
     const beforeHeartbeat = await app.request("/health/ready");

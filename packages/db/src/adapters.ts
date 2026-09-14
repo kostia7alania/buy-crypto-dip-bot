@@ -1,8 +1,8 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
+import { migrateKnownHistory } from "./migration-history.js";
 import { schema } from "./schema.js";
 
 export type DatabaseRuntime = "production" | "local" | "test";
@@ -39,5 +39,5 @@ export const runMigrations = async (
   // DB_MIGRATIONS_DIR to the copied migrations folder instead.
   const migrationsFolder =
     process.env.DB_MIGRATIONS_DIR ?? path.resolve(__dirname, "../migrations");
-  await migrate(db, { migrationsFolder });
+  await migrateKnownHistory(db, migrationsFolder);
 };

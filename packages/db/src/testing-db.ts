@@ -2,7 +2,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { migrate } from "drizzle-orm/pglite/migrator";
+import type { DatabaseConnection } from "./adapters.js";
+import { migrateKnownHistory } from "./migration-history.js";
 import { schema } from "./schema.js";
 
 // A real PostgreSQL, in process.
@@ -41,7 +42,10 @@ export const createTestDb = async (): Promise<TestDatabase> => {
   const client = new PGlite();
   const db = drizzle(client, { schema });
 
-  await migrate(db, { migrationsFolder: migrationsFolder() });
+  await migrateKnownHistory(
+    db as unknown as DatabaseConnection["db"],
+    migrationsFolder(),
+  );
 
   return {
     db,

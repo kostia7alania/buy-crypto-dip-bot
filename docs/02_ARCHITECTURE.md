@@ -1,6 +1,6 @@
 # Architecture
 
-Reviewed: 2026-09-12. [Current source and verification](23_PROJECT_STATUS.md)
+Reviewed: 2026-09-14. [Current source and verification](23_PROJECT_STATUS.md)
 are authoritative for readiness; the target is not a deployment claim.
 
 ## Stable boundaries
@@ -12,22 +12,31 @@ contracts in `packages/shared-types`, and PostgreSQL/Drizzle in `packages/db`.
 Web code follows FSD-lite. Exchange integration uses ports/adapters and only
 public Bybit market observations are implemented.
 
-## Two source lines that must be reconciled
+## Integrated local runtime
 
-| Concern | Local Gate 1 recovery from `cedc6df` | Fetched main `becc46b` |
-| --- | --- | --- |
-| Ownership | Required user owners, same-owner order FK, tenant/system audit scope | Personal tenants, memberships, auth identities, required tenant ownership |
-| PostgreSQL | Journal through `0014_bouncy_zuras`; append-only audit and typed notification outbox | `0002_cost_first_tenancy`; quarantine, restricted runtime role and forced RLS |
-| Login | HMAC Login Widget, hashed opaque sessions, replay/abuse controls and revocation | HMAC bootstrap identity with tenant context; Supabase JWT/OIDC pending |
-| Web | Safety Ledger, separate widget polling, recovered account-change cleanup | Public prerender, private CSR/noindex, one visibility-aware snapshot |
-| Background work | Node intervals, durable notification/digest and bot heartbeat | Node minute-slot evaluation ledger and outbox; long polling, digest removed |
-| Release | Local Gate 1 CI/catalog proof and readiness additions | Immutable-image VPS release and backup/health gates |
+Browser -> sealed Nuxt session -> BFF opaque API token -> resolved user ->
+personal tenant transaction -> restricted dipbot_app role -> PostgreSQL.
+Owned routes retain owner predicates and constraints in addition to forced RLS.
+Auth/bootstrap, scheduler discovery and delivery still have trusted privileged
+operations; the full bypass inventory is in the research.
 
-The `0002` names, snapshots and journals describe different changes. Do not
-concatenate them or replace a catalog already used by a deployment. Preserve
-evidence, identify the installed catalog, and design forward migrations for
-each supported starting point. Keep the local session, audit and notification
-controls when porting to the newer tenant model.
+Recovery through 0014 and cost-first through 0002 retain separate immutable
+journals. The guarded runner recognizes either history and converges it to
+gate1_tenants_v1. Only the common forward directory receives later migrations.
+There is no journal relabelling or guessed quarantine owner.
+
+The page owns one private dashboard snapshot; its hook owns polling,
+cancellation and cache invalidation. Widgets receive data and emit refresh
+requests. Public routes are prerendered; dashboard is CSR/noindex/no-store.
+
+The active Node runner retains single-flight, pending uniqueness, typed outbox
+and digest. Main ledger/outbox history is preserved without activating a second
+scheduler/dispatcher. Release uses digest-pinned images, a one-shot migration,
+backup and dependency-aware readiness. No old-image rollback follows attempted
+DDL automatically.
+
+See [ADR 009](../adr/ADR_009_TENANT_HISTORY_CONVERGENCE.md) and
+[research](24_TENANT_INTEGRATION_RESEARCH.md) for design, proof and limitations.
 
 ## Approved target
 

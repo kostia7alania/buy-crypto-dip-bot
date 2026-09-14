@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import {
   getRunnerConnection,
   type RunnerStatusResponse,
 } from "~/entities/runner";
 import type { MeResponse } from "~/entities/user";
+import { useDashboardRefresh } from "~/features/dashboard-refresh";
+import { isUnauthenticated } from "~/shared/lib/http-error";
 
 useSeoMeta({ title: "Dashboard", robots: "noindex,nofollow" });
 
@@ -14,19 +16,8 @@ interface SafetyStatus extends RunnerStatusResponse {
   orderLikeActionsRequireApproval?: boolean;
 }
 
-const { data: risk, refresh: refreshRisk } = await useFetch<SafetyStatus>(
-  "/api/risk-status",
-  {
-    key: "risk-status",
-  },
-);
-
-let statusInterval: ReturnType<typeof setInterval> | null = null;
-onMounted(() => {
-  statusInterval = setInterval(() => refreshRisk(), 10000);
-});
-onUnmounted(() => {
-  if (statusInterval) clearInterval(statusInterval);
+const { data: publicRisk } = await useFetch<SafetyStatus>("/api/risk-status", {
+  key: "risk-status",
 });
 
 // Shares the `auth-me` key with TelegramLoginWidget, so both read one request.
@@ -37,6 +28,26 @@ const { data: me } = await useFetch<MeResponse>("/api/auth/me", {
   key: "auth-me",
 });
 const isSignedIn = computed(() => Boolean(me.value?.user));
+const { snapshot, error, status, refreshDashboard, setDashboardAuthenticated } =
+  useDashboardRefresh();
+watch(
+  () => me.value?.user?.id,
+  (userId) => {
+    setDashboardAuthenticated(false);
+    if (userId) setDashboardAuthenticated(true);
+  },
+  { immediate: true, flush: "sync" },
+);
+watch(error, (failure) => {
+  if (isUnauthenticated(failure)) me.value = { user: null };
+});
+const risk = computed(() =>
+  isSignedIn.value
+    ? error.value
+      ? undefined
+      : snapshot.value?.risk
+    : publicRisk.value,
+);
 
 const connection = computed(() => getRunnerConnection(risk.value));
 const connectionNote = computed(() => {
@@ -215,7 +226,7 @@ const announceJourney = async (message: string) => {
             a forecast.
           </p>
         </header>
-        <StrategyListWidget @announce="announceJourney" />
+        <StrategyListWidget :strategies="snapshot?.strategies ?? []" :error="error" :status="status" @announce="announceJourney" @mutated="refreshDashboard" />
       </section>
 
       <section
@@ -233,7 +244,7 @@ const announceJourney = async (message: string) => {
             not treated as either outcome.
           </p>
         </header>
-        <AuditFeedWidget @announce="announceJourney" />
+        <AuditFeedWidget :audit="snapshot?.audit" :error="error" :status="status" :updated-at="snapshot?.generatedAt" @refresh="refreshDashboard" />
       </section>
 
       <section
@@ -280,7 +291,7 @@ const announceJourney = async (message: string) => {
             deliberately keeps simulation separate from an exchange fill.
           </p>
         </header>
-        <OrderLedgerWidget @announce="announceJourney" />
+        <OrderLedgerWidget :orders="snapshot?.orders" :error="error" :status="status" :updated-at="snapshot?.generatedAt" @refresh="refreshDashboard" />
       </section>
 
       <section
@@ -295,8 +306,8 @@ const announceJourney = async (message: string) => {
             they do not upgrade a simulation into live evidence.
           </p>
         </header>
-        <PnlWidget />
-        <PerformanceWidget />
+        <PnlWidget :pnl="snapshot?.pnl" :error="error" />
+        <PerformanceWidget :performance="snapshot?.performance" :error="error" />
         <BacktestWidget />
       </section>
     </template>
@@ -315,17 +326,7 @@ const announceJourney = async (message: string) => {
         </p>
       </section>
 
-      <section class="ops-dashboard__analysis" aria-labelledby="public-replay-title">
-        <header class="ops-dashboard__journey-header">
-          <p class="ops-dashboard__journey-step">Available without an account</p>
-          <h2 id="public-replay-title">Replay bounded rules over public history</h2>
-          <p>
-            This public backtest can explore a pair, threshold and quote amount.
-            It does not create tenant decisions or exchange evidence.
-          </p>
-        </header>
-        <BacktestWidget />
-      </section>
+
     </template>
   </section>
 </template>

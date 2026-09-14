@@ -1,3 +1,4 @@
+import { CONVERGED_CATALOG } from "@buy-crypto-dip-bot/db";
 export type ReadinessState = "starting" | "ready" | "failed";
 
 export interface RuntimeReadinessSnapshot {
@@ -10,7 +11,7 @@ export interface RuntimeReadinessSnapshot {
   checkedAt: string;
 }
 
-const schemaVersion = "0014_bouncy_zuras";
+const schemaVersion = CONVERGED_CATALOG;
 export const BOT_HEARTBEAT_STALE_MS = 90_000;
 let database: ReadinessState = "starting";
 let runner: ReadinessState = "starting";

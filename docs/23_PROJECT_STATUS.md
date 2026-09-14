@@ -1,108 +1,84 @@
 # Project status
 
-Reviewed: 2026-09-12. This is the current readiness record for the recovery
-checkout. Historical plans retain their original research and implementation
-claims; they do not override this verdict.
+Reviewed: 2026-09-14. This document owns the current readiness verdict.
+Historical plans preserve their original evidence and do not override it.
 
-**Gate 1: NO-GO. Execution: DRY_RUN only. Hosted/edge/Demo/live launch: not approved.**
+**Gate 1: NO-GO. Execution: DRY_RUN only. Hosted, edge, Demo and live launch
+remain unapproved.**
 
-## Source identity
+## Current source
 
-| Source | Observed state | What its evidence proves |
-| --- | --- | --- |
-| Recovery source | `31212e159d8da7b5ccebb52b57f5b794db156ec2`, based on `cedc6df`; existing Gate 1/Safety Ledger package plus recovery fixes | Local source and checks through catalog `0014_bouncy_zuras` |
-| Remote main | `becc46bb3b957c484324dbc3c517d5db7762be97`, fetched 2026-09-11 | Cost-first tenant/RLS and VPS implementation merged on 2026-08-20 |
-| Running production | Revision, database catalog and provider configuration not inspected in this recovery | No deployment, availability or production isolation claim |
+Integration branch: `codex/tenant-integration-20260914`. It combines recovery
+`d183fa2` with the relevant cost-first foundation from main
+`becc46bb3b957c484324dbc3c517d5db7762be97`, fetched again on 2026-09-14.
+Recovery is preserved on `codex/gate1-recovery-20260912`; its code snapshot is
+`31212e159d8da7b5ccebb52b57f5b794db156ec2`.
 
-Remote main adds three commits: `3379cfd` cost-first multi-tenancy, `3536031`
-deployment session-secret bootstrap, and `becc46b` private backtest error
-preservation. The local working package does not contain those code changes.
-It began with 204 changed/untracked status entries; that is a worktree entry
-count, not completed tasks or a release.
+The interrupted work was located in task "Составить и выполнить 20 задач",
+ID `019fb904-e09c-7672-acae-ad417f4a95ae`. Its four outstanding review fixes were
+recovered on September 12. The September 14 integration preserves them and
+adds the forward migration and runtime convergence described below.
 
-The package and recovery fixes are preserved on local branch
-`codex/gate1-recovery-20260912`. The immutable source identity and the exact
-files changed during this recovery are in
+The running production revision, catalog and provider configuration have not
+been inspected. No deployment or provider-delivery claim follows from this
+local source integration. Exact source/check identities are recorded in
 [implementation evidence](20_GATE1_IMPLEMENTATION_EVIDENCE.md).
 
-The remote [cost-first strategy](15_COST_FIRST_SAAS_STRATEGY.md),
-[ADR](../adr/ADR_008_COST_FIRST_HYBRID_EDGE.md) and
-[delivery plan](../plans/004-cost-first-multi-tenant-edge.md) are restored here
-with source-scope notices. Their provider snapshot is dated 2026-08-20 and
-has not been refreshed into a current price or capacity promise.
+## What changed in this integration
 
-## What exists
-
-| Capability | Local recovery | Remote main | Remaining work |
-| --- | --- | --- | --- |
-| Dip/RiskGuard/local orders | Implemented, DRY_RUN only | Implemented, DRY_RUN only | Accurate reservation and policy/snapshot lifecycle |
-| Reviewed-symbol policy | Central policy; creation, inputs and completion guarded by this recovery | Still unions active strategy symbols into runner allowlist | Port the recovery fix before release |
-| Account isolation | Opaque sessions, owner-qualified routes, same-owner FK and A/B suites | Personal tenants, identities/memberships, restricted role and forced RLS in source | One converged auth/catalog and full proof |
-| Login security | Replay/abuse limits, lifecycle/revocation, CSRF and server-authoritative identity | Tenant bootstrap HMAC flow | Preserve hardening during tenant/OIDC migration |
-| Audit | Versioned, transactional, immutable V0/V1 history | Tenant-owned audit plus event ledger | Reconcile schemas without losing original evidence |
-| Telegram | Private binding, command sessions, durable typed outbox and digest | Scoped long-polling bot; digest removed from runner | Port delivery controls, then webhook/idempotent cutover |
-| Web | Safety Ledger; fixed account-cache and login remount | Prerendered public pages, CSR/noindex dashboard, one snapshot refresh | Combine the dashboard contract with session/privacy fixes |
-| PnL, benchmarks, backtest | Implemented basic simulation/reporting | Implemented with private error handling | Complete freshness, missing-data and methodology evidence |
-| Operations | Fail-closed startup, readiness, bot-only heartbeat, PG18 CI lane | Immutable-image VPS release, backups and health gates | Unified release gate, restore and incident rehearsal |
-| Cloudflare / Supabase | Target only | Target only | Identity/JWT, runtime entries, webhook/Cron/Queues and cutover |
-
-"Implemented" in this table means source exists at the named baseline. It
-never means the two versions are integrated, deployed, independently approved
-or commercially available. There are no verified customer, revenue or pricing
-outcomes in this recovery.
-
-## Interrupted review findings recovered
-
-| Finding | Outcome | Evidence |
+| Area | Current local result | Remaining acceptance |
 | --- | --- | --- |
-| P0: stored strategies expand the approved pair list | Fixed locally. `packages/config` owns the reviewed list; environment only narrows it. Creation/activation, input routes, bot and order completion enforce it. | Config, API policy and pending-order regression tests |
-| P1: `/market` reveals whether another tenant configured a pair | Fixed locally. Public market access no longer queries strategy ownership/configuration. | Same response before/after an unsupported B-owned legacy row |
-| P1: A's private Nuxt cache survives login as B | Fixed locally. Identity changes invalidate private cache entries and pending writes; keyed dashboard content remounts. | Local browser A -> logout -> B, including a delayed A response |
-| P1: Telegram widget disappears after logout | Fixed locally. Post-render lifecycle installs one widget/callback for the signed-out host and cleans them on state change. | Local browser logout/re-login plus failed-logout feedback |
+| Migration history | Strict recognition of both original histories; guarded transactional bridges to `gate1_tenants_v1`; one authority for subsequent forward SQL | Destination catalog review and explicit decisions for any unresolved ownership |
+| Data preservation | Original migration journals preserved; original audit fields and numeric amounts retained; quarantine strategy/order preflight refuses without writes | Real destination inventory and restored-backup comparison |
+| Tenant access | Personal tenants, memberships, owner constraints, forced RLS and restricted transactions for owned API routes and bot/runner mutations | Full integrated matrix, independent review and service-credential separation |
+| Login | Recovery opaque sessions, replay/abuse, CSRF, revocation and authoritative BFF retained | Real Telegram login/private start/provider smoke; OIDC later |
+| Dashboard | One private snapshot, visibility-aware refresh, account invalidation, 401 pause; first-request cancellation race fixed | Full accessibility/mobile/provider checks in N09 |
+| Audit and Telegram | Recovery immutable versioned audit, private notification binding, typed outbox and digest retained | Full restart/delivery matrix and fairness/reservation work |
+| Release | Immutable digest, commit-pinned files, separate migration service, writer quiescence, backup and readiness ordering; no automatic old-image restart after attempted DDL | Restore/incident rehearsal and production approval |
+| Public web | Public prerender; private CSR/noindex/no-store; truthful signed-out backtest copy | Published revision and claims/analytics QA |
+| Platform | Cloudflare/Supabase remain targets | OIDC/JWT, edge entries, webhook, Cron/Queues and cutover proof |
 
-Unsupported historical pending orders remain pending and cancellable; the
-recovery does not erase them or silently label them completed. Deployment
-policy must be shared by API and bot, including an explicit empty allowlist.
+The migration retains main's event ledger, generic outbox and evaluation keys
+as data/schema. It does not activate main's minute-slot/generic dispatch path
+alongside recovery's runner/outbox. Decision provenance, reservations and
+scheduler cutover remain N10/N11. Identity profile fields are compatibility
+snapshots until a future canonical OIDC/profile contract is implemented.
 
-## Verification in this recovery
+## Verified locally
 
-Node `v26.7.0`, pnpm `11.0.0`.
+- PostgreSQL 18 contract lane: clean install, both known upgrades, catalog
+  equivalence, audit/numeric preservation, quarantine refusal, concurrent and
+  repeat execution, modified history refusal, critical RLS drift refusal and
+  subsequent forward migration atomicity.
+- Restricted-role pool reuse: A, forbidden foreign write, rollback, B, missing
+  context and restored connection state. No developer or production DB used.
+- API snapshot A/B isolation and anonymous refusal; BFF session forwarding,
+  private caching headers and upstream outage behavior.
+- Browser with fixtures: immediate first A snapshot, logout/re-login, one
+  widget/callback, B remains B after a delayed A result, no refreshes during
+  179 seconds of simulated hidden visibility, and private data cleared on 401.
+  This does not prove real Telegram authentication or delivery.
+- Local source checks, build and compose validation are detailed in the
+  evidence appendix, including failures corrected during development.
 
-- Before fixes: `pnpm check` and `pnpm build` passed.
-- After the four fixes: `pnpm check` passed, including new policy and legacy
-  order tests. Turbo reused unchanged tasks; this does not include PG18 when
-  `POSTGRES18_TEST_URL` is absent.
-- After the bot subset follow-up: 64 bot tests passed.
-- A fresh isolated PostgreSQL 18 lane passed **7/7** through exact local
-  catalog `0014`: clean install/upgrade equivalence, ownership and audit
-  constraints. No developer or production database was used.
-- Real local browser, fixture API and simulated Telegram callback: successful
-  A login, failed logout stays signed in with error, successful logout removes
-  A, exactly one widget/callback returns, B sees B, and a late A order response
-  does not overwrite B. This proves the frontend transition with fixtures,
-  not actual Telegram authentication or provider delivery.
-- Final full checks, build and source snapshot identity are recorded in
-  [implementation evidence](20_GATE1_IMPLEMENTATION_EVIDENCE.md).
+## What keeps Gate 1 at NO-GO
 
-## Why Gate 1 remains NO-GO
+1. The complete integrated API/BFF/bot/runner, aggregate, restart/concurrency,
+   outbox and configuration matrix and independent review remain incomplete.
+2. The privileged connection still supports trusted auth, discovery, delivery
+   and some owner-qualified bot reads. RLS is proved in designated restricted
+   transactions, not as containment of arbitrary SQL through the privileged pool.
+3. Actual production catalog, secrets, forwarding trust, restore/incident
+   procedure and dependency-aware readiness need a destination rehearsal.
+4. Actual Telegram login, private `/start`, delivery and the complete R121
+   accessibility checks remain open.
+5. Reservation accounting, immutable decision/market/config provenance and
+   truthful partial/stale reporting remain explicit N10 work.
 
-1. The newer main and recovery use incompatible migrations: local
-   `0002_left_pride` through `0014` versus main's `0002_cost_first_tenancy`.
-   Ownership, roles, sessions, audit and outbox semantics must converge on
-   forward migrations; neither prior proof covers that future result.
-2. The final integrated revision needs the complete A/B API/BFF/bot/runner,
-   aggregate, race/restart, outbox and configuration matrix plus independent
-   review. A seven-case catalog lane is necessary but insufficient.
-3. Production revision/catalog, proxy/header trust, per-service secrets,
-   readiness and backup/restore/incident behavior need actual evidence.
-4. Actual Telegram login/private `/start`/delivery, provider smoke and the full
-   R121 accessibility checks remain open. Local fixture success is narrower.
+The next deliverable is integrated proof and reservation correctness. Gate 1
+checks happen before GO. Demo requires GO plus a separate reviewed scope;
+live execution remains unavailable and requires later explicit approval.
 
-The next priority is integration and proof, not private exchange access.
-Gate 1 proof tasks run **before** the GO decision; their old AFTER_GATE1
-labels must not create a circular dependency. Demo implementation remains
-blocked until GO and a separately reviewed scope. Live is a later explicit
-approval, never an inferred next step.
-
-See [the master backlog](../tasks/00_MASTER_PLAN.md) for owners, acceptance
-criteria and the current R001-R123 index.
+[Research and decisions](24_TENANT_INTEGRATION_RESEARCH.md) explain the chosen
+approach and primary sources. [Master backlog](../tasks/00_MASTER_PLAN.md)
+retains every R001-R123 acceptance item.

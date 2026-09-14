@@ -1,5 +1,7 @@
 # ADR 008: Defer PostgreSQL RLS Until Runtime Roles Are Separated
 
+> Superseded for the local integration by [ADR 009](ADR_009_TENANT_HISTORY_CONVERGENCE.md), 2026-09-14. Restricted transaction RLS is implemented; separate service credentials and complete release proof remain required. The original rationale below is historical.
+
 > Baseline notice, 2026-09-12: this deferral applies to the local Gate 1 line using the older runtime role. Remote main `becc46b` already has a restricted role and forced RLS under [its separate cost-first ADR](ADR_008_COST_FIRST_HYBRID_EDGE.md). Reconcile the role, migration and evidence models before making a combined RLS claim. See [project status](../docs/23_PROJECT_STATUS.md).
 
 Status: accepted — deferred until after Gate 1 (2026-08-02).

@@ -2,9 +2,12 @@ import { schema } from "@buy-crypto-dip-bot/db";
 import { createBybitPublicClient } from "@buy-crypto-dip-bot/exchange-bybit";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
-import { getDb } from "../../db.js";
 import { logApiError } from "../../operational-log.js";
-import { type AppEnv, requireUser } from "../auth/principal.middleware.js";
+import {
+  type AppEnv,
+  requireTenantDb,
+  requireUser,
+} from "../auth/principal.middleware.js";
 
 export interface SymbolPnl {
   symbol: string;
@@ -28,7 +31,7 @@ export interface PnlReport {
   };
 }
 
-type Db = ReturnType<typeof getDb>;
+type Db = Pick<ReturnType<typeof requireTenantDb>, "select">;
 
 // Unrealized PnL of the simulated portfolio: what the dry-run purchases
 // would be worth right now. Shared by the /pnl route and the daily digest.
@@ -113,7 +116,7 @@ export async function computePnlReport(
 export const pnlRoutes = new Hono<AppEnv>().get("/", async (c) => {
   const user = requireUser(c);
   try {
-    return c.json(await computePnlReport(getDb(), user.userId));
+    return c.json(await computePnlReport(requireTenantDb(c), user.userId));
   } catch (error) {
     logApiError("PNL_COMPUTE_FAILED", error, c.get("correlationId"));
     return c.json({ error: "INTERNAL_SERVER_ERROR" }, 500);

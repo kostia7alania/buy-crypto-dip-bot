@@ -5,9 +5,12 @@ import { AUDIT_SCHEMA_VERSION } from "@buy-crypto-dip-bot/shared-types";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import * as v from "valibot";
-import { getDb } from "../../db.js";
 import { logApiError } from "../../operational-log.js";
-import { type AppEnv, requireUser } from "../auth/principal.middleware.js";
+import {
+  type AppEnv,
+  requireTenantDb,
+  requireUser,
+} from "../auth/principal.middleware.js";
 
 const addStrategySchema = v.object({
   symbol: v.pipe(v.string(), v.regex(/^[A-Z0-9]{3,20}$/)),
@@ -26,16 +29,22 @@ const updateStrategySchema = v.object({
   ),
 });
 
+export const listStrategies = (
+  db: Pick<ReturnType<typeof requireTenantDb>, "select">,
+  userId: string,
+) =>
+  db
+    .select()
+    .from(schema.strategies)
+    .where(eq(schema.strategies.userId, userId))
+    .orderBy(schema.strategies.symbol);
+
 export const strategiesRoutes = new Hono<AppEnv>()
   .get("/", async (c) => {
     const user = requireUser(c);
     try {
-      const db = getDb();
-      const list = await db
-        .select()
-        .from(schema.strategies)
-        .where(eq(schema.strategies.userId, user.userId))
-        .orderBy(schema.strategies.symbol);
+      const db = requireTenantDb(c);
+      const list = await listStrategies(db, user.userId);
       return c.json(list);
     } catch (error) {
       logApiError("STRATEGY_LIST_FAILED", error, c.get("correlationId"));
@@ -55,7 +64,7 @@ export const strategiesRoutes = new Hono<AppEnv>()
       if (!isAllowedSymbol(symbol, process.env.ALLOWLIST_SYMBOLS)) {
         return c.json({ error: "SYMBOL_NOT_ALLOWED" }, 400);
       }
-      const db = getDb();
+      const db = requireTenantDb(c);
 
       // 1. Uniqueness is per user, not global: two people are both entitled
       //    to their own BTCUSDT strategy.
@@ -151,7 +160,7 @@ export const strategiesRoutes = new Hono<AppEnv>()
         return c.json({ error: "INVALID_UPDATE_PAYLOAD" }, 400);
       }
 
-      const db = getDb();
+      const db = requireTenantDb(c);
       // Ownership is part of the lookup, so a strategy belonging to someone
       // else is indistinguishable from one that does not exist. Returning 403
       // here would confirm the id is real — itself a cross-tenant leak.

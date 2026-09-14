@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from "vue";
+import { ref } from "vue";
 import {
   createStrategy,
-  fetchStrategies,
   type Strategy,
   type StrategyConfigData,
   updateStrategy,
@@ -10,26 +9,14 @@ import {
 
 const emit = defineEmits<{
   announce: [message: string];
+  mutated: [];
 }>();
 
-const { data: strategies, refresh: refreshStrategies } = await useAsyncData(
-  "strategies",
-  () => fetchStrategies(),
-);
-
-let pollingInterval: ReturnType<typeof setInterval> | null = null;
-
-onMounted(() => {
-  pollingInterval = setInterval(() => {
-    if (editingId.value === null) {
-      refreshStrategies();
-    }
-  }, 5000);
-});
-
-onUnmounted(() => {
-  if (pollingInterval) clearInterval(pollingInterval);
-});
+const props = defineProps<{
+  strategies: readonly Strategy[];
+  error?: unknown;
+  status?: string;
+}>();
 
 // Editing state for strategy config
 const editingId = ref<string | null>(null);
@@ -86,7 +73,7 @@ const saveEdit = async (strategy: Strategy) => {
     });
     editingId.value = null;
     editForm.value = null;
-    await refreshStrategies();
+    emit("mutated");
     publishMutationStatus(
       "confirmed",
       `${strategy.symbol} limits and threshold were saved.`,
@@ -108,7 +95,7 @@ const toggleStrategy = async (strategy: Strategy) => {
     await updateStrategy(strategy.id, {
       enabled: nextEnabled,
     });
-    await refreshStrategies();
+    emit("mutated");
     publishMutationStatus(
       "confirmed",
       nextEnabled
@@ -142,7 +129,7 @@ const addCustomPair = async () => {
   try {
     await createStrategy(symbol);
     newSymbol.value = "";
-    await refreshStrategies();
+    emit("mutated");
     publishMutationStatus(
       "confirmed",
       `${symbol} was added in DRY_RUN mode. Review its caps before activation.`,
@@ -158,6 +145,8 @@ const addCustomPair = async () => {
 
 <template>
   <section class="strategy-list">
+    <p v-if="props.error" role="alert">Strategies could not be refreshed. Retry before changing limits.</p>
+    <p v-else-if="props.status === 'pending' && !props.strategies.length" role="status">Loading strategies...</p>
     <div class="strategy-list__header-actions">
       <h2 class="strategy-list__title">Active Trading Strategies</h2>
       <!-- Add Custom Pair Form inline -->
@@ -191,7 +180,7 @@ const addCustomPair = async () => {
 
     <div class="strategy-list__grid">
       <StrategyCard
-        v-for="strategy in strategies"
+        v-for="strategy in props.strategies"
         :key="strategy.id"
         :strategy="strategy"
         :is-editing="editingId === strategy.id"

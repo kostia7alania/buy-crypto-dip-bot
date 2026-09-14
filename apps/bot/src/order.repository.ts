@@ -1,5 +1,9 @@
 import { getAllowedSymbols, isAllowedSymbol } from "@buy-crypto-dip-bot/config";
-import { auditEventRow, schema } from "@buy-crypto-dip-bot/db";
+import {
+  auditEventRow,
+  schema,
+  withPersonalTenant,
+} from "@buy-crypto-dip-bot/db";
 import {
   AUDIT_SCHEMA_VERSION,
   createCorrelationId,
@@ -56,7 +60,7 @@ export const claimOwnedPendingOrder = async (
     return { outcome: "SYMBOL_NOT_ALLOWED" };
   }
 
-  const row = await db.transaction(async (tx) => {
+  const row = await withPersonalTenant(db, callerId, async (tx) => {
     const [claimed] = await tx
       .update(schema.orders)
       .set({ status: nextStatus })
@@ -136,7 +140,7 @@ export const setEnabledForCaller = async (
   enabled: boolean,
   correlationId: string = createCorrelationId(),
 ): Promise<number> => {
-  return db.transaction(async (tx) => {
+  return withPersonalTenant(db, callerId, async (tx) => {
     const updated = await tx
       .update(schema.strategies)
       .set({ enabled })

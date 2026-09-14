@@ -259,3 +259,82 @@ PGlite success was not treated as a substitute.
   remaining Gate 1 operations batch.
 - No private Bybit credential, signing, Demo order, Broker OAuth, or live-order
   work is authorized while this record says NO-GO.
+
+
+## 2026-09-14: researched tenant-history integration
+
+Baselines: recovery `d183fa2` and main
+`becc46bb3b957c484324dbc3c517d5db7762be97`, fetched again on this date.
+Branch: `codex/tenant-integration-20260914`. Source commit identity is recorded
+in the follow-up checkpoint below. Gate 1 remains NO-GO.
+
+Design and source citations: [integration research](24_TENANT_INTEGRATION_RESEARCH.md).
+Decision: [ADR 009](../adr/ADR_009_TENANT_HISTORY_CONVERGENCE.md).
+
+### Verification
+
+- `pnpm check` passed: boundary guard, 4 isolated release-flow tests, typecheck,
+  lint and 345 workspace tests. The 14 PG-dependent cases are intentionally
+  skipped in the ordinary lane; the separate PostgreSQL lane below ran them.
+  Turbo reused unchanged workspace tasks. Existing lint warnings remain.
+- `pnpm build` passed on the final runtime source, including public prerender
+  and private dashboard/BFF output.
+- `POSTGRES18_TEST_URL=<isolated fixture> pnpm --filter @buy-crypto-dip-bot/db
+  test:postgres18`: **16/16 passed**, including two history-recognition tests
+  and 14 real PostgreSQL contract cases. Temporary PostgreSQL 18 container,
+  dynamically assigned loopback port, no mounted developer/production data.
+- Both original histories were checked against their source commits. Main's
+  archived SQL and journal remain byte-for-byte identical; root recovery
+  migrations were not edited. Clean, recovery and main catalog comparisons
+  include columns/defaults/nullability, constraints, indexes, policies and
+  triggers. Original audit values and decimal amounts are retained.
+- Real PG failure coverage includes quarantine refusal, unknown/mixed/edited
+  history, disabled RLS, concurrent/repeated migration, failed forward DDL and
+  changed applied forward SQL. Tests verify rollback, not only error text.
+- Restricted-role pool reuse proves A-only and B-only reads, a foreign write
+  refusal, rollback, missing context and restoration after reuse.
+- The built `packages/db/scripts/migrate.mjs` ran twice on an additional empty
+  fixture database. Both executions succeeded and recorded one recovery ->
+  gate1_tenants_v1 marker. The fixture database was then dropped.
+- Browser with real local Nuxt and mocked API/session responses: first A
+  snapshot succeeded with one request; logout removed A; one widget and callback
+  returned; B's snapshot stayed B after manually releasing the delayed A result.
+  Simulated hidden visibility produced zero new requests over 179 seconds.
+  Restoring visibility with an expired-session response cleared B's data and
+  returned the signed-out page. The temporary tab and its test overrides were
+  closed. Actual Telegram was not authenticated and no message was sent.
+- Shell syntax and rendered compose contracts passed using only fixture values.
+  The 4 release control-flow tests substitute Docker/curl: success, failed
+  backup, failed migration and failed application startup. They prove ordering
+  and refusal to restart old services after attempted DDL. They do not prove a
+  VPS deploy, a real backup restore or external proxy behavior.
+- The complete R001-R123 index remains present once per ticket. N05/N06 are
+  locally complete, and N07-N12 retain their explicit release/product work.
+
+### Corrections found while verifying
+
+The browser exposed duplicate snapshot clearing between the login widget and
+refresh hook. It cancelled the new account's initial response. Snapshot
+invalidation now belongs exclusively to the hook; the browser regression passed
+after a fresh reload. Health/bootstrap expectations now name the converged
+catalog. BFF tests use the Nuxt auto-import boundary without adding a direct h3
+dependency. A PGlite test hit its existing 5-second timeout during concurrent
+work; the isolated rerun and final full command passed without weakening it.
+Corepack/typecheck processes also stalled after a long desktop pause. They were
+stopped and the final run used cached pnpm with network auto-update disabled and
+Node compile cache disabled. No dependency or account setting was changed.
+
+Owner-local logs: `/tmp/dipbot-integration-20260914/`:
+`check-release-final.log`, `build-final.log`, `pg-final.log`,
+`release-fixture.log`, `compose.json`. These temporary logs are supporting
+locators, not durable production evidence. The committed tests, SQL, source
+identity and results above are the reproducible record.
+
+### Remaining boundary
+
+Production source/catalog, true provider login/private start/delivery, restore,
+full accessibility, independent review and the complete integrated matrix remain
+open. Privileged auth/discovery/delivery paths are documented; this is not a
+claim that the entire process runs with a non-privileged credential. The generic
+main event/outbox ledger is preserved but not activated as a second dispatcher.
+Reservation/config/market-snapshot work remains N10. No push or deploy occurred.

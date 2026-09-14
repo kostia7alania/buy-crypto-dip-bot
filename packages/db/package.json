@@ -18,9 +18,9 @@
     "build": "tsdown src/index.ts --format esm --out-dir dist --no-dts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
-    "test:postgres18": "REQUIRE_POSTGRES18_TEST=1 vitest run src/postgres18-contract.test.ts",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "test:postgres18": "REQUIRE_POSTGRES18_TEST=1 vitest run src/postgres18-contract.test.ts src/convergence.test.ts",
+    "db:generate": "drizzle-kit generate --custom",
+    "db:migrate": "pnpm build && node scripts/migrate.mjs",
     "db:verify-legacy-decision": "node scripts/validate-legacy-decision.mjs"
   },
   "dependencies": {

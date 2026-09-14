@@ -1,23 +1,29 @@
 #!/usr/bin/env bash
 # One-time (idempotent) VPS setup for Buy Crypto Dip Bot.
-# Usage: bash vps-bootstrap.sh  (as root, on the VPS)
+# Usage: REPO_REF=<40-char-main-commit> bash vps-bootstrap.sh
+# Run as root on the VPS. REPO_REF keeps every downloaded file immutable.
 set -euo pipefail
 
 APP_DIR=/opt/buy-crypto-dip-bot
 TRAEFIK_DIR=/opt/traefik
-RAW=https://raw.githubusercontent.com/kostia7alania/buy-crypto-dip-bot/main
+: "${REPO_REF:?set REPO_REF to the 40-character commit SHA being deployed}"
+if ! [[ "$REPO_REF" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "REPO_REF must be a lowercase 40-character commit SHA" >&2
+  exit 1
+fi
+RAW="https://raw.githubusercontent.com/kostia7alania/buy-crypto-dip-bot/$REPO_REF"
 
 echo "=== 1. Base packages ==="
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
-apt-get install -y curl git ufw
+apt-get install -y ca-certificates curl git openssl ufw
 
 echo "=== 2. Docker ==="
 if ! command -v docker >/dev/null; then
   curl -fsSL https://get.docker.com | sh
 fi
 
-echo "=== 3. Swap (2G) — 1GB RAM needs headroom ==="
+echo "=== 3. Swap (2G) - 1GB RAM needs headroom ==="
 if ! swapon --show | grep -q /swapfile; then
   fallocate -l 2G /swapfile
   chmod 600 /swapfile
@@ -49,11 +55,12 @@ echo ">>> Add your public key to /home/deploy/.ssh/authorized_keys"
 
 echo "=== 6. Traefik edge proxy (shared by all projects on this box) ==="
 docker network inspect proxy >/dev/null 2>&1 || docker network create proxy
-mkdir -p "$TRAEFIK_DIR"
-if [ ! -f "$TRAEFIK_DIR/docker-compose.yml" ]; then
-  curl -fsSL "$RAW/infra/traefik/docker-compose.yml" -o "$TRAEFIK_DIR/docker-compose.yml"
+if [ ! -s "$TRAEFIK_DIR/docker-compose.yml" ] || [ ! -s "$TRAEFIK_DIR/dynamic.yml" ]; then
+  echo "Refusing to replace the host-specific shared Traefik/VPN config." >&2
+  echo "Provision and verify $TRAEFIK_DIR/docker-compose.yml and dynamic.yml first." >&2
+  exit 1
 fi
-(cd "$TRAEFIK_DIR" && docker compose up -d)
+(cd "$TRAEFIK_DIR" && docker compose config --quiet && docker compose up -d --wait)
 
 echo "=== 7. App directory ==="
 mkdir -p "$APP_DIR"
@@ -65,29 +72,22 @@ if [ ! -f "$APP_DIR/.env" ]; then
   cat > "$APP_DIR/.env" <<EOF
 POSTGRES_PASSWORD=${PG_PASS}
 API_KEY=${API_KEY}
-BOT_HEARTBEAT_SECRET=${BOT_HEARTBEAT_SECRET}
 SESSION_SECRET=${SESSION_SECRET}
+BOT_HEARTBEAT_SECRET=${BOT_HEARTBEAT_SECRET}
+DIPBOT_IMAGE=
 TELEGRAM_BOT_TOKEN=
 OPERATOR_TELEGRAM_USER_ID=
 NUXT_PUBLIC_TELEGRAM_BOT_USERNAME=
+NUXT_PUBLIC_SITE_URL=https://buy-crypto-dip-bot.com
 ALLOWLIST_SYMBOLS=BTCUSDT,ETHUSDT,SOLUSDT
 EOF
   chmod 600 "$APP_DIR/.env"
-  echo ">>> Generated $APP_DIR/.env — fill TELEGRAM_BOT_TOKEN"
+  echo ">>> Generated $APP_DIR/.env - fill TELEGRAM_BOT_TOKEN"
 fi
-if ! grep -Eq '^BOT_HEARTBEAT_SECRET=.{32,}$' "$APP_DIR/.env"; then
-  BOT_HEARTBEAT_SECRET=$(openssl rand -hex 32)
-  if grep -q '^BOT_HEARTBEAT_SECRET=' "$APP_DIR/.env"; then
-    sed -i "s/^BOT_HEARTBEAT_SECRET=.*/BOT_HEARTBEAT_SECRET=${BOT_HEARTBEAT_SECRET}/" "$APP_DIR/.env"
-  else
-    printf '\nBOT_HEARTBEAT_SECRET=%s\n' "$BOT_HEARTBEAT_SECRET" >> "$APP_DIR/.env"
-  fi
-  chmod 600 "$APP_DIR/.env"
-  echo ">>> Generated missing BOT_HEARTBEAT_SECRET in $APP_DIR/.env"
-fi
+mkdir -p "$APP_DIR/.deploy" "$APP_DIR/backups"
 chown -R deploy:deploy "$APP_DIR"
 
 echo "=== Done. Next steps ==="
 echo "1. curl -fsSL $RAW/docker-compose.prod.yml -o $APP_DIR/docker-compose.yml"
 echo "2. Fill Telegram vars in $APP_DIR/.env"
-echo "3. su - deploy -c 'cd $APP_DIR && docker compose up -d'"
+echo "3. After Gate 1 proof and production approval, run Deploy for commit $REPO_REF"

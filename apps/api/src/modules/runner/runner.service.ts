@@ -8,6 +8,7 @@ import {
   createPostgresConnection,
   runMigrations,
   schema,
+  withPersonalTenant,
 } from "@buy-crypto-dip-bot/db";
 import { createBybitPublicClient } from "@buy-crypto-dip-bot/exchange-bybit";
 import { evaluateRisk } from "@buy-crypto-dip-bot/risk-engine";
@@ -108,7 +109,7 @@ async function seedDefaultStrategyIfNeeded(db: Db) {
 
   for (const symbol of defaultSymbols) {
     const correlationId = createCorrelationId();
-    const inserted = await db.transaction(async (tx) => {
+    const inserted = await withPersonalTenant(db, operator.id, async (tx) => {
       const [strategy] = await tx
         .insert(schema.strategies)
         .values({
@@ -671,7 +672,7 @@ export async function startRunner(options: StartRunnerOptions) {
           const executeAt = new Date(
             Date.now() + orderExecutionDelaySeconds * 1000,
           );
-          const order = await db.transaction(async (tx) => {
+          const order = await withPersonalTenant(db, ownerId, async (tx) => {
             const [inserted] = await tx
               .insert(schema.orders)
               .values({

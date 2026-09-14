@@ -7,9 +7,11 @@ import { auditRoutes } from "./modules/audit/audit.route.js";
 import { authRoutes } from "./modules/auth/auth.route.js";
 import {
   type AppEnv,
+  tenantDatabaseMiddleware,
   userPrincipalMiddleware,
 } from "./modules/auth/principal.middleware.js";
 import { backtestRoutes } from "./modules/backtest/backtest.route.js";
+import { dashboardRoutes } from "./modules/dashboard/dashboard.route.js";
 import { createHealthRoutes } from "./modules/health/health.route.js";
 import { marketDataRoutes } from "./modules/market-data/market-data.route.js";
 import { ordersRoutes } from "./modules/orders/orders.route.js";
@@ -79,6 +81,7 @@ export const createApp = (options: CreateAppOptions = {}) => {
   // this says *who* for. Every route that touches user-owned rows requires a
   // live session, so a leaked API key on its own reads nobody's data.
   app.use("*", userPrincipalMiddleware());
+  app.use("*", tenantDatabaseMiddleware());
 
   // Hono's default boundary prints the complete Error object. Database and
   // fetch errors can retain query parameters, headers, URLs, and request
@@ -106,5 +109,6 @@ export const createApp = (options: CreateAppOptions = {}) => {
   app.route("/audit", auditRoutes);
   app.route("/auth", authRoutes);
   app.route("/strategies", strategiesRoutes);
+  app.route("/dashboard", dashboardRoutes);
   return app;
 };

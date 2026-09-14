@@ -1,23 +1,16 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from "vue";
-import {
-  fetchPerformance,
-  type PerformancePosition,
+import { computed } from "vue";
+import type {
+  PerformancePosition,
+  PerformanceReport,
 } from "~/entities/performance";
 
-const { data, refresh } = await useAsyncData("performance", () =>
-  fetchPerformance(),
-);
+const props = defineProps<{
+  performance?: PerformanceReport;
+  error?: unknown;
+}>();
 
-let pollingInterval: ReturnType<typeof setInterval> | null = null;
-onMounted(() => {
-  pollingInterval = setInterval(() => refresh(), 30000);
-});
-onUnmounted(() => {
-  if (pollingInterval) clearInterval(pollingInterval);
-});
-
-const positions = computed(() => data.value?.positions ?? []);
+const positions = computed(() => props.performance?.positions ?? []);
 
 const sign = (n: number) => (n >= 0 ? "+" : "");
 const pct = (n: number) => `${sign(n)}${n.toFixed(2)}%`;
@@ -55,7 +48,9 @@ const barWidth = (value: number, p: PerformancePosition) => {
       </div>
     </div>
 
-    <p v-if="positions.length === 0" class="perf__empty">
+    <p v-if="props.error" class="perf__empty">Benchmark data is unavailable.</p>
+    <p v-else-if="!props.performance" class="perf__empty">Loading benchmarks...</p>
+    <p v-else-if="positions.length === 0" class="perf__empty">
       No simulated purchases yet — the comparison appears after the first executed dry-run order.
     </p>
 

@@ -1,27 +1,16 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
-import { fetchOrders, type Order } from "~/entities/order";
+import { computed } from "vue";
+import type { Order } from "~/entities/order";
 import { isUnauthenticated } from "~/shared/lib/http-error";
 import { formatMoney } from "~/shared/lib/number-format";
 
-const emit = defineEmits<{
-  announce: [message: string];
+const props = defineProps<{
+  orders?: readonly Order[];
+  error?: unknown;
+  status: "idle" | "pending" | "success" | "error";
+  updatedAt?: string;
 }>();
-
-const lastUpdatedAt = ref<Date | null>(null);
-const loadOrders = async () => {
-  const result = await fetchOrders();
-  lastUpdatedAt.value = new Date();
-  return result;
-};
-
-const {
-  data: orders,
-  error,
-  status,
-  refresh: refreshOrders,
-} = await useAsyncData("orders", loadOrders);
-
+const emit = defineEmits<{ refresh: [] }>();
 const formatPrice = (value: string | null) =>
   value === null ? "Not set" : `$${formatMoney(Number(value))}`;
 const statusLabel = (order: Order) => {
@@ -30,34 +19,14 @@ const statusLabel = (order: Order) => {
   if (order.status === "CANCELLED") return "Canceled";
   return "Unknown";
 };
+
 const errorMessage = computed(() =>
-  isUnauthenticated(error.value)
+  isUnauthenticated(props.error)
     ? "Your session is no longer authorized. Sign in again before loading private ledger data."
     : "The ledger could not be loaded. No empty or successful state is inferred.",
 );
-const visibleOrders = computed(() => (error.value ? [] : (orders.value ?? [])));
-
-const retryOrders = async () => {
-  await refreshOrders();
-  emit(
-    "announce",
-    error.value
-      ? "The dry-run ledger is still unavailable."
-      : `${orders.value?.length ?? 0} dry-run order records loaded.`,
-  );
-};
-
-let pollingInterval: ReturnType<typeof setInterval> | null = null;
-
-onMounted(() => {
-  pollingInterval = setInterval(() => {
-    refreshOrders();
-  }, 5000);
-});
-
-onUnmounted(() => {
-  if (pollingInterval) clearInterval(pollingInterval);
-});
+const visibleOrders = computed(() => (props.error ? [] : (props.orders ?? [])));
+const retryOrders = () => emit("refresh");
 </script>
 
 <template>
@@ -67,7 +36,7 @@ onUnmounted(() => {
       class="order-ledger__table-container"
       role="region"
       aria-labelledby="order-ledger-title"
-      :aria-busy="status === 'pending'"
+      :aria-busy="props.status === 'pending'"
       tabindex="0"
     >
       <table class="order-ledger__table">
@@ -88,10 +57,10 @@ onUnmounted(() => {
           </tr>
         </thead>
         <tbody>
-          <tr v-if="status === 'pending' && !orders">
+          <tr v-if="props.status === 'pending' && !props.orders">
             <td colspan="8" class="order-ledger__empty">Loading tenant ledger…</td>
           </tr>
-          <tr v-else-if="error">
+          <tr v-else-if="props.error">
             <td colspan="8" class="order-ledger__empty">
               <div class="order-ledger__error">
                 <span>{{ errorMessage }}</span>
@@ -101,7 +70,7 @@ onUnmounted(() => {
               </div>
             </td>
           </tr>
-          <tr v-else-if="!orders || orders.length === 0">
+          <tr v-else-if="!props.orders || props.orders.length === 0">
             <td colspan="8" class="order-ledger__empty">
               No local dry-run orders recorded for this account.
             </td>
@@ -133,8 +102,8 @@ onUnmounted(() => {
     <p class="order-ledger__freshness">
       Last successful refresh:
       <NuxtTime
-        v-if="lastUpdatedAt"
-        :datetime="lastUpdatedAt"
+        v-if="props.updatedAt"
+        :datetime="props.updatedAt"
         hour="2-digit"
         minute="2-digit"
         second="2-digit"

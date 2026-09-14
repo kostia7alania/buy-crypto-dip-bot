@@ -1,3 +1,7 @@
+import {
+  type TenantTransaction,
+  withPersonalTenant,
+} from "@buy-crypto-dip-bot/db";
 import type { MiddlewareHandler } from "hono";
 import { getDb } from "../../db.js";
 import { logApiError } from "../../operational-log.js";
@@ -39,6 +43,7 @@ export interface AppEnv {
     // Present only on private routes. `requireUser` below is the sole
     // supported way to read it, so a handler cannot forget the null case.
     user?: UserPrincipal;
+    tenantDb?: TenantTransaction;
   };
 }
 
@@ -82,6 +87,49 @@ export const userPrincipalMiddleware = (): MiddlewareHandler<AppEnv> => {
     c.set("user", principal);
     return next();
   };
+};
+
+const TENANT_PATHS = [
+  "/strategies",
+  "/orders",
+  "/audit",
+  "/pnl",
+  "/performance",
+  "/dashboard",
+];
+
+/** Only owned-data routes enter the restricted role; auth bootstrap stays separate. */
+export const tenantDatabaseMiddleware =
+  (): MiddlewareHandler<AppEnv> => async (c, next) => {
+    if (
+      !TENANT_PATHS.some(
+        (prefix) =>
+          c.req.path === prefix || c.req.path.startsWith(`${prefix}/`),
+      )
+    )
+      return next();
+    const user = requireUser(c);
+    c.header("cache-control", "private, no-store");
+    await withPersonalTenant(
+      getDb(),
+      user.userId,
+      async (tx) => {
+        c.set("tenantDb", tx);
+        await next();
+        if (c.error) throw c.error;
+      },
+      c.req.path === "/dashboard/snapshot"
+        ? { isolationLevel: "repeatable read", accessMode: "read only" }
+        : undefined,
+    );
+  };
+
+export const requireTenantDb = (c: {
+  get: (key: "tenantDb") => TenantTransaction | undefined;
+}): TenantTransaction => {
+  const db = c.get("tenantDb");
+  if (!db) throw new Error("TENANT_DATABASE_CONTEXT_REQUIRED");
+  return db;
 };
 
 /**

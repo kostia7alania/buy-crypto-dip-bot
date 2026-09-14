@@ -25,7 +25,7 @@ describe("health and version routes", () => {
     expect(await res.json()).toMatchObject({
       state: "starting",
       bot: "not_required",
-      schemaVersion: "0014_bouncy_zuras",
+      schemaVersion: "gate1_tenants_v1",
     });
   });
 

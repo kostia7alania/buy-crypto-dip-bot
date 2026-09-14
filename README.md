@@ -7,17 +7,19 @@ exchange credentials.
 
 ## Start with the current state
 
-- [Project status and release blockers](docs/23_PROJECT_STATUS.md), reviewed 2026-09-12.
+- [Project status and release blockers](docs/23_PROJECT_STATUS.md), reviewed 2026-09-14.
 - [Prioritized backlog and R001-R123 index](tasks/00_MASTER_PLAN.md).
 - [Product model](docs/14_PRODUCT_STRATEGY.md) and [architecture](docs/02_ARCHITECTURE.md).
 - [Cost-first target from main](docs/15_COST_FIRST_SAAS_STRATEGY.md).
 - [Plans and historical evidence](PLANS.md).
 - [Краткое введение на русском](README_FIRST_RU.md).
 
-The local Gate 1 recovery and the newer cost-first code in `origin/main` have
-**different migration and identity histories**. Read the status before
-integrating or deploying. Passing local checks is not a public multi-user
-launch approval. Gate 1 remains NO-GO.
+The recovery and cost-first histories now have guarded forward convergence.
+Personal tenants/RLS, the private dashboard snapshot and immutable release
+flow are integrated with the recovered session/audit/notification controls.
+Read [the research and migration decisions](docs/24_TENANT_INTEGRATION_RESEARCH.md)
+before upgrades. Local verification does not approve a public launch.
+Gate 1 remains NO-GO.
 
 ## Workspace
 

@@ -8,6 +8,8 @@ Current priorities: [master backlog](tasks/00_MASTER_PLAN.md).
 
 ## Current work
 
+- [011: Tenant history convergence](plans/011-tenant-history-convergence.md), researched integration and PostgreSQL/browser proof.
+
 - [010: Interrupted Gate 1 recovery](plans/010-recovery-and-project-status.md), four review fixes and documentation reconciliation.
 - [009: R001-R123 implementation history](plans/009-123-practical-execution.md), local Gate 1 line; not a release verdict.
 - [004: Cost-first multi-tenant edge](plans/004-cost-first-multi-tenant-edge.md), restored remote source plan; edge cutover pending.

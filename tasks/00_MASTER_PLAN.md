@@ -1,8 +1,8 @@
 # Master backlog
 
-Reviewed: 2026-09-12. [Project status](../docs/23_PROJECT_STATUS.md) owns source
-identity, verification and the Gate 1 NO-GO verdict. The restored cost-first
-plan describes remote main; this backlog also accounts for the local recovery.
+Reviewed: 2026-09-14. [Project status](../docs/23_PROJECT_STATUS.md) owns source
+identity, verification and the Gate 1 NO-GO verdict. The September 14 integration and its evidence are recorded in
+[the research](../docs/24_TENANT_INTEGRATION_RESEARCH.md).
 
 ## Next delivery sequence
 
@@ -12,11 +12,11 @@ plan describes remote main; this backlog also accounts for the local recovery.
 | N02 | P1, API/Tenancy | LOCAL_DONE | Remove public strategy-existence oracle. An unsupported symbol has the same response with and without another tenant's row; no exchange fetch. |
 | N03 | P1, Web/Auth | LOCAL_DONE | Clear private Nuxt data and pending writes on identity change; remount account-owned panels. A delayed A response cannot show under B. Browser fixture flow passed. |
 | N04 | P1, Web/Auth | LOCAL_DONE | Reinstall a single Telegram widget after logout; clean its callback; failed logout remains signed in with an actionable error. Browser fixture flow passed. |
-| N05 | P0, Release/DB | PARTIAL | Recovery snapshot preserved on `codex/gate1-recovery-20260912`; source comparison with main `becc46b` recorded. Next: design forward migrations for both starting catalogs. Do not replay two incompatible `0002` migrations. Preserve owners, quarantine and all audit versions. |
-| N06 | P0, API/DB/Web | AFTER_N05 | Port the local session/replay/CSRF, policy, immutable audit, market-data and typed outbox controls onto personal tenants/RLS. Keep main's snapshot refresh and release hardening. Auth, bot, aggregates and pooled DB access use one identity. |
+| N05 | P0, Release/DB | LOCAL_DONE | Both original histories preserved; strict guarded forward convergence and common subsequent migration journal implemented. Real PG18 proves clean/recovery/main catalog equivalence, preservation, refusal and atomicity. Destination ownership decisions remain N08. |
+| N06 | P0, API/DB/Web | LOCAL_DONE | Personal tenants/RLS integrated with opaque sessions, replay/CSRF, allowlist, immutable audit and typed outbox. Owned API and bot/runner mutations use restricted transactions; dashboard uses one private snapshot. Immutable release source integrated. Privileged service credentials and full proof remain N07/N08. |
 | N07 | P0, Verification/Release | PRE_GO | On the integrated committed revision run PostgreSQL 18 clean/upgrade plus complete A/B, failure/restart/concurrency and outbox matrix. Record catalog, commands, reviewer and immutable artifact. This is a prerequisite for GO, not post-GO work. |
 | N08 | P0, Operations | PRE_GO | Verify deployed revision/catalog, trusted forwarding headers, per-service secrets, migration/readiness ordering, backup/restore and rollback. Rehearsal preserves tenant and audit evidence. |
-| N09 | P1, Web/UX | OPEN | Finish actual Telegram login/account-switch/private-start delivery and R121 keyboard, screen-reader, zoom, contrast and mobile checks. Fix the signed-out backtest copy: its API/BFF requires login. Fixture tests are not provider proof. |
+| N09 | P1, Web/UX | OPEN | Finish actual Telegram login/account-switch/private-start delivery and R121 keyboard, screen-reader, zoom, contrast and mobile checks. Signed-out backtest copy corrected; snapshot A/B/late-response, hidden visibility and 401 fixtures pass. Fixture tests are not provider proof. |
 | N10 | P0, Product/Reporting | GATED | Finish R047-R058 decision snapshots, config revision, reservation semantics and truthful reporting. Publish missing-data/freshness/fees/slippage assumptions; add human-readable decision detail. |
 | N11 | P1, Platform/Auth | GATED | Implement cost-first Supabase identity/OIDC/JWT, edge-compatible Hono/BFF, verified Telegram webhook, bounded Cron/Queue and idempotency. Verify paid/free cost signals and exactly one scheduler/bot mode at cutover. No private exchange work. |
 | N12 | P1, Product/Content | OPEN_EXTERNAL | Refresh claims on the actual published revision; complete keyword/content map, privacy QA, real interviews and pricing discovery. Leave tariffs, revenue, SLA and legal conclusions unannounced until supported. |
@@ -35,8 +35,6 @@ old blanket DONE counts and the status list at the end of plan 009.
 - `LOCAL_SOURCE`: implementation exists in local source and its prior record;
   it still needs preservation/review in the integrated result.
 - `PARTIAL`: implementation or documentation exists but acceptance is incomplete.
-- `RECONCILE`: newer main changes the architecture decision; do not apply the
-  old local verdict globally (R013: RLS).
 - `PRE_GO`: required to establish Gate 1 GO. Corrects the old circular
   AFTER_GATE1 labels on R037-R041.
 - `GATED`: blocked by an unproved foundation or its stated dependencies.
@@ -51,7 +49,7 @@ although the present ledger correctly labels local completion as simulation.
 R089/R090/R092 remain partial until source-specific claims and the complete
 first-run journey agree, including authenticated backtests.
 
-Index totals: EXTERNAL 4, GATED 46, LATER 1, LOCAL_SOURCE 50, OPEN 4, PARTIAL 12, PRE_GO 5, RECONCILE 1. Total: 123. These are not release completion percentages.
+Index totals: EXTERNAL 4, GATED 46, LATER 1, LOCAL_SOURCE 51, OPEN 4, PARTIAL 12, PRE_GO 5. Total: 123. These are not release completion percentages.
 
 | Ticket | Priority | Current state | Acceptance item |
 | --- | --- | --- | --- |
@@ -67,7 +65,7 @@ Index totals: EXTERNAL 4, GATED 46, LATER 1, LOCAL_SOURCE 50, OPEN 4, PARTIAL 12
 | R010 | P1 | PARTIAL | Record irreversible legacy-owner decisions |
 | R011 | P0 | LOCAL_SOURCE | Formalize tenant versus system audit scope |
 | R012 | P1 | PARTIAL | Preserve ambiguous audit history during remediation |
-| R013 | P2 | RECONCILE | Evaluate RLS as post-Gate defense in depth |
+| R013 | P2 | LOCAL_SOURCE | Restricted tenant transactions and forced RLS integrated under ADR 009; privileged pool limits documented |
 | R014 | P0 | LOCAL_SOURCE | Tenant-qualify order-to-strategy reads |
 | R015 | P1 | LOCAL_SOURCE | Establish owner-required private-data boundaries |
 | R016 | P2 | GATED | Separate operator inspection from tenant surfaces |

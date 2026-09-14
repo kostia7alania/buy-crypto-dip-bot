@@ -154,6 +154,41 @@ describe("read isolation", () => {
   });
 });
 
+describe("dashboard snapshot isolation", () => {
+  it("returns one private snapshot for each owner without accepting an identity header", async () => {
+    for (const [token, ownId, foreignId] of [
+      [aliceToken, world.alice.userId, world.bob.userId],
+      [bobToken, world.bob.userId, world.alice.userId],
+    ]) {
+      const response = await createApp().request(
+        "/dashboard/snapshot",
+        asUser(token as string, {
+          headers: { "x-dipbot-user-id": foreignId as string },
+        }),
+      );
+      expect(response.status).toBe(200);
+      expect(response.headers.get("cache-control")).toBe("private, no-store");
+      const body = await json<{
+        schemaVersion: number;
+        strategies: OwnedRow[];
+        orders: OwnedRow[];
+        audit: OwnedRow[];
+      }>(response);
+      expect(body.schemaVersion).toBe(1);
+      expect(body.strategies.length).toBeGreaterThan(0);
+      for (const rows of [body.strategies, body.orders, body.audit]) {
+        expect(rows.every((row) => row.userId === ownId)).toBe(true);
+      }
+      expect(JSON.stringify(body)).not.toContain(foreignId);
+    }
+  });
+  it("refuses anonymous snapshots instead of returning an empty portfolio", async () => {
+    const response = await createApp().request("/dashboard/snapshot");
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: "UNAUTHENTICATED" });
+  });
+});
+
 describe("write isolation", () => {
   it("refuses to update another tenant's strategy, and says 404 rather than 403", async () => {
     const res = await createApp().request(

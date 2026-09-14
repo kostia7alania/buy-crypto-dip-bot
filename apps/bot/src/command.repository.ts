@@ -1,5 +1,9 @@
 import { isAllowedSymbol, strategyDefaults } from "@buy-crypto-dip-bot/config";
-import { auditEventRow, schema } from "@buy-crypto-dip-bot/db";
+import {
+  auditEventRow,
+  schema,
+  withPersonalTenant,
+} from "@buy-crypto-dip-bot/db";
 import {
   AUDIT_SCHEMA_VERSION,
   createCorrelationId,
@@ -100,7 +104,7 @@ export const applyOwnedOnboardingStrategy = async (
   if (!isAllowedSymbol(input.symbol, process.env.ALLOWLIST_SYMBOLS)) {
     throw new Error("SYMBOL_NOT_ALLOWED");
   }
-  return db.transaction(async (tx) => {
+  return withPersonalTenant(db, callerId, async (tx) => {
     const configPatch = {
       thresholdPercent: input.thresholdPercent,
       suggestedQuoteAmount: input.amountUsdt,
@@ -189,7 +193,7 @@ export const updateOwnedStrategyConfig = async (
   value: number,
   correlationId: string = createCorrelationId(),
 ): Promise<StrategyMutationOutcome> => {
-  return db.transaction(async (tx) => {
+  return withPersonalTenant(db, callerId, async (tx) => {
     // Lock the row while merging JSON so concurrent edits to different fields
     // cannot overwrite one another with an older config snapshot.
     const [strategy] = await tx
@@ -249,7 +253,7 @@ export const toggleOwnedStrategy = async (
   symbol: string,
   correlationId: string = createCorrelationId(),
 ): Promise<StrategyToggleOutcome> => {
-  return db.transaction(async (tx) => {
+  return withPersonalTenant(db, callerId, async (tx) => {
     const [updated] = await tx
       .update(schema.strategies)
       .set({ enabled: sql<boolean>`not ${schema.strategies.enabled}` })

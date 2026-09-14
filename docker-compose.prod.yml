@@ -1,6 +1,6 @@
 # Production stack for the VPS. Lives at /opt/buy-crypto-dip-bot/docker-compose.yml
 # together with a .env file (see .env.example + POSTGRES_PASSWORD).
-# Deploys are: docker compose pull && docker compose up -d
+# Use the gated Deploy workflow with an immutable DIPBOT_IMAGE digest.
 
 services:
   db:
@@ -19,8 +19,18 @@ services:
       timeout: 5s
       retries: 5
 
+  migrate:
+    image: ${DIPBOT_IMAGE:?set an immutable image digest}
+    command: ["node", "packages/db/scripts/migrate.mjs"]
+    restart: "no"
+    environment:
+      POSTGRES_CONNECTION_STRING: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/dipbot
+    depends_on:
+      db:
+        condition: service_healthy
+
   api:
-    image: ghcr.io/kostia7alania/buy-crypto-dip-bot:latest
+    image: ${DIPBOT_IMAGE:?set an immutable image digest}
     command: ["node", "apps/api/dist/server.mjs"]
     restart: unless-stopped
     environment:
@@ -36,12 +46,20 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      # Liveness only: readiness also requires the bot heartbeat.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
     # Localhost-only: nginx and debugging; never exposed to the internet.
     ports:
       - "127.0.0.1:8787:8787"
 
   bot:
-    image: ghcr.io/kostia7alania/buy-crypto-dip-bot:latest
+    image: ${DIPBOT_IMAGE:?set an immutable image digest}
     command: ["node", "apps/bot/dist/index.mjs"]
     restart: unless-stopped
     environment:
@@ -55,9 +73,13 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      api:
+        condition: service_healthy
 
   web:
-    image: ghcr.io/kostia7alania/buy-crypto-dip-bot:latest
+    image: ${DIPBOT_IMAGE:?set an immutable image digest}
     command: ["node", "apps/web/.output/server/index.mjs"]
     restart: unless-stopped
     environment:
@@ -71,7 +93,8 @@ services:
       NITRO_PORT: "3000"
       NITRO_HOST: 0.0.0.0
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     networks:
       - default
       - proxy
@@ -86,10 +109,12 @@ services:
       - traefik.http.routers.dipbot.entrypoints=websecure
       - traefik.http.routers.dipbot.tls.certresolver=le
       - traefik.http.routers.dipbot.middlewares=dipbot-www
-      # Plain-HTTP router: keeps the site up while Cloudflare still reaches
-      # the origin over :80 (before the 443->2053 Origin Rule is in place).
+      # Plain HTTP always redirects before serving application content.
       - traefik.http.routers.dipbot-http.rule=Host(`buy-crypto-dip-bot.com`) || Host(`www.buy-crypto-dip-bot.com`)
       - traefik.http.routers.dipbot-http.entrypoints=web
+      - traefik.http.routers.dipbot-http.middlewares=dipbot-https
+      - traefik.http.middlewares.dipbot-https.redirectscheme.scheme=https
+      - traefik.http.middlewares.dipbot-https.redirectscheme.permanent=true
       # www -> apex
       - traefik.http.middlewares.dipbot-www.redirectregex.regex=^https://www\.(.*)
       - traefik.http.middlewares.dipbot-www.redirectregex.replacement=https://$$1

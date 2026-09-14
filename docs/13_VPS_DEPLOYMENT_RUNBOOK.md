@@ -1,171 +1,78 @@
-# Production VPS Deployment Runbook
+# Production VPS release runbook
 
-> Recovery notice, 2026-09-12: this checkout and remote `becc46b` have different deployment workflows and database catalogs. Before using any release or rollback command, resolve the source/catalog and Gate 1 prerequisites in [project status](23_PROJECT_STATUS.md). The immutable-image/backup workflow exists in remote main; it has not been integrated here. No deployment was performed by this recovery.
+Updated: 2026-09-14. Source procedure only, not a completed deployment.
+[Project status](23_PROJECT_STATUS.md) remains Gate 1 NO-GO.
 
-How **Buy Crypto Dip Bot** ships to the VPS. The server never builds anything — a 1GB
-box cannot build Nuxt. GitHub Actions builds a single Docker image; the VPS
-only pulls and restarts.
+## Release authority
 
-```
-git push main ──▶ CI (typecheck+lint+test)
-              └─▶ Deploy workflow:
-                    build ──▶ ghcr.io/kostia7alania/buy-crypto-dip-bot:latest + :<sha>
-                    deploy ─▶ ssh VPS: docker compose pull && up -d
-```
+The Deploy workflow runs checks, PostgreSQL 18 contracts and build before
+publishing a commit-tagged, revision-labelled image. Deployment consumes its
+immutable digest, never latest. It requires main, the production environment,
+DEPLOY_ENABLED=true and GATE1_APPROVED=true. Leave the gates closed until the
+integrated proof and destination rehearsal have been reviewed.
 
-- Workflow: `.github/workflows/deploy.yml`
-- Image: single image, three services (api / bot / web) selected by `command:`
-- Server stack: `/opt/buy-crypto-dip-bot/docker-compose.yml` (from `docker-compose.prod.yml`)
-- The GHCR package is public — the VPS pulls anonymously, no `docker login`.
+The server receives compose and scripts/deploy-release.sh from exactly the
+workflow commit SHA. Its local .env stays private. The bootstrap script also
+requires a 40-character REPO_REF and refuses to replace an existing shared
+Traefik/VPN configuration. Bootstrap is a host preparation procedure, not a
+command to run during local source validation.
 
-## 1. SSH deploy key (never deploy as root, never use passwords in CI)
+## Before enabling a release
 
-Generate a dedicated keypair on your machine (NOT the server, and never
-commit it):
+1. Record the current image IDs, source revision, PostgreSQL version and complete
+   migration journals. Inventory unresolved owners and quarantine records.
+2. Restore a fresh destination backup into an isolated database, including the
+   roles needed by the rehearsal. Run the guarded migration and application
+   contracts against the restore. Compare original audit fields, amounts and
+   tenant ownership. A readable pg_restore list is not this rehearsal.
+3. Verify source checks, A/B and restart/delivery proof, proxy/header trust,
+   service secrets, bot heartbeat and exact DRY_RUN allowlist on both services.
+4. Review the maintenance window, backup retention/off-host accessibility and
+   forward-repair/restore decision with the actual destination inventory.
 
-```bash
-ssh-keygen -t ed25519 -f ~/.ssh/dipbot_deploy -N "" -C "gh-actions-deploy"
-```
+Unknown/mixed/modified journals and unjournalled application tables fail
+closed. Unresolved strategy/order ownership needs a reviewed remediation;
+never edit hashes or assign rows to the deploying user to make a migration pass.
 
-- **Public** key (`~/.ssh/dipbot_deploy.pub`) → append to
-  `/home/deploy/.ssh/authorized_keys` on the VPS (the bootstrap script
-  creates the `deploy` user with docker access).
-- **Private** key (`~/.ssh/dipbot_deploy`) → paste into the `VPS_SSH_KEY`
-  GitHub secret (`pbcopy < ~/.ssh/dipbot_deploy` on macOS).
+## Implemented sequence
 
-## 2. GitHub configuration (Settings → Secrets and variables → Actions)
+1. Validate the target SHA/digest and compose, then pull the image.
+2. Save previous compose, private environment and actual container image IDs
+   under .deploy. These files contain sensitive deployment configuration and
+   retain restrictive permissions.
+3. Stop API, bot and web writers. Start/check only PostgreSQL and create a
+   custom-format backup. Check archive readability and retain it.
+4. Run the one-shot migrate service. It uses the same guarded runner as API
+   startup and the documented database CLI.
+5. Install the target compose/digest and start services. API liveness allows
+   bot startup; final /health/ready also checks the bot heartbeat.
+6. Check the web root and HTTP-to-HTTPS redirect. Record successful release
+   metadata. No automatic image pruning removes the previous recovery artifact.
 
-| Kind | Name | Value |
-|---|---|---|
-| Secret | `VPS_HOST` | server IP |
-| Secret | `VPS_USER` | `deploy` |
-| Secret | `VPS_SSH_KEY` | private key from step 1 |
-| Variable | `DEPLOY_ENABLED` | `true` — the safety switch; deploy job is skipped otherwise |
+API and bot share the reviewed symbol policy. An explicitly empty allowlist
+remains empty. Compose fixes execution to DRY_RUN. The web service receives
+neither the bot heartbeat secret nor the Telegram bot token.
 
-No `VPS_PASSWORD`: CI authenticates only with the key. After confirming key
-login works, disable SSH password auth entirely:
+## Failure behavior
 
-```bash
-# /etc/ssh/sshd_config.d/hardening.conf
-PasswordAuthentication no
-PermitRootLogin prohibit-password
-# then: systemctl reload ssh
-```
+Before DDL is attempted, failure can restart the existing containers. After a
+migration attempt, the outcome is treated as potentially committed, including
+client disconnects. Failure leaves application services stopped. Do not start
+an old image against the new catalog just because its tag exists.
 
-Keep `DEPLOY_ENABLED` unset until the server has been bootstrapped (step 3),
-or the deploy job will fail on a missing `/opt/buy-crypto-dip-bot`.
+Choose a reviewed forward repair or a restore based on exact catalog and backup
+evidence. No script restores over the database or deletes audit history
+automatically. The .deploy previous image IDs and backup are inputs to recovery,
+not proof that an old release is schema-compatible.
 
-## 3. One-time server bootstrap
+## Subsequent migrations
 
-```bash
-ssh root@<VPS_IP>
-# docker, swap, ufw, deploy user, Traefik edge proxy, /opt/buy-crypto-dip-bot/.env
-curl -fsSL https://raw.githubusercontent.com/kostia7alania/buy-crypto-dip-bot/main/scripts/vps-bootstrap.sh | bash
+Use the guarded db:migrate command with an explicit POSTGRES_CONNECTION_STRING.
+Only migrations/forward accepts new SQL after convergence. db:generate creates
+custom SQL drafts; do not use automatic diffing against old root snapshots,
+direct drizzle-kit migrate, or schema push. See
+[the migration authority](../packages/db/migrations/README.md).
 
-cd /opt/buy-crypto-dip-bot
-curl -fsSL https://raw.githubusercontent.com/kostia7alania/buy-crypto-dip-bot/main/docker-compose.prod.yml -o docker-compose.yml
-nano .env    # fill TELEGRAM_BOT_TOKEN; optionally set OPERATOR_TELEGRAM_USER_ID
-docker compose up -d
-docker compose ps    # db healthy, api/bot/web running
-curl -s localhost:8787/health
-```
-
-The bootstrap generates strong `POSTGRES_PASSWORD`, `API_KEY`,
-`BOT_HEARTBEAT_SECRET`, and `SESSION_SECRET` values in
-`/opt/buy-crypto-dip-bot/.env` automatically. Postgres and the API are
-reachable only from the docker network / localhost.
-
-The Compose file passes an explicit allowlist of environment variables to
-each process. In particular, `BOT_HEARTBEAT_SECRET` is available only to the
-API and bot; the web BFF receives `API_KEY` but cannot forge bot readiness.
-After updating an older installation, rerun `scripts/vps-bootstrap.sh` once to
-generate a missing heartbeat secret before starting the new Compose stack.
-
-### Edge proxy: Traefik (all projects on this VPS)
-
-Traefik (`/opt/traefik`, from `infra/traefik/docker-compose.yml`) owns ports
-80, 443 and 2053 (fallback) and terminates TLS with automatic Let's Encrypt
-certificates. Host nginx is retired. Keep Cloudflare SSL mode **Full**.
-
-Port 443 is shared with the host's x-ui VPN (xray, VLESS+Reality): xray
-listens on 8443 (firewalled to docker subnets only), and `dynamic.yml`
-routes the Reality SNI plus any unknown SNI to it via L4 TLS passthrough.
-VPN clients keep connecting to :443 — their configs never changed. If you
-edit the x-ui inbound, keep its port at 8443.
-
-Adding the next subdomain/SaaS project needs zero central config — in that
-project's compose:
-
-```yaml
-services:
-  myapp:
-    networks: [default, proxy]
-    labels:
-      - traefik.enable=true
-      - traefik.docker.network=proxy
-      - traefik.http.routers.myapp.rule=Host(`dev.buy-crypto-dip-bot.com`)
-      - traefik.http.routers.myapp.entrypoints=websecure
-      - traefik.http.routers.myapp.tls.certresolver=le
-      - traefik.http.services.myapp.loadbalancer.server.port=3000
-networks:
-  proxy:
-    external: true
-```
-
-…plus a proxied A/CNAME record for the subdomain in Cloudflare.
-
-## 4. Every deploy after that
-
-`git push` to `main`. That is the whole procedure. Watch it in the repo's
-Actions tab.
-
-Manual redeploy: Actions → Deploy → Run workflow, or on the server
-`cd /opt/buy-crypto-dip-bot && docker compose pull && docker compose up -d`.
-
-## 5. Rollback
-
-```bash
-ssh root@<VPS_IP>
-cd /opt/buy-crypto-dip-bot
-# pin the image to the previous commit sha shown in the Actions history
-sed -i 's|buy-crypto-dip-bot:latest|buy-crypto-dip-bot:<previous_sha>|' docker-compose.yml
-docker compose up -d
-```
-
-Revert the pin at the next normal deploy.
-
-## 6. Migrating off the legacy PM2 deployment
-
-The first deployments ran from `/var/www/buy-crypto-dip-bot` under PM2 with a
-standalone `dipbot-db` container. To switch a box that still runs it:
-
-```bash
-~/.local/share/fnm/node-versions/v26.4.0/installation/bin/pm2 delete all
-docker stop dipbot-db      # keep as backup; volume buy-crypto-dip-bot_pgdata stays
-# then follow step 3
-```
-
-## 7. Domain & TLS (when a domain is pointed at the VPS)
-
-```bash
-apt-get install -y certbot python3-certbot-nginx
-certbot --nginx -d <domain>
-```
-
-Then register the domain with @BotFather (`/setdomain`) to enable Telegram
-Login on the dashboard. Prefer a non-.ru TLD; put DNS behind Cloudflare to
-hide the origin IP.
-
-## 8. Security checklist
-
-- [ ] `API_KEY` set in `/opt/buy-crypto-dip-bot/.env` (bootstrap does this)
-- [ ] `BOT_HEARTBEAT_SECRET` is at least 32 characters and is scoped only to
-      the API and bot containers (bootstrap and Compose do this)
-- [ ] `docker compose config` shows no `BOT_HEARTBEAT_SECRET` or
-      `TELEGRAM_BOT_TOKEN` under the `web` service
-- [ ] Rotate the VPS root password after sharing it anywhere; CI never uses it
-- [ ] SSH password auth disabled once key login is confirmed (step 1)
-- [ ] `ufw status` → only 22/80/443 (+ your own services) allowed
-- [ ] Postgres is NOT published on a host port (`docker compose ps` shows no 5432 mapping)
-- [ ] `.env` files are chmod 600 and never committed
-- [ ] The repo is public: never put real tokens in code, compose files, or workflows — only in GH secrets and the server `.env`
+No VPS, provider, repository variable or production configuration was changed
+by the September 14 implementation. Shell/compose and isolated fixture checks
+are narrower than a deployment/restore rehearsal.

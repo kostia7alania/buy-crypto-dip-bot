@@ -20,6 +20,8 @@ const loginFailed = ref(false);
 const logoutFailed = ref(false);
 const changingSession = ref(false);
 
+// The dashboard refresh owner cancels and clears its snapshot on identity changes.
+// Clearing that key here would cancel the new account's initial request.
 const clearPrivateData = () => {
   clearNuxtData([
     "strategies",

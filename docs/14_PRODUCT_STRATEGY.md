@@ -1,6 +1,6 @@
 # Product model and delivery strategy
 
-Reviewed: 2026-09-12. Source scope: [project status](23_PROJECT_STATUS.md).
+Reviewed: 2026-09-14. Source scope: [project status](23_PROJECT_STATUS.md).
 
 ## Product today
 
@@ -38,9 +38,9 @@ leverage, meme coins or a strategy marketplace to this MVP.
 
 ## Delivery order
 
-1. Finish the interrupted local safety fixes and preserve their evidence.
-2. Reconcile the newer personal-tenant/RLS implementation with the local
-   session, immutable audit, market-data and notification hardening.
+1. Completed locally: recovered safety fixes and preserved their evidence.
+2. Completed locally: converge personal tenants/RLS with recovery sessions,
+   immutable audit, market policy, notification hardening and dashboard snapshot.
 3. Prove the resulting revision and catalog, browser identity transitions,
    operations and deployment readiness. Gate 1 must have one explicit verdict.
 4. Implement the cost-first runtime in bounded slices and verify a single

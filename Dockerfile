@@ -32,7 +32,7 @@ COPY --from=build /repo/apps/api/dist apps/api/dist
 COPY --from=build /repo/apps/bot/dist apps/bot/dist
 # Nuxt output is self-contained (nitro bundles its deps)
 COPY --from=build /repo/apps/web/.output apps/web/.output
-# Drizzle migrations, applied by the API on startup
+# Guarded migrations, applied by the one-shot service and checked at API startup
 COPY --from=build /repo/packages/db/migrations /app/migrations
 ENV DB_MIGRATIONS_DIR=/app/migrations
 

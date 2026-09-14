@@ -3,6 +3,7 @@ import {
   auditEventRow,
   type createPostgresConnection,
   schema,
+  withPersonalTenant,
 } from "@buy-crypto-dip-bot/db";
 import { AUDIT_SCHEMA_VERSION } from "@buy-crypto-dip-bot/shared-types";
 import { and, eq, inArray, isNull, lte, or } from "drizzle-orm";
@@ -20,14 +21,22 @@ export const claimDueDryRunOrder = async (
   orderId: string,
   correlationId: string,
   now: Date = new Date(),
-) =>
-  db.transaction(async (tx) => {
+) => {
+  // Internal scheduler discovery is privileged; the claim itself is owner-scoped.
+  const [owner] = await db
+    .select({ userId: schema.orders.userId })
+    .from(schema.orders)
+    .where(eq(schema.orders.id, orderId))
+    .limit(1);
+  if (!owner) return null;
+  return withPersonalTenant(db, owner.userId, async (tx) => {
     const [claimed] = await tx
       .update(schema.orders)
       .set({ status: "COMPLETED" })
       .where(
         and(
           eq(schema.orders.id, orderId),
+          eq(schema.orders.userId, owner.userId),
           eq(schema.orders.status, "PENDING"),
           eq(schema.orders.mode, "DRY_RUN"),
           inArray(
@@ -59,3 +68,4 @@ export const claimDueDryRunOrder = async (
     );
     return claimed;
   });
+};

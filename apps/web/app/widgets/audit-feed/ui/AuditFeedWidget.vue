@@ -1,54 +1,23 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
-import { fetchAuditLogs } from "~/entities/audit";
+import { computed } from "vue";
+import type { AuditLog } from "~/entities/audit";
 import { isUnauthenticated } from "~/shared/lib/http-error";
 
-const emit = defineEmits<{
-  announce: [message: string];
+const props = defineProps<{
+  audit?: readonly AuditLog[];
+  error?: unknown;
+  status: "idle" | "pending" | "success" | "error";
+  updatedAt?: string;
 }>();
+const emit = defineEmits<{ refresh: [] }>();
 
-const lastUpdatedAt = ref<Date | null>(null);
-const loadAudit = async () => {
-  const result = await fetchAuditLogs();
-  lastUpdatedAt.value = new Date();
-  return result;
-};
-
-const {
-  data: audit,
-  error,
-  status,
-  refresh: refreshAudit,
-} = await useAsyncData("audit", loadAudit);
-
-const visibleAudit = computed(() => (error.value ? [] : (audit.value ?? [])));
 const errorMessage = computed(() =>
-  isUnauthenticated(error.value)
+  isUnauthenticated(props.error)
     ? "Your session is no longer authorized. Sign in again before loading private decision evidence."
     : "Decision evidence could not be loaded. No empty or successful state is inferred.",
 );
-
-const retryAudit = async () => {
-  await refreshAudit();
-  emit(
-    "announce",
-    error.value
-      ? "Decision evidence is still unavailable."
-      : `${audit.value?.length ?? 0} decision records loaded.`,
-  );
-};
-
-let pollingInterval: ReturnType<typeof setInterval> | null = null;
-
-onMounted(() => {
-  pollingInterval = setInterval(() => {
-    refreshAudit();
-  }, 5000);
-});
-
-onUnmounted(() => {
-  if (pollingInterval) clearInterval(pollingInterval);
-});
+const visibleAudit = computed(() => (props.error ? [] : (props.audit ?? [])));
+const retryAudit = () => emit("refresh");
 </script>
 
 <template>
@@ -58,17 +27,17 @@ onUnmounted(() => {
       class="audit-feed__scroller"
       role="region"
       aria-labelledby="audit-feed-title"
-      :aria-busy="status === 'pending'"
+      :aria-busy="props.status === 'pending'"
       tabindex="0"
     >
-      <p v-if="status === 'pending' && !audit" class="audit-feed__empty">
+      <p v-if="props.status === 'pending' && !props.audit" class="audit-feed__empty">
         Loading decision evidence…
       </p>
-      <div v-else-if="error" class="audit-feed__empty audit-feed__error">
+      <div v-else-if="props.error" class="audit-feed__empty audit-feed__error">
         <p>{{ errorMessage }}</p>
         <UiButton size="compact" @click="retryAudit">Retry decisions</UiButton>
       </div>
-      <p v-else-if="!audit || audit.length === 0" class="audit-feed__empty">
+      <p v-else-if="!props.audit || props.audit.length === 0" class="audit-feed__empty">
         No decision records exist for this account yet.
       </p>
       <ol v-else class="audit-feed__list" role="list">
@@ -91,8 +60,8 @@ onUnmounted(() => {
     <p class="audit-feed__freshness">
       Last successful refresh:
       <NuxtTime
-        v-if="lastUpdatedAt"
-        :datetime="lastUpdatedAt"
+        v-if="props.updatedAt"
+        :datetime="props.updatedAt"
         hour="2-digit"
         minute="2-digit"
         second="2-digit"
