@@ -320,7 +320,8 @@ after a fresh reload. Health/bootstrap expectations now name the converged
 catalog. BFF tests use the Nuxt auto-import boundary without adding a direct h3
 dependency. A PGlite test hit its existing 5-second timeout during concurrent
 work; the isolated rerun and final full command passed without weakening it.
-Corepack/typecheck processes also stalled after a long desktop pause. They were
+Corepack/typecheck processes also stalled during this run. The cause was not
+established. They were
 stopped and the final run used cached pnpm with network auto-update disabled and
 Node compile cache disabled. No dependency or account setting was changed.
 
@@ -338,3 +339,102 @@ open. Privileged auth/discovery/delivery paths are documented; this is not a
 claim that the entire process runs with a non-privileged credential. The generic
 main event/outbox ledger is preserved but not activated as a second dispatcher.
 Reservation/config/market-snapshot work remains N10. No push or deploy occurred.
+
+
+### Immutable integration checkpoint
+
+- Runtime and research checkpoint: `846de6a8db3f621644a488b66515a1fc51736ae2`.
+- Integrated source with both parents: `5ee012d1d4271333c24f4b195633a28cdd0cb71f`.
+- Parents: recovery implementation checkpoint and main
+  `becc46bb3b957c484324dbc3c517d5db7762be97`.
+- Merge resolution retained the already tested runtime tree. The additional
+  main change was its hybrid-rendering ADR, updated to the implemented state.
+  Verification: `git diff --quiet 846de6a 5ee012d -- apps packages scripts
+  package.json Dockerfile docker-compose.prod.yml .github .env.example
+  .env.production.example` passed. Main is an ancestor of the integrated source.
+- Superseded header-principal modules and blanket quarantine reassignment were
+  not reintroduced. Their functional replacements are opaque sessions,
+  restricted personal transactions and explicit ownership preflight. Main's
+  original SQL remains under histories/cost-first, not as a second root 0002.
+- Final documentation-only checkpoint follows this source. No runtime files
+  changed after the verified source checkpoint.
+
+Touched files in the implementation checkpoint (relative to repository root):
+
+- `.env.example`
+- `.env.production.example`
+- `.github/workflows/deploy.yml`
+- `Dockerfile`
+- `PLANS.md`
+- `README.md`
+- `README_FIRST_RU.md`
+- `adr/ADR_008_POST_GATE_RLS.md`
+- `adr/ADR_009_TENANT_HISTORY_CONVERGENCE.md`
+- `apps/api/src/app.ts`
+- `apps/api/src/bootstrap.test.ts`
+- `apps/api/src/modules/audit/audit.route.ts`
+- `apps/api/src/modules/auth/principal.middleware.ts`
+- `apps/api/src/modules/auth/tenant-isolation.test.ts`
+- `apps/api/src/modules/dashboard/dashboard.route.ts`
+- `apps/api/src/modules/health/health.route.test.ts`
+- `apps/api/src/modules/orders/orders.route.ts`
+- `apps/api/src/modules/performance/performance.route.ts`
+- `apps/api/src/modules/pnl/pnl.route.ts`
+- `apps/api/src/modules/runner/order.repository.ts`
+- `apps/api/src/modules/runner/runner.service.ts`
+- `apps/api/src/modules/strategies/strategies.route.ts`
+- `apps/api/src/runtime-readiness.ts`
+- `apps/bot/src/command.repository.ts`
+- `apps/bot/src/order.repository.ts`
+- `apps/web/app/entities/dashboard-snapshot/api.ts`
+- `apps/web/app/entities/dashboard-snapshot/index.ts`
+- `apps/web/app/entities/dashboard-snapshot/types.ts`
+- `apps/web/app/features/dashboard-refresh/index.ts`
+- `apps/web/app/features/dashboard-refresh/model/use-dashboard-refresh.ts`
+- `apps/web/app/pages/dashboard/index.vue`
+- `apps/web/app/widgets/audit-feed/ui/AuditFeedWidget.vue`
+- `apps/web/app/widgets/order-ledger/ui/OrderLedgerWidget.vue`
+- `apps/web/app/widgets/performance/ui/PerformanceWidget.vue`
+- `apps/web/app/widgets/pnl/ui/PnlWidget.vue`
+- `apps/web/app/widgets/strategy-list/ui/StrategyListWidget.vue`
+- `apps/web/app/widgets/telegram-login/ui/TelegramLoginWidget.vue`
+- `apps/web/nuxt.config.ts`
+- `apps/web/server/api/dashboard/snapshot.get.ts`
+- `apps/web/server/api/dashboard/snapshot.test.ts`
+- `docker-compose.prod.yml`
+- `docs/02_ARCHITECTURE.md`
+- `docs/13_VPS_DEPLOYMENT_RUNBOOK.md`
+- `docs/14_PRODUCT_STRATEGY.md`
+- `docs/20_GATE1_IMPLEMENTATION_EVIDENCE.md`
+- `docs/23_PROJECT_STATUS.md`
+- `docs/24_TENANT_INTEGRATION_RESEARCH.md`
+- `package.json`
+- `packages/db/drizzle.config.ts`
+- `packages/db/migrations/README.md`
+- `packages/db/migrations/convergence/cost-first-to-recovery.sql`
+- `packages/db/migrations/convergence/tenant-foundation.sql`
+- `packages/db/migrations/forward/meta/_journal.json`
+- `packages/db/migrations/histories/cost-first/0000_violet_gargoyle.sql`
+- `packages/db/migrations/histories/cost-first/0001_glorious_kulan_gath.sql`
+- `packages/db/migrations/histories/cost-first/0002_cost_first_tenancy.sql`
+- `packages/db/migrations/histories/cost-first/meta/_journal.json`
+- `packages/db/package.json`
+- `packages/db/scripts/migrate.mjs`
+- `packages/db/src/adapters.ts`
+- `packages/db/src/convergence.test.ts`
+- `packages/db/src/index.ts`
+- `packages/db/src/migration-history.ts`
+- `packages/db/src/schema.ts`
+- `packages/db/src/tenant-context.ts`
+- `packages/db/src/testing-db.ts`
+- `plans/011-tenant-history-convergence.md`
+- `scripts/deploy-release.sh`
+- `scripts/deploy-release.test.mjs`
+- `scripts/vps-bootstrap.sh`
+- `tasks/00_MASTER_PLAN.md`
+
+Merge additionally updates `adr/ADR_003_NUXT_4_SSR_FOR_SEO.md`.
+
+Cleanup: the created browser tab, Nuxt process group, stalled test process and
+temporary PostgreSQL container were stopped. No persistent database volume was
+created or removed. No test overrides remain in an open browser tab.

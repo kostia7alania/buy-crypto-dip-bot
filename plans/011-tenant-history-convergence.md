@@ -1,6 +1,6 @@
 # ExecPlan 011: Converge the two PostgreSQL histories
 
-Started: 2026-09-14. Status: implementation and verification complete; source checkpoint pending.
+Started: 2026-09-14. Status: complete for the scoped local integration.
 
 ## Objective
 
@@ -56,3 +56,8 @@ Generic ledger/evaluation columns and historical rows are preserved without
 activating a competing dispatcher. Platform and reservation work remain scoped
 separately in N10/N11. The separate privileged credential is still a pre-GO
 requirement, not claimed complete by transaction-local role switching.
+
+Source checkpoint: `846de6a8db3f621644a488b66515a1fc51736ae2`.
+Main ancestry reconciled in `5ee012d1d4271333c24f4b195633a28cdd0cb71f`. No runtime files changed
+between the verified checkpoint and this merge; the merge also retains main's
+updated hybrid-rendering ADR. External Gate 1 acceptance remains in N07-N12.

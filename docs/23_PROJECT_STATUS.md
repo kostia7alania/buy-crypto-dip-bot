@@ -8,7 +8,8 @@ remain unapproved.**
 
 ## Current source
 
-Integration branch: `codex/tenant-integration-20260914`. It combines recovery
+Integration source: `5ee012d1d4271333c24f4b195633a28cdd0cb71f`.
+Branch: `codex/tenant-integration-20260914`. It combines recovery
 `d183fa2` with the relevant cost-first foundation from main
 `becc46bb3b957c484324dbc3c517d5db7762be97`, fetched again on 2026-09-14.
 Recovery is preserved on `codex/gate1-recovery-20260912`; its code snapshot is
