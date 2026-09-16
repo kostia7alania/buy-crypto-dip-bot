@@ -6,7 +6,8 @@
     "dev": "node --import tsx --env-file=../../.env --watch src/server.ts",
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "test:postgres18": "REQUIRE_POSTGRES18_TEST=1 vitest run src/modules/runner/reservation.postgres18.test.ts"
   },
   "dependencies": {
     "@buy-crypto-dip-bot/config": "workspace:*",

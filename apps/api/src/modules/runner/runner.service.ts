@@ -11,12 +11,10 @@ import {
   withPersonalTenant,
 } from "@buy-crypto-dip-bot/db";
 import { createBybitPublicClient } from "@buy-crypto-dip-bot/exchange-bybit";
-import { evaluateRisk } from "@buy-crypto-dip-bot/risk-engine";
 import {
   AUDIT_SCHEMA_VERSION,
   createCorrelationId,
 } from "@buy-crypto-dip-bot/shared-types";
-import { evaluateDipStrategy } from "@buy-crypto-dip-bot/strategy-engine";
 import { and, eq, gte, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import { logApiError, logApiEvent } from "../../operational-log.js";
 import { deleteExpiredSessions } from "../auth/session.repository.js";
@@ -39,6 +37,7 @@ import {
 import { computePnlReport } from "../pnl/pnl.route.js";
 import { getCountdownSecondsLeft } from "./countdown.js";
 import { claimDueDryRunOrder } from "./order.repository.js";
+import { reserveDryRunOrder } from "./reservation.repository.js";
 import { createSingleFlightTask } from "./single-flight.js";
 
 let tickIntervalId: NodeJS.Timeout | null = null;
@@ -72,14 +71,6 @@ export const getRunnerStatus = () => ({
 });
 
 type Db = ReturnType<typeof createPostgresConnection>["db"];
-
-interface StrategyConfigJson {
-  thresholdPercent: number;
-  maxDailySpendUsdt: number;
-  maxWeeklySpendUsdt: number;
-  cooldownMinutes: number;
-  suggestedQuoteAmount: number;
-}
 
 // Seed default strategies for the single operator of a self-hosted install.
 //
@@ -478,165 +469,33 @@ export async function startRunner(options: StartRunnerOptions) {
           // every write below owner-typed rather than owner-optional.
           const ownerId = strategy.userId;
           if (!ownerId) continue;
-
-          const config = strategy.config as unknown as StrategyConfigJson;
-          const strategyContract = {
-            id: strategy.id,
-            name: strategy.name,
-            symbol: strategy.symbol,
-            mode: (strategy.mode === "LIVE" ? "LIVE" : "DRY_RUN") as
-              | "LIVE"
-              | "DRY_RUN",
-            maxDailySpendUsdt: config.maxDailySpendUsdt,
-            maxWeeklySpendUsdt: config.maxWeeklySpendUsdt,
-            cooldownMinutes: config.cooldownMinutes,
-          };
-
-          // 1. Evaluate strategy
-          const signal = evaluateDipStrategy({
-            strategy: strategyContract,
-            currentPrice: ticker.lastPrice,
-            high24h: ticker.high24h ?? ticker.lastPrice,
-            thresholdPercent: config.thresholdPercent,
-            suggestedQuoteAmount: config.suggestedQuoteAmount,
-            now: new Date().toISOString(),
+          const executeAt = new Date(
+            Date.now() + orderExecutionDelaySeconds * 1000,
+          );
+          const result = await reserveDryRunOrder(db, {
+            userId: ownerId,
+            strategyId: strategy.id,
+            ticker,
+            executeAt,
+            correlationId,
           });
 
-          // If no signal, log and skip
-          if (signal.type === "NO_SIGNAL") {
-            logApiEvent("RUNNER_NO_SIGNAL");
+          if (result.outcome === "SKIPPED") {
+            const event = {
+              NOT_ACTIVE: "RUNNER_INACTIVE_STRATEGY_SKIPPED",
+              INVALID_CONFIG: "RUNNER_INVALID_STRATEGY_CONFIG_SKIPPED",
+              NO_SIGNAL: "RUNNER_NO_SIGNAL",
+              PENDING: "RUNNER_PENDING_ORDER_SKIPPED",
+              DUPLICATE: "RUNNER_DUPLICATE_EVALUATION_SKIPPED",
+              COOLDOWN: "RUNNER_COOLDOWN_SKIPPED",
+            }[result.reason];
+            logApiEvent(event);
             continue;
           }
 
-          // 2. Fetch risk boundaries (spent USDT in last 24h and last 7 days)
-          const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-          const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-
-          const dailySpentResult = await db
-            .select({
-              sum: sql<string>`sum(cast(${schema.orders.quoteAmount} as numeric))`,
-            })
-            .from(schema.orders)
-            .where(
-              and(
-                // Owner as well as strategy: the strategy id alone would be
-                // enough today, but a spend cap is the last thing that should
-                // depend on a single id being right.
-                eq(schema.orders.userId, ownerId),
-                eq(schema.orders.strategyId, strategy.id),
-                eq(schema.orders.status, "COMPLETED"),
-                gte(schema.orders.createdAt, oneDayAgo),
-              ),
-            );
-
-          const weeklySpentResult = await db
-            .select({
-              sum: sql<string>`sum(cast(${schema.orders.quoteAmount} as numeric))`,
-            })
-            .from(schema.orders)
-            .where(
-              and(
-                eq(schema.orders.userId, ownerId),
-                eq(schema.orders.strategyId, strategy.id),
-                eq(schema.orders.status, "COMPLETED"),
-                gte(schema.orders.createdAt, oneWeekAgo),
-              ),
-            );
-
-          const dailySpentUsdt = Number(dailySpentResult[0]?.sum ?? "0");
-          const weeklySpentUsdt = Number(weeklySpentResult[0]?.sum ?? "0");
-
-          // 3. Check for cooldown to avoid double-buying in the same dip.
-          // PENDING orders count too — otherwise a second signal could
-          // schedule a duplicate while the first is still counting down.
-          const lastOrder = await db
-            .select()
-            .from(schema.orders)
-            .where(
-              and(
-                eq(schema.orders.userId, ownerId),
-                eq(schema.orders.strategyId, strategy.id),
-                or(
-                  eq(schema.orders.status, "COMPLETED"),
-                  eq(schema.orders.status, "PENDING"),
-                ),
-              ),
-            )
-            .orderBy(sql`${schema.orders.createdAt} DESC`)
-            .limit(1);
-
-          const [lastOrderRow] = lastOrder;
-          if (lastOrderRow) {
-            if (lastOrderRow.status === "PENDING") {
-              logApiEvent("RUNNER_PENDING_ORDER_SKIPPED");
-              continue;
-            }
-            const lastOrderTime = new Date(lastOrderRow.createdAt).getTime();
-            const minutesSinceLastOrder =
-              (Date.now() - lastOrderTime) / (60 * 1000);
-            if (minutesSinceLastOrder < config.cooldownMinutes) {
-              logApiEvent("RUNNER_COOLDOWN_SKIPPED");
-              continue;
-            }
-          }
-
-          // 4. Run through RiskGuard
-          const decision = evaluateRisk(signal, strategyContract, {
-            liveTradingEnabled: false, // always false for dry-run only safety
-            allowedSymbols: getAllowedSymbols(process.env.ALLOWLIST_SYMBOLS),
-            dailySpentUsdt,
-            weeklySpentUsdt,
-          });
-
-          if (decision.status === "REJECTED") {
+          if (result.outcome === "REJECTED") {
             logApiEvent("RISK_DECISION_REJECTED", "WARN", correlationId);
-
-            // Cooldown/Throttle RiskGuard alerts to Telegram (once per 1 hour per strategy/reason combination)
-            const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-            const recentAlerts = await db
-              .select()
-              .from(schema.auditEvents)
-              .where(
-                and(
-                  eq(schema.auditEvents.userId, ownerId),
-                  eq(schema.auditEvents.entityType, "strategy"),
-                  eq(schema.auditEvents.entityId, strategy.id),
-                  eq(schema.auditEvents.action, "RISK_DECISION_REJECTED"),
-                  gte(schema.auditEvents.createdAt, oneHourAgo),
-                ),
-              );
-
-            const hasRecentSimilarAlert = recentAlerts.some((alert) => {
-              const payload = alert.payload as { reasonCodes?: string[] };
-              const prevReasons = payload.reasonCodes;
-              if (!prevReasons) return false;
-              return (
-                prevReasons.length === decision.reasonCodes.length &&
-                prevReasons.every((r) => decision.reasonCodes.includes(r))
-              );
-            });
-
-            // Save Audit Event
-            await db.insert(schema.auditEvents).values(
-              auditEventRow({
-                schemaVersion: AUDIT_SCHEMA_VERSION,
-                type: "RISK_DECISION_REJECTED",
-                scope: "USER",
-                userId: ownerId,
-                actor: { kind: "SYSTEM", channel: "RUNNER" },
-                reasonCode: "RISK_POLICY_REJECTED",
-                correlationId,
-                subject: { type: "STRATEGY", id: strategy.id },
-                payloadClass: "TENANT_FINANCIAL",
-                payload: {
-                  mode: "DRY_RUN",
-                  policyVersion: "RISK_V1",
-                  reasonCodes: decision.reasonCodes,
-                },
-              }),
-            );
-
-            if (!hasRecentSimilarAlert) {
+            if (result.shouldNotify) {
               if (strategy.ownerChatId) {
                 enqueueNotification(db, {
                   userId: ownerId,
@@ -646,10 +505,10 @@ export async function startRunner(options: StartRunnerOptions) {
                     version: TELEGRAM_TEMPLATE_VERSION,
                     key: "RISK_REJECTED",
                     inputs: {
-                      strategyName: strategy.name,
-                      symbol: strategy.symbol,
+                      strategyName: result.strategy.name,
+                      symbol: result.strategy.symbol,
                       price: ticker.lastPrice,
-                      reasonCodes: decision.reasonCodes,
+                      reasonCodes: result.reasonCodes,
                     },
                   },
                 }).catch((err) =>
@@ -665,76 +524,15 @@ export async function startRunner(options: StartRunnerOptions) {
             }
             continue;
           }
-
-          // 5. Schedule a PENDING order; processDueOrders executes it once
-          // execute_at passes, even across restarts. The reservation and its
-          // approval evidence commit together.
-          const executeAt = new Date(
-            Date.now() + orderExecutionDelaySeconds * 1000,
-          );
-          const order = await withPersonalTenant(db, ownerId, async (tx) => {
-            const [inserted] = await tx
-              .insert(schema.orders)
-              .values({
-                userId: ownerId,
-                strategyId: strategy.id,
-                symbol: strategy.symbol,
-                mode: strategy.mode,
-                side: "BUY",
-                quoteAmount: String(config.suggestedQuoteAmount),
-                price: String(ticker.lastPrice),
-                status: "PENDING",
-                executeAt,
-              })
-              .onConflictDoNothing()
-              .returning();
-
-            await tx.insert(schema.auditEvents).values(
-              inserted
-                ? auditEventRow({
-                    schemaVersion: AUDIT_SCHEMA_VERSION,
-                    type: "RISK_DECISION_APPROVED",
-                    scope: "USER",
-                    userId: ownerId,
-                    actor: { kind: "SYSTEM", channel: "RUNNER" },
-                    reasonCode: "RISK_POLICY_APPROVED",
-                    correlationId,
-                    subject: { type: "STRATEGY", id: strategy.id },
-                    payloadClass: "TENANT_FINANCIAL",
-                    payload: {
-                      mode: "DRY_RUN",
-                      policyVersion: "RISK_V1",
-                      reasonCodes: [],
-                      orderId: inserted.id,
-                    },
-                  })
-                : auditEventRow({
-                    schemaVersion: AUDIT_SCHEMA_VERSION,
-                    type: "PENDING_ORDER_DUPLICATE_SUPPRESSED",
-                    scope: "USER",
-                    userId: ownerId,
-                    actor: { kind: "SYSTEM", channel: "RUNNER" },
-                    reasonCode: "EXISTING_PENDING_ORDER",
-                    correlationId,
-                    subject: { type: "STRATEGY", id: strategy.id },
-                    payloadClass: "OPERATIONAL",
-                    payload: { mode: "DRY_RUN" },
-                  }),
-            );
-            return inserted ?? null;
-          });
-
-          if (!order) {
-            continue;
-          }
+          const { order, config, strategy: reservedStrategy } = result;
           const templateFor = (
             secondsLeft: number,
           ): Extract<TelegramTemplateV1, { key: "ORDER_PENDING" }> => ({
             version: TELEGRAM_TEMPLATE_VERSION,
             key: "ORDER_PENDING",
             inputs: {
-              strategyName: strategy.name,
-              symbol: strategy.symbol,
+              strategyName: reservedStrategy.name,
+              symbol: reservedStrategy.symbol,
               price: ticker.lastPrice,
               quoteAmount: config.suggestedQuoteAmount,
               secondsLeft,

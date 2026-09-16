@@ -41,6 +41,14 @@ const statusOf = async (orderId: string) => {
   return row?.status;
 };
 
+const reservationStatusOf = async (orderId: string) => {
+  const [row] = await harness.db
+    .select({ status: schema.orderReservations.status })
+    .from(schema.orderReservations)
+    .where(eq(schema.orderReservations.orderId, orderId));
+  return row?.status;
+};
+
 describe("claimOwnedPendingOrder", () => {
   it("blocks buy-now for an unsupported legacy pair while preserving cancellation", async () => {
     await harness.db
@@ -67,6 +75,9 @@ describe("claimOwnedPendingOrder", () => {
       ).outcome,
     ).toBe("CLAIMED");
     expect(await statusOf(world.alice.pendingOrderId)).toBe("CANCELLED");
+    expect(await reservationStatusOf(world.alice.pendingOrderId)).toBe(
+      "RELEASED",
+    );
     const events = await harness.db
       .select()
       .from(schema.auditEvents)
@@ -89,6 +100,9 @@ describe("claimOwnedPendingOrder", () => {
 
     expect(result.outcome).toBe("CLAIMED");
     expect(await statusOf(world.alice.pendingOrderId)).toBe("CANCELLED");
+    expect(await reservationStatusOf(world.alice.pendingOrderId)).toBe(
+      "RELEASED",
+    );
     const events = await harness.db
       .select()
       .from(schema.auditEvents)
@@ -109,6 +123,7 @@ describe("claimOwnedPendingOrder", () => {
     expect(result.outcome).toBe("NOT_FOUND");
     // Bob's order must be exactly as it was.
     expect(await statusOf(world.bob.pendingOrderId)).toBe("PENDING");
+    expect(await reservationStatusOf(world.bob.pendingOrderId)).toBe("ACTIVE");
   });
 
   it("reports another tenant's order as NOT_FOUND, never as forbidden", async () => {
@@ -139,6 +154,9 @@ describe("claimOwnedPendingOrder", () => {
 
     expect(result.outcome).toBe("CLAIMED");
     expect(await statusOf(world.alice.pendingOrderId)).toBe("COMPLETED");
+    expect(await reservationStatusOf(world.alice.pendingOrderId)).toBe(
+      "CONSUMED",
+    );
   });
 
   it("refuses a second tap rather than booking the purchase twice", async () => {
@@ -178,6 +196,10 @@ describe("claimOwnedPendingOrder", () => {
 
     const claimed = [a, b].filter((r) => r.outcome === "CLAIMED");
     expect(claimed).toHaveLength(1);
+    const terminalStatus = await statusOf(world.alice.pendingOrderId);
+    expect(await reservationStatusOf(world.alice.pendingOrderId)).toBe(
+      terminalStatus === "COMPLETED" ? "CONSUMED" : "RELEASED",
+    );
   });
 
   it("will not cancel an order that already completed", async () => {

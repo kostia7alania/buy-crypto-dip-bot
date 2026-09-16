@@ -328,16 +328,31 @@ describe("committed migrations", () => {
 
   it("allows only one active pending order per owned strategy", async () => {
     await harness.exec(`
+      BEGIN;
       INSERT INTO users (id, telegram_user_id, telegram_chat_id)
       VALUES ('aaaaaaaa-1111-4111-8111-111111111111', 'pending-test', 'pending-test');
       INSERT INTO strategies (id, user_id, name, symbol, mode, enabled, config)
       VALUES ('bbbbbbbb-1111-4111-8111-111111111111',
               'aaaaaaaa-1111-4111-8111-111111111111',
               'Pending guard', 'BTCUSDT', 'DRY_RUN', true, '{}'::jsonb);
-      INSERT INTO orders (user_id, strategy_id, symbol, mode, side, quote_amount, status)
-      VALUES ('aaaaaaaa-1111-4111-8111-111111111111',
+      INSERT INTO orders (id, user_id, strategy_id, symbol, mode, side, quote_amount, status)
+      VALUES ('cccccccc-1111-4111-8111-111111111111',
+              'aaaaaaaa-1111-4111-8111-111111111111',
               'bbbbbbbb-1111-4111-8111-111111111111',
               'BTCUSDT', 'DRY_RUN', 'BUY', '10', 'PENDING');
+      INSERT INTO order_reservations (
+        user_id, strategy_id, order_id, quote_amount, status, policy_version,
+        config_revision, strategy_config, market_snapshot_key,
+        market_snapshot, risk_snapshot
+      ) VALUES (
+        'aaaaaaaa-1111-4111-8111-111111111111',
+        'bbbbbbbb-1111-4111-8111-111111111111',
+        'cccccccc-1111-4111-8111-111111111111',
+        '10', 'ACTIVE', 'TEST_POLICY', 'test-config-v1', '{}'::jsonb,
+        'test-market:cccccccc-1111-4111-8111-111111111111',
+        '{"source":"TEST"}'::jsonb, '{"source":"TEST"}'::jsonb
+      );
+      COMMIT;
     `);
 
     await expect(
@@ -348,6 +363,26 @@ describe("committed migrations", () => {
                 'BTCUSDT', 'DRY_RUN', 'BUY', '20', 'PENDING');
       `),
     ).rejects.toThrow();
+  });
+
+  it("refuses to commit a pending order without its active reservation", async () => {
+    await harness.exec(`
+      INSERT INTO users (id, telegram_user_id)
+      VALUES ('aaaaaaaa-2222-4222-8222-222222222222', 'reservation-required');
+      INSERT INTO strategies (id, user_id, name, symbol, mode, enabled, config)
+      VALUES ('bbbbbbbb-2222-4222-8222-222222222222',
+              'aaaaaaaa-2222-4222-8222-222222222222',
+              'Reservation required', 'BTCUSDT', 'DRY_RUN', true, '{}'::jsonb);
+    `);
+
+    await expect(
+      harness.exec(`
+        INSERT INTO orders (user_id, strategy_id, symbol, mode, side, quote_amount, status)
+        VALUES ('aaaaaaaa-2222-4222-8222-222222222222',
+                'bbbbbbbb-2222-4222-8222-222222222222',
+                'BTCUSDT', 'DRY_RUN', 'BUY', '20', 'PENDING');
+      `),
+    ).rejects.toThrow("PENDING_ORDER_ACTIVE_RESERVATION_REQUIRED");
   });
 
   it("refuses a session row pointing at a user that does not exist", async () => {

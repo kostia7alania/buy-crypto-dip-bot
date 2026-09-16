@@ -107,20 +107,38 @@ const seedTenant = async (
     .returning();
   if (!completedOrder) throw new Error("failed to seed completed order");
 
-  const [pendingOrder] = await db
-    .insert(schema.orders)
-    .values({
+  const pendingOrder = await db.transaction(async (tx) => {
+    const [order] = await tx
+      .insert(schema.orders)
+      .values({
+        userId: user.id,
+        strategyId: sharedStrategy.id,
+        evaluationKey: `test-evaluation:${user.id}`,
+        symbol: sharedSymbol,
+        mode: "DRY_RUN",
+        side: "BUY",
+        quoteAmount: String(spec.completedSpendUsdt),
+        price: String(spec.completedPrice),
+        status: "PENDING",
+        executeAt: new Date(Date.now() + 60_000),
+      })
+      .returning();
+    if (!order) throw new Error("failed to seed pending order");
+    await tx.insert(schema.orderReservations).values({
       userId: user.id,
       strategyId: sharedStrategy.id,
-      symbol: sharedSymbol,
-      mode: "DRY_RUN",
-      side: "BUY",
+      orderId: order.id,
       quoteAmount: String(spec.completedSpendUsdt),
-      price: String(spec.completedPrice),
-      status: "PENDING",
-      executeAt: new Date(Date.now() + 60_000),
-    })
-    .returning();
+      status: "ACTIVE",
+      policyVersion: "TEST_POLICY",
+      configRevision: "test-config-v1",
+      strategyConfig: { ...STRATEGY_CONFIG },
+      marketSnapshotKey: `test-market:${order.id}`,
+      marketSnapshot: { source: "TEST", symbol: sharedSymbol },
+      riskSnapshot: { source: "TEST" },
+    });
+    return order;
+  });
   if (!pendingOrder) throw new Error("failed to seed pending order");
 
   const [auditEvent] = await db

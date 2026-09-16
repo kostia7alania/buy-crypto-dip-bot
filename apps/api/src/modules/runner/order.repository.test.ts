@@ -14,6 +14,14 @@ const db = () =>
   harness.db as unknown as Parameters<typeof claimDueDryRunOrder>[0];
 const dueAt = () => new Date(Date.now() + 120_000);
 
+const reservationStatus = async () => {
+  const [reservation] = await harness.db
+    .select({ status: schema.orderReservations.status })
+    .from(schema.orderReservations)
+    .where(eq(schema.orderReservations.orderId, world.alice.pendingOrderId));
+  return reservation?.status;
+};
+
 beforeEach(async () => {
   harness = await createTestDb();
   world = await seedTwoTenants(harness.db);
@@ -42,6 +50,7 @@ describe("due-order atomic claim", () => {
       .from(schema.orders)
       .where(eq(schema.orders.id, world.alice.pendingOrderId));
     expect(order?.status).toBe("PENDING");
+    expect(await reservationStatus()).toBe("ACTIVE");
     const events = await harness.db
       .select()
       .from(schema.auditEvents)
@@ -76,6 +85,7 @@ describe("due-order atomic claim", () => {
       .from(schema.orders)
       .where(eq(schema.orders.id, world.alice.pendingOrderId));
     expect(order?.status).toBe("COMPLETED");
+    expect(await reservationStatus()).toBe("CONSUMED");
 
     const events = await harness.db
       .select()
@@ -104,6 +114,7 @@ describe("due-order atomic claim", () => {
         new Date(),
       ),
     ).resolves.toBeNull();
+    expect(await reservationStatus()).toBe("ACTIVE");
   });
 
   it("rolls state back when immutable evidence is rejected", async () => {
@@ -116,5 +127,6 @@ describe("due-order atomic claim", () => {
       .from(schema.orders)
       .where(eq(schema.orders.id, world.alice.pendingOrderId));
     expect(order?.status).toBe("PENDING");
+    expect(await reservationStatus()).toBe("ACTIVE");
   });
 });

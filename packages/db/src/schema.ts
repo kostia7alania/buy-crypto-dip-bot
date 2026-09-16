@@ -374,6 +374,77 @@ export const orders = pgTable(
   ],
 );
 
+export const orderReservations = pgTable(
+  "order_reservations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // Filled by the same owner trigger used by strategies and orders.
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .default(sql`NULL`)
+      .references(() => tenants.id),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    strategyId: uuid("strategy_id").notNull(),
+    orderId: uuid("order_id").notNull(),
+    quoteAmount: numeric("quote_amount").notNull(),
+    status: text("status").notNull().default("ACTIVE"),
+    policyVersion: text("policy_version").notNull(),
+    configRevision: text("config_revision").notNull(),
+    strategyConfig: jsonb("strategy_config")
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    marketSnapshotKey: text("market_snapshot_key").notNull(),
+    marketSnapshot: jsonb("market_snapshot")
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    riskSnapshot: jsonb("risk_snapshot")
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at"),
+  },
+  (table) => [
+    unique("order_reservations_order_unique").on(table.orderId),
+    index("order_reservations_tenant_snapshot_idx").on(
+      table.tenantId,
+      table.marketSnapshotKey,
+    ),
+    index("order_reservations_strategy_status_idx").on(
+      table.userId,
+      table.strategyId,
+      table.status,
+    ),
+    foreignKey({
+      name: "order_reservations_user_strategy_fk",
+      columns: [table.userId, table.strategyId],
+      foreignColumns: [strategies.userId, strategies.id],
+    }),
+    foreignKey({
+      name: "order_reservations_user_order_fk",
+      columns: [table.userId, table.orderId],
+      foreignColumns: [orders.userId, orders.id],
+    }),
+    check(
+      "order_reservations_quote_positive_check",
+      sql`${table.quoteAmount} > 0`,
+    ),
+    check(
+      "order_reservations_status_check",
+      sql`${table.status} IN ('ACTIVE', 'CONSUMED', 'RELEASED')`,
+    ),
+    check(
+      "order_reservations_resolution_check",
+      sql`(${table.status} = 'ACTIVE' AND ${table.resolvedAt} IS NULL) OR (${table.status} <> 'ACTIVE' AND ${table.resolvedAt} IS NOT NULL)`,
+    ),
+    check(
+      "order_reservations_snapshot_shape_check",
+      sql`jsonb_typeof(${table.strategyConfig}) = 'object' AND jsonb_typeof(${table.marketSnapshot}) = 'object' AND jsonb_typeof(${table.riskSnapshot}) = 'object'`,
+    ),
+  ],
+).enableRLS();
+
 export const notificationOutbox = pgTable(
   "notification_outbox",
   {
@@ -518,6 +589,7 @@ export const schema = {
   strategies,
   auditEvents,
   orders,
+  orderReservations,
   notificationOutbox,
 };
 

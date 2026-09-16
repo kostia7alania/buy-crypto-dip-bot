@@ -63,9 +63,14 @@ const requiredInvariants = [
     "runtime DRY_RUN-only config",
   ],
   [
-    "apps/api/src/modules/runner/runner.service.ts",
+    "apps/api/src/modules/runner/reservation.repository.ts",
     /liveTradingEnabled:\s*false/,
-    "runner live-trading hard stop",
+    "reservation live-trading hard stop",
+  ],
+  [
+    "apps/api/src/modules/runner/runner.service.ts",
+    /reserveDryRunOrder/,
+    "runner reservation boundary",
   ],
 ];
 
