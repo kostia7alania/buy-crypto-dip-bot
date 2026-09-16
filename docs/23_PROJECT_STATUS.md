@@ -1,6 +1,6 @@
 # Project status
 
-Reviewed: 2026-09-14. This document owns the current readiness verdict.
+Reviewed: 2026-09-16. This document owns the current readiness verdict.
 Historical plans preserve their original evidence and do not override it.
 
 **Gate 1: NO-GO. Execution: DRY_RUN only. Hosted, edge, Demo and live launch
@@ -8,17 +8,20 @@ remain unapproved.**
 
 ## Current source
 
-Integration source: `5ee012d1d4271333c24f4b195633a28cdd0cb71f`.
-Branch: `codex/tenant-integration-20260914`. It combines recovery
-`d183fa2` with the relevant cost-first foundation from main
-`becc46bb3b957c484324dbc3c517d5db7762be97`, fetched again on 2026-09-14.
-Recovery is preserved on `codex/gate1-recovery-20260912`; its code snapshot is
+Reservation source: `37d986aa72d20f80b319ae6ebff7bfb628793a13`.
+Branch: `codex/remote-continuation-20260916`. It descends from the documented
+tenant-integration checkpoint `3b90246`, whose runtime merge
+`5ee012d1d4271333c24f4b195633a28cdd0cb71f` combines recovery `d183fa2` with
+the relevant cost-first foundation from main
+`becc46bb3b957c484324dbc3c517d5db7762be97`. Recovery remains preserved on
+`codex/gate1-recovery-20260912`; its code snapshot is
 `31212e159d8da7b5ccebb52b57f5b794db156ec2`.
 
 The interrupted work was located in task "Составить и выполнить 20 задач",
 ID `019fb904-e09c-7672-acae-ad417f4a95ae`. Its four outstanding review fixes were
-recovered on September 12. The September 14 integration preserves them and
-adds the forward migration and runtime convergence described below.
+recovered on September 12. The September 14 integration preserves them. The
+September 16 continuation adds the bounded reservation lifecycle and targeted
+concurrency/restart proof described below.
 
 The running production revision, catalog and provider configuration have not
 been inspected. No deployment or provider-delivery claim follows from this
@@ -34,16 +37,19 @@ local source integration. Exact source/check identities are recorded in
 | Tenant access | Personal tenants, memberships, owner constraints, forced RLS and restricted transactions for owned API routes and bot/runner mutations | Full integrated matrix, independent review and service-credential separation |
 | Login | Recovery opaque sessions, replay/abuse, CSRF, revocation and authoritative BFF retained | Real Telegram login/private start/provider smoke; OIDC later |
 | Dashboard | One private snapshot, visibility-aware refresh, account invalidation, 401 pause; first-request cancellation race fixed | Full accessibility/mobile/provider checks in N09 |
-| Audit and Telegram | Recovery immutable versioned audit, private notification binding, typed outbox and digest retained | Full restart/delivery matrix and fairness/reservation work |
+| Audit, reservation and Telegram | Recovery immutable versioned audit, private notification binding, typed outbox and digest retained; owner-scoped dry-run holds now commit with order and approval evidence, then consume or release atomically | Full integrated restart/delivery matrix, fairness, rejected-decision provenance and truthful reporting |
 | Release | Immutable digest, commit-pinned files, separate migration service, writer quiescence, backup and readiness ordering; no automatic old-image restart after attempted DDL | Restore/incident rehearsal and production approval |
 | Public web | Public prerender; private CSR/noindex/no-store; truthful signed-out backtest copy | Published revision and claims/analytics QA |
 | Platform | Cloudflare/Supabase remain targets | OIDC/JWT, edge entries, webhook, Cron/Queues and cutover proof |
 
 The migration retains main's event ledger, generic outbox and evaluation keys
 as data/schema. It does not activate main's minute-slot/generic dispatch path
-alongside recovery's runner/outbox. Decision provenance, reservations and
-scheduler cutover remain N10/N11. Identity profile fields are compatibility
-snapshots until a future canonical OIDC/profile contract is implemented.
+alongside recovery's runner/outbox. The local runner now stores immutable
+config, public-market and risk evidence for approved dry-run reservations.
+Rejected-decision provenance, common dashboard market snapshots, truthful
+partial/stale reporting and scheduler cutover remain N10/N11. Identity profile
+fields are compatibility snapshots until a future canonical OIDC/profile
+contract is implemented.
 
 ## Verified locally
 
@@ -53,6 +59,10 @@ snapshots until a future canonical OIDC/profile contract is implemented.
   subsequent forward migration atomicity.
 - Restricted-role pool reuse: A, forbidden foreign write, rollback, B, missing
   context and restored connection state. No developer or production DB used.
+- Disposable PostgreSQL 18: two independent runner connections serialize on
+  one strategy, exactly one creates the order/hold, and a newly opened process
+  later completes the durable order and consumes its hold. The existing 16-case
+  PostgreSQL contract lane also passes with the new forward migration.
 - API snapshot A/B isolation and anonymous refusal; BFF session forwarding,
   private caching headers and upstream outage behavior.
 - Browser with fixtures: immediate first A snapshot, logout/re-login, one
@@ -73,12 +83,14 @@ snapshots until a future canonical OIDC/profile contract is implemented.
    procedure and dependency-aware readiness need a destination rehearsal.
 4. Actual Telegram login, private `/start`, delivery and the complete R121
    accessibility checks remain open.
-5. Reservation accounting, immutable decision/market/config provenance and
-   truthful partial/stale reporting remain explicit N10 work.
+5. Rejected-decision provenance, cross-view market snapshot semantics and
+   truthful missing/partial/stale reporting remain explicit N10 work. The
+   approved dry-run reservation slice is local source, not deployed evidence.
 
-The next deliverable is integrated proof and reservation correctness. Gate 1
-checks happen before GO. Demo requires GO plus a separate reviewed scope;
-live execution remains unavailable and requires later explicit approval.
+The next deliverable is the complete integrated proof plus the remaining N10
+reporting/provenance contract. Gate 1 checks happen before GO. Demo requires GO
+plus a separate reviewed scope; live execution remains unavailable and requires
+later explicit approval.
 
 [Research and decisions](24_TENANT_INTEGRATION_RESEARCH.md) explain the chosen
 approach and primary sources. [Master backlog](../tasks/00_MASTER_PLAN.md)

@@ -438,3 +438,61 @@ Merge additionally updates `adr/ADR_003_NUXT_4_SSR_FOR_SEO.md`.
 Cleanup: the created browser tab, Nuxt process group, stalled test process and
 temporary PostgreSQL container were stopped. No persistent database volume was
 created or removed. No test overrides remain in an open browser tab.
+
+## 2026-09-16: durable dry-run reservation slice
+
+Implementation source: `37d986aa72d20f80b319ae6ebff7bfb628793a13`.
+Branch: `codex/remote-continuation-20260916`.
+Base documentation checkpoint: `3b902468bf9fc2644eeacdca9d7ae7e90a56c3ac`.
+Decision: **Gate 1 remains NO-GO**. Execution remains `DRY_RUN` only.
+
+### Implemented boundary
+
+- Forward migration `0000_order_reservation_lifecycle` adds forced-RLS,
+  owner-bound reservation evidence without modifying either frozen history.
+- A strategy-row lock serializes decisions across processes. The order, active
+  hold, immutable config/public-market/risk snapshot and approved audit commit
+  in one personal-tenant transaction.
+- Deferred database invariants reject pending orders without active holds and
+  mismatched terminal states. Completion consumes a hold and cancellation
+  releases it; evidence cannot be rewritten or settled twice.
+- Existing valid pending rows are backfilled as `LEGACY_BACKFILL`; invalid
+  ownership, config shape or amount aborts migration.
+- The runner uses the new atomic repository. Existing API due-order and bot
+  cancel/buy-now paths exercise the same lifecycle trigger.
+
+### Verification
+
+- `pnpm check` passed on the implementation source: Gate boundary, release
+  controls, workspace typecheck, lint and ordinary tests. Lint retained 13
+  existing warnings and introduced no new error.
+- `pnpm build` passed: **12/12 packages**, including the Nuxt production build
+  and 26 prerender outputs. Existing source-map and tsdown deprecation warnings
+  remain non-fatal.
+- Ordinary suites passed independently: API **152 passed / 1 PostgreSQL-only
+  skipped**, bot **64 passed**, DB **68 passed / 14 PostgreSQL-only skipped**.
+- On a disposable loopback-only `postgres:18-alpine` instance,
+  `test:postgres18` for DB passed **16/16**. The new API lane passed **1/1**:
+  two independent connections raced, exactly one reserved, both original
+  connections closed, and a new connection completed the order and consumed
+  the durable hold.
+- Targeted migration and reservation checks passed, including rollback after
+  invalid audit evidence, duplicate suppression after release, rolling spend
+  rejection, pending-without-reservation refusal and bot/API lifecycle states.
+- The first cold parallel `pnpm check` attempt hit two five-second PGlite test
+  timeouts. The exact notification-privacy and ownership-migration files each
+  passed alone; the full warmed `pnpm check` then passed without changing test
+  timeouts or assertions.
+- `git diff --check` passed before the implementation commit. The PostgreSQL
+  container was stopped and removed; it used no persistent volume.
+
+### Remaining boundary
+
+This is targeted N07 evidence, not the complete integrated matrix. R047-R049
+remain partial because rejected decisions, cross-view market provenance and
+broader idempotency semantics are unfinished. R050/R051 now have local source,
+but no deployment or independent release review. Truthful missing/stale data,
+fees/slippage, scheduler fairness/drain, real Telegram, destination restore and
+production catalog evidence remain open. No push, deployment, provider login,
+Telegram delivery, private exchange request or live order occurred. The final
+documentation-only checkpoint follows the implementation source.

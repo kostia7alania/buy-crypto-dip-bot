@@ -1,7 +1,8 @@
 # Master backlog
 
-Reviewed: 2026-09-14. [Project status](../docs/23_PROJECT_STATUS.md) owns source
-identity, verification and the Gate 1 NO-GO verdict. The September 14 integration and its evidence are recorded in
+Reviewed: 2026-09-16. [Project status](../docs/23_PROJECT_STATUS.md) owns source
+identity, verification and the Gate 1 NO-GO verdict. The September 14
+integration and September 16 reservation extension are recorded in
 [the research](../docs/24_TENANT_INTEGRATION_RESEARCH.md).
 
 ## Next delivery sequence
@@ -14,10 +15,10 @@ identity, verification and the Gate 1 NO-GO verdict. The September 14 integratio
 | N04 | P1, Web/Auth | LOCAL_DONE | Reinstall a single Telegram widget after logout; clean its callback; failed logout remains signed in with an actionable error. Browser fixture flow passed. |
 | N05 | P0, Release/DB | LOCAL_DONE | Both original histories preserved; strict guarded forward convergence and common subsequent migration journal implemented. Real PG18 proves clean/recovery/main catalog equivalence, preservation, refusal and atomicity. Destination ownership decisions remain N08. |
 | N06 | P0, API/DB/Web | LOCAL_DONE | Personal tenants/RLS integrated with opaque sessions, replay/CSRF, allowlist, immutable audit and typed outbox. Owned API and bot/runner mutations use restricted transactions; dashboard uses one private snapshot. Immutable release source integrated. Privileged service credentials and full proof remain N07/N08. |
-| N07 | P0, Verification/Release | PRE_GO | On the integrated committed revision run PostgreSQL 18 clean/upgrade plus complete A/B, failure/restart/concurrency and outbox matrix. Record catalog, commands, reviewer and immutable artifact. This is a prerequisite for GO, not post-GO work. |
+| N07 | P0, Verification/Release | PRE_GO | Targeted PostgreSQL 18 reservation race/new-process restart proof passes. Still run the complete clean/upgrade, A/B, failure/restart/concurrency and outbox matrix on the final integrated revision; record catalog, commands, reviewer and immutable artifact before GO. |
 | N08 | P0, Operations | PRE_GO | Verify deployed revision/catalog, trusted forwarding headers, per-service secrets, migration/readiness ordering, backup/restore and rollback. Rehearsal preserves tenant and audit evidence. |
 | N09 | P1, Web/UX | OPEN | Finish actual Telegram login/account-switch/private-start delivery and R121 keyboard, screen-reader, zoom, contrast and mobile checks. Signed-out backtest copy corrected; snapshot A/B/late-response, hidden visibility and 401 fixtures pass. Fixture tests are not provider proof. |
-| N10 | P0, Product/Reporting | GATED | Finish R047-R058 decision snapshots, config revision, reservation semantics and truthful reporting. Publish missing-data/freshness/fees/slippage assumptions; add human-readable decision detail. |
+| N10 | P0, Product/Reporting | GATED | Local source now covers approved dry-run config/public-market/risk snapshots and atomic consume/release reservation semantics (R047-R051 slice). Finish rejected-decision provenance, shared snapshot semantics, R052-R058 and truthful missing-data/freshness/fees/slippage reporting. |
 | N11 | P1, Platform/Auth | GATED | Implement cost-first Supabase identity/OIDC/JWT, edge-compatible Hono/BFF, verified Telegram webhook, bounded Cron/Queue and idempotency. Verify paid/free cost signals and exactly one scheduler/bot mode at cutover. No private exchange work. |
 | N12 | P1, Product/Content | OPEN_EXTERNAL | Refresh claims on the actual published revision; complete keyword/content map, privacy QA, real interviews and pricing discovery. Leave tariffs, revenue, SLA and legal conclusions unannounced until supported. |
 
@@ -44,12 +45,13 @@ old blanket DONE counts and the status list at the end of plan 009.
 
 R070 is now partial: the current DRY_RUN policy bypass is fixed by N01, while
 future instrument metadata and Demo eligibility remain gated. R093 still
-needs pair discovery in the UI. R052 is gated by the reservation/state model,
-although the present ledger correctly labels local completion as simulation.
+needs pair discovery in the UI. R052 remains gated by truthful execution and
+reporting semantics even though the local reservation state core exists and the
+present ledger correctly labels completion as simulation.
 R089/R090/R092 remain partial until source-specific claims and the complete
 first-run journey agree, including authenticated backtests.
 
-Index totals: EXTERNAL 4, GATED 46, LATER 1, LOCAL_SOURCE 51, OPEN 4, PARTIAL 12, PRE_GO 5. Total: 123. These are not release completion percentages.
+Index totals: EXTERNAL 4, GATED 41, LATER 1, LOCAL_SOURCE 53, OPEN 4, PARTIAL 15, PRE_GO 5. Total: 123. These are not release completion percentages.
 
 | Ticket | Priority | Current state | Acceptance item |
 | --- | --- | --- | --- |
@@ -99,11 +101,11 @@ Index totals: EXTERNAL 4, GATED 46, LATER 1, LOCAL_SOURCE 51, OPEN 4, PARTIAL 12
 | R044 | P1 | GATED | Add an upstream market-data circuit-breaker policy |
 | R045 | P1 | GATED | Share market-data budgets and snapshots |
 | R046 | P1 | GATED | Define per-tenant scheduler fairness and backpressure |
-| R047 | P0 | GATED | Persist an immutable signal-market snapshot reference |
-| R048 | P0 | GATED | Attach a risk-policy/config revision to decisions |
-| R049 | P1 | GATED | Define signal idempotency and duplicate suppression |
-| R050 | P0 | GATED | Separate reservation lifecycle from order lifecycle |
-| R051 | P1 | GATED | Define strategy-change behavior for active reservations |
+| R047 | P0 | PARTIAL | Approved dry-run reservations persist an immutable public-market snapshot/key; rejected decisions and shared dashboard provenance remain |
+| R048 | P0 | PARTIAL | Approved reservations persist risk-policy and effective-config revisions; rejected-decision references remain |
+| R049 | P1 | PARTIAL | Exact strategy/config/market evaluations are duplicate-suppressed; broader observation identity and scheduler semantics remain |
+| R050 | P0 | LOCAL_SOURCE | Separate durable hold lifecycle from order lifecycle; commit, consume and release invariants pass locally |
+| R051 | P1 | LOCAL_SOURCE | Preserve the effective strategy snapshot for an active hold; later strategy edits do not rewrite evidence |
 | R052 | P0 | GATED | Separate simulated completion from exchange execution semantics |
 | R053 | P1 | GATED | Model countdown scalability independently of execution |
 | R054 | P1 | GATED | Define countdown ownership and restart recovery |

@@ -8,6 +8,8 @@ Current priorities: [master backlog](tasks/00_MASTER_PLAN.md).
 
 ## Current work
 
+- [012: Durable dry-run reservation lifecycle](plans/012-reservation-lifecycle.md),
+  completed bounded local N10 slice and targeted PostgreSQL 18 race/restart proof.
 - [011: Tenant history convergence](plans/011-tenant-history-convergence.md), researched integration and PostgreSQL/browser proof.
 
 - [010: Interrupted Gate 1 recovery](plans/010-recovery-and-project-status.md), four review fixes and documentation reconciliation.

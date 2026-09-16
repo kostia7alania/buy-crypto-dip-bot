@@ -1,7 +1,8 @@
 # Tenant integration research and decisions
 
-Researched and implemented: 2026-09-14. Baselines: recovery `d183fa2` and
-fetched main `becc46bb3b957c484324dbc3c517d5db7762be97`.
+Researched and implemented: 2026-09-14. Reservation extension: 2026-09-16.
+Baselines: recovery `d183fa2` and fetched main
+`becc46bb3b957c484324dbc3c517d5db7762be97`.
 
 ## Decision for this project
 
@@ -237,14 +238,58 @@ image automatically would be unsafe because its schema and audit writes may be
 incompatible. No automatic restore overwrites the database, and audit history
 is not deleted by the release flow.
 
+## Reservation lifecycle extension
+
+The September 16 slice keeps the same PostgreSQL/Drizzle stack and adds no
+dependency. Every reservation attempt enters the existing restricted personal
+tenant transaction and locks its current strategy row with `SELECT FOR UPDATE`.
+PostgreSQL holds that row lock until the transaction ends, so competing runner
+processes for the same strategy observe the preceding commit before they total
+spend or create another hold. The strategy is re-read under the lock; a stale
+outer scheduler read cannot reserve after disablement or against an older
+configuration. [PostgreSQL explicit locking](https://www.postgresql.org/docs/18/explicit-locking.html)
+
+One transaction evaluates the public ticker, computes the effective config
+revision and evaluation key, applies risk limits, and inserts the `PENDING`
+order, `ACTIVE` reservation and approved audit event. A later error rolls all
+three back. PostgreSQL transactions expose intermediate statements only as one
+committed unit to concurrent sessions. [PostgreSQL transactions](https://www.postgresql.org/docs/18/tutorial-transactions.html)
+
+The reservation records the policy version, effective strategy config, public
+market observation and risk totals used by that approval. Evidence fields are
+immutable. An order transition from `PENDING` to `COMPLETED` consumes its hold;
+`CANCELLED` releases it. Deferred constraint triggers check the final pair at
+commit, allowing the order insert to be followed by its reservation inside one
+transaction while refusing a committed `PENDING` order without `ACTIVE`, or a
+terminal order with a mismatched hold. PostgreSQL constraint triggers can be
+deferred to transaction end; this behavior was also exercised on PostgreSQL 18.
+[PostgreSQL CREATE TRIGGER](https://www.postgresql.org/docs/18/sql-createtrigger.html)
+
+The table uses forced RLS, matching owner/tenant foreign keys and the existing
+owner trigger. The application role can insert and read owned evidence and can
+update only lifecycle columns; a trigger rejects evidence rewrites and second
+settlements. Existing valid pending rows receive an explicit
+`LEGACY_BACKFILL` reservation. Invalid pending ownership, non-object config or
+non-positive amounts stop migration rather than inventing evidence.
+
+This closes the local lifecycle core of R050/R051 and advances R047-R049 only
+partially. The evaluation key suppresses an identical strategy/config/market
+tuple, but this is not a global market-candle identity. Approved reservations
+have full local snapshots; rejected decisions still lack equivalent config and
+market references. Dashboard valuation does not yet share this observation,
+and missing/stale/fees/slippage reporting remains open. A targeted two-process
+race and new-process settlement passed on disposable PostgreSQL 18, but that is
+not the complete N07 matrix or deployment evidence.
+
 ## Preserved history and later work
 
 Main's event ledger, generic outbox and evaluation-key columns survive with
 original data. The active runtime keeps recovery's single-flight runner,
 pending-order uniqueness, typed notification outbox and digest. Main's
 minute-slot/generic dispatch paths are not activated in parallel. Scheduling
-changes must be reviewed together with the outstanding reservation accounting
-and decision-snapshot requirements, not conflated with database convergence.
+changes must be reviewed together with the remaining decision-provenance,
+reporting and scheduler-ownership requirements, not conflated with database
+convergence.
 
 The transactional outbox pattern commits durable work with state changes, but
 delivery can repeat and consumers need idempotency. The current lifecycle
@@ -252,8 +297,8 @@ records requested, attempted and delivered outcomes; it does not claim
 exactly-once Telegram delivery. [AWS transactional outbox](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/transactional-outbox.html)
 
 The next bounded work is the complete integrated isolation/restart/outbox proof
-and reservation accounting, then real destination restore/readiness and
-Telegram checks. Cloudflare entries, Supabase OIDC/JWT, webhooks, Cron/Queues
-and measured provider costs remain the platform stage. Private exchange work
-remains outside Gate 1. Local checks and documentation updates do not change
-Gate 1's NO-GO verdict.
+and remaining N10 reporting/provenance contract, then real destination
+restore/readiness and Telegram checks. Cloudflare entries, Supabase OIDC/JWT,
+webhooks, Cron/Queues and measured provider costs remain the platform stage.
+Private exchange work remains outside Gate 1. Local checks and documentation
+updates do not change Gate 1's NO-GO verdict.
