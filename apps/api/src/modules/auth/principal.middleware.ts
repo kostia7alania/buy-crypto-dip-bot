@@ -73,10 +73,8 @@ export const userPrincipalMiddleware = (): MiddlewareHandler<AppEnv> => {
       principal = await resolveSession(getDb(), token);
     } catch (error) {
       logApiError("SESSION_RESOLVE_FAILED", error, c.get("correlationId"));
-      // Fail closed. A database blip must not silently downgrade a private
-      // route into an unauthenticated one.
-      if (!isPublic) return c.json({ error: "UNAUTHENTICATED" }, 401);
-      return next();
+      // A failed lookup is not an anonymous caller or a successful logout.
+      throw error;
     }
 
     if (!principal) {

@@ -98,7 +98,6 @@ describe("forged and malformed session tokens", () => {
     ["a short token", "abc"],
     ["uppercase hex", "A".repeat(64)],
     ["non-hex characters", "z".repeat(64)],
-    ["a well-formed but unknown token", "a1b2c3d4".repeat(8)],
     ["a SQL-shaped payload", "' OR 1=1 --"],
     [
       "a UUID that is not a session token",

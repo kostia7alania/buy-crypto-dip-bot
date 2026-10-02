@@ -448,8 +448,50 @@ describe("toggleOwnedStrategy", () => {
       reasonCode: "USER_REQUESTED",
       correlationId,
       payloadClass: "TENANT_CONFIGURATION",
-      payload: { fields: ["enabled"] },
+      payload: { fields: ["enabled"], enabled: false },
     });
+  });
+
+  it("does not reapply a delivered toggle, even after a newer toggle", async () => {
+    const original = await toggleOwnedStrategy(
+      db(),
+      world.alice.userId,
+      world.sharedSymbol,
+      "telegram_update_replay_1",
+    );
+    expect(original).toMatchObject({ enabled: false });
+    expect(
+      await toggleOwnedStrategy(
+        db(),
+        world.alice.userId,
+        world.sharedSymbol,
+        "telegram_update_replay_1",
+      ),
+    ).toEqual(original);
+    expect(
+      (await strategyByOwnerAndSymbol(world.alice.userId, world.sharedSymbol))
+        ?.enabled,
+    ).toBe(false);
+
+    await toggleOwnedStrategy(
+      db(),
+      world.alice.userId,
+      world.sharedSymbol,
+      "telegram_update_replay_2",
+    );
+    expect(
+      await toggleOwnedStrategy(
+        db(),
+        world.alice.userId,
+        world.sharedSymbol,
+        "telegram_update_replay_1",
+      ),
+    ).toEqual(original);
+    expect(
+      (await strategyByOwnerAndSymbol(world.alice.userId, world.sharedSymbol))
+        ?.enabled,
+    ).toBe(true);
+    expect(await eventsByAction("STRATEGY_UPDATED")).toHaveLength(2);
   });
 
   it("rolls the toggle back when its audit event is invalid", async () => {

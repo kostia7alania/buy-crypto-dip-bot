@@ -90,6 +90,7 @@ export type AuditEventV1 =
       reasonCode: "USER_REQUESTED" | "ONBOARDING_APPLIED";
       payloadClass: "TENANT_CONFIGURATION";
       payload: {
+        enabled?: boolean;
         fields: Array<
           | "enabled"
           | "thresholdPercent"
@@ -304,7 +305,11 @@ const assertPayload = (
       if (payload.mode !== "DRY_RUN") invalid("MODE");
       return;
     case "STRATEGY_UPDATED":
-      exactKeys(payload, ["fields"], "PAYLOAD_KEYS");
+      exactKeys(
+        payload,
+        payload.enabled === undefined ? ["fields"] : ["fields", "enabled"],
+        "PAYLOAD_KEYS",
+      );
       if (
         !Array.isArray(payload.fields) ||
         payload.fields.length === 0 ||
@@ -314,6 +319,13 @@ const assertPayload = (
         new Set(payload.fields).size !== payload.fields.length
       ) {
         invalid("STRATEGY_FIELDS");
+      }
+      if (
+        payload.enabled !== undefined &&
+        (typeof payload.enabled !== "boolean" ||
+          !(payload.fields as string[]).includes("enabled"))
+      ) {
+        invalid("STRATEGY_ENABLED");
       }
       return;
     case "STRATEGIES_BULK_PAUSED":

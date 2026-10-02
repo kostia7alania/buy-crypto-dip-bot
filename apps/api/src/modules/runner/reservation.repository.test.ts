@@ -3,7 +3,8 @@ import type { TestDatabase } from "@buy-crypto-dip-bot/db/testing";
 import { createTestDb } from "@buy-crypto-dip-bot/db/testing";
 import type { MarketTicker } from "@buy-crypto-dip-bot/exchange-core";
 import { eq } from "drizzle-orm";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { claimDueDryRunOrder } from "./order.repository.js";
 import { reserveDryRunOrder } from "./reservation.repository.js";
 
 let harness: TestDatabase;
@@ -33,14 +34,18 @@ const ticker = (sourceAt = "2026-09-16T00:59:55.000Z"): MarketTicker => ({
   ttlMs: 30_000,
 });
 
-const reserve = (correlationId = "reservation_test_1234", market = ticker()) =>
+const reserve = (
+  correlationId = "reservation_test_1234",
+  market = ticker(),
+  now = NOW,
+) =>
   reserveDryRunOrder(db(), {
     userId,
     strategyId,
     ticker: market,
-    executeAt: new Date("2026-09-16T01:00:15.000Z"),
+    executeAt: new Date(now.getTime() + 15_000),
     correlationId,
-    now: NOW,
+    now,
   });
 
 beforeEach(async () => {
@@ -67,6 +72,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.useRealTimers();
   await harness?.close();
 });
 
@@ -87,8 +93,14 @@ describe("dry-run reservation", () => {
     });
     expect(result.reservation.configRevision).toMatch(/^sha256:[0-9a-f]{64}$/);
     expect(result.reservation.marketSnapshotKey).toMatch(
-      /^bybit-ticker-v1:[0-9a-f]{64}$/,
+      /^bybit-ticker-v2:[0-9a-f]{64}$/,
     );
+    expect(result.reservation.marketSnapshot).toMatchObject({
+      receivedAt: ticker().receivedAt,
+      ageMs: 5_000,
+      evaluatedAt: NOW.toISOString(),
+      ageAtEvaluationMs: 5_000,
+    });
 
     await harness.db
       .update(schema.strategies)
@@ -115,7 +127,7 @@ describe("dry-run reservation", () => {
     ).toHaveLength(0);
   });
 
-  it("suppresses the same evaluated market/config snapshot after release", async () => {
+  it("suppresses the same source snapshot after release despite a different receipt time", async () => {
     const first = await reserve();
     expect(first.outcome).toBe("RESERVED");
     if (first.outcome !== "RESERVED") return;
@@ -124,7 +136,17 @@ describe("dry-run reservation", () => {
       .update(schema.orders)
       .set({ status: "CANCELLED" })
       .where(eq(schema.orders.id, first.order.id));
-    await expect(reserve()).resolves.toEqual({
+    await expect(
+      reserve(
+        "reservation_replay_1234",
+        {
+          ...ticker(),
+          receivedAt: new Date(NOW.getTime() + 1).toISOString(),
+          ageMs: 5_001,
+        },
+        new Date(NOW.getTime() + 1),
+      ),
+    ).resolves.toEqual({
       outcome: "SKIPPED",
       reason: "DUPLICATE",
     });
@@ -134,9 +156,61 @@ describe("dry-run reservation", () => {
       .from(schema.orderReservations)
       .where(eq(schema.orderReservations.id, first.reservation.id));
     expect(reservation?.status).toBe("RELEASED");
+
+    expect(
+      (
+        await reserve(
+          "reservation_new_source_1234",
+          ticker("2026-09-16T00:59:56.000Z"),
+        )
+      ).outcome,
+    ).toBe("RESERVED");
   });
 
-  it("rejects a reservation that would exceed completed rolling spend", async () => {
+  it("rejects a ticker that expires while waiting for the transaction lock", async () => {
+    const locked = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const blocker = harness.db.transaction(async (tx) => {
+      await tx
+        .select()
+        .from(schema.strategies)
+        .where(eq(schema.strategies.id, strategyId))
+        .for("update");
+      locked.resolve();
+      await release.promise;
+    });
+    await locked.promise;
+
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+    try {
+      const pending = reserveDryRunOrder(db(), {
+        userId,
+        strategyId,
+        ticker: ticker(),
+        executeAt: new Date(NOW.getTime() + 15_000),
+        correlationId: "reservation_expired_wait_1234",
+      });
+      vi.setSystemTime(new Date(NOW.getTime() + 30_000));
+      release.resolve();
+      await expect(pending).resolves.toEqual({
+        outcome: "SKIPPED",
+        reason: "STALE_MARKET",
+      });
+      expect(await harness.db.select().from(schema.orders)).toHaveLength(0);
+      expect(
+        await harness.db.select().from(schema.orderReservations),
+      ).toHaveLength(0);
+      expect(await harness.db.select().from(schema.auditEvents)).toHaveLength(
+        0,
+      );
+    } finally {
+      release.resolve();
+      await blocker;
+    }
+  });
+
+  it("preserves legacy completed-order cooldown and spend without a reservation", async () => {
     await harness.db.insert(schema.orders).values({
       userId,
       strategyId,
@@ -149,6 +223,19 @@ describe("dry-run reservation", () => {
       createdAt: new Date("2026-09-16T00:30:00.000Z"),
     });
 
+    await harness.db
+      .update(schema.strategies)
+      .set({ config: { ...CONFIG, cooldownMinutes: 60 } })
+      .where(eq(schema.strategies.id, strategyId));
+    await expect(reserve()).resolves.toEqual({
+      outcome: "SKIPPED",
+      reason: "COOLDOWN",
+    });
+    await harness.db
+      .update(schema.strategies)
+      .set({ config: { ...CONFIG } })
+      .where(eq(schema.strategies.id, strategyId));
+
     const result = await reserve(
       "reservation_limit_1234",
       ticker("2026-09-16T00:59:56.000Z"),
@@ -160,5 +247,94 @@ describe("dry-run reservation", () => {
     expect(
       await harness.db.select().from(schema.orderReservations),
     ).toHaveLength(0);
+  });
+
+  it("charges recovered holds at settlement for cooldown and rolling daily/weekly budgets", async () => {
+    const config = {
+      ...CONFIG,
+      maxDailySpendUsdt: 20,
+      maxWeeklySpendUsdt: 20,
+      cooldownMinutes: 60,
+    };
+    await harness.db
+      .update(schema.strategies)
+      .set({ config })
+      .where(eq(schema.strategies.id, strategyId));
+    const createdAt = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+    const order = await harness.db.transaction(async (tx) => {
+      const [pending] = await tx
+        .insert(schema.orders)
+        .values({
+          userId,
+          strategyId,
+          symbol: "BTCUSDT",
+          mode: "DRY_RUN",
+          side: "BUY",
+          quoteAmount: "20",
+          price: "90",
+          status: "PENDING",
+          createdAt,
+          executeAt: new Date(createdAt.getTime() + 15_000),
+        })
+        .returning();
+      if (!pending) throw new Error("test pending order insert failed");
+      await tx.insert(schema.orderReservations).values({
+        userId,
+        strategyId,
+        orderId: pending.id,
+        quoteAmount: "20",
+        status: "ACTIVE",
+        policyVersion: "RISK_V1",
+        configRevision: "recovery-test-config",
+        strategyConfig: config,
+        marketSnapshotKey: "recovery-test-market",
+        marketSnapshot: { ...ticker() },
+        riskSnapshot: {},
+        createdAt,
+      });
+      return pending;
+    });
+    expect(
+      (await claimDueDryRunOrder(db(), order.id, "reservation_recovery_1234"))
+        ?.status,
+    ).toBe("COMPLETED");
+    const [consumed] = await harness.db
+      .select()
+      .from(schema.orderReservations)
+      .where(eq(schema.orderReservations.orderId, order.id));
+    if (!consumed?.resolvedAt) throw new Error("test hold was not consumed");
+    const resolvedAt = consumed.resolvedAt;
+    const reserveAfter = (elapsedMs: number) => {
+      const now = new Date(resolvedAt.getTime() + elapsedMs);
+      return reserve(
+        "reservation_after_recovery_1234",
+        {
+          ...ticker(now.toISOString()),
+          receivedAt: now.toISOString(),
+          ageMs: 0,
+        },
+        now,
+      );
+    };
+
+    await expect(reserveAfter(1_000)).resolves.toEqual({
+      outcome: "SKIPPED",
+      reason: "COOLDOWN",
+    });
+    await harness.db
+      .update(schema.strategies)
+      .set({ config: { ...config, cooldownMinutes: 0 } })
+      .where(eq(schema.strategies.id, strategyId));
+    await expect(reserveAfter(1_000)).resolves.toMatchObject({
+      outcome: "REJECTED",
+      reasonCodes: ["DAILY_LIMIT_EXCEEDED", "WEEKLY_LIMIT_EXCEEDED"],
+    });
+    await expect(reserveAfter(25 * 60 * 60 * 1000)).resolves.toMatchObject({
+      outcome: "REJECTED",
+      reasonCodes: ["WEEKLY_LIMIT_EXCEEDED"],
+    });
+    await expect(reserveAfter(8 * 24 * 60 * 60 * 1000)).resolves.toMatchObject({
+      outcome: "RESERVED",
+    });
   });
 });

@@ -173,7 +173,8 @@ export const strategiesRoutes = new Hono<AppEnv>()
             eq(schema.strategies.userId, user.userId),
           ),
         )
-        .limit(1);
+        .limit(1)
+        .for("update");
 
       if (!existing) {
         return c.json({ error: "STRATEGY_NOT_FOUND" }, 404);

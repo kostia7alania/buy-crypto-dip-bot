@@ -1,5 +1,11 @@
-import { randomBytes } from "node:crypto";
-import { cpSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import {
+  cpSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,6 +28,9 @@ const folder = path.resolve(
 const recovery = readMigrationFiles({ migrationsFolder: folder });
 const costFirstFolder = path.join(folder, "histories/cost-first");
 const costFirst = readMigrationFiles({ migrationsFolder: costFirstFolder });
+const forward = readMigrationFiles({
+  migrationsFolder: path.join(folder, "forward"),
+});
 const applied = (history: typeof recovery) =>
   history.map((m) => ({ hash: m.hash, created_at: m.folderMillis }));
 
@@ -74,6 +83,62 @@ const fresh = async () => {
   const connection = createPostgresConnection(url.toString());
   connections.push(connection);
   return connection;
+};
+
+// Reproduce the released 0000 catalog and its journals without invoking the
+// current runner, whose postflight requires the new forward protections.
+const reservationV0 = async (history: "recovery" | "cost-first") => {
+  const connection = await fresh();
+  await migrate(connection.db, {
+    migrationsFolder: history === "recovery" ? folder : costFirstFolder,
+  });
+  const bridge = readFileSync(
+    path.join(folder, "convergence/cost-first-to-recovery.sql"),
+    "utf8",
+  );
+  const foundation = readFileSync(
+    path.join(folder, "convergence/tenant-foundation.sql"),
+    "utf8",
+  );
+  const digest = (text: string) =>
+    createHash("sha256").update(text).digest("hex");
+  const first = forward[0];
+  if (!first) throw new Error("RESERVATION_MIGRATION_REQUIRED");
+  await connection.db.transaction(async (tx) => {
+    for (const contents of [
+      ...(history === "cost-first" ? [bridge] : []),
+      foundation,
+      first.sql.join("--> statement-breakpoint"),
+    ]) {
+      for (const statement of contents.split("--> statement-breakpoint"))
+        if (statement.trim()) await tx.execute(sql.raw(statement));
+    }
+    await tx.execute(sql`create table drizzle.__dipbot_convergence (
+      target text primary key, source_history text not null,
+      target_hash text not null, completed_at timestamptz not null default now()
+    ); create table drizzle.__dipbot_forward_migrations (
+      id serial primary key, hash text not null, created_at bigint not null
+    )`);
+    await tx.execute(sql`insert into drizzle.__dipbot_convergence(target,source_history,target_hash)
+      values('gate1_tenants_v1',${history},${digest(JSON.stringify([digest(bridge), digest(foundation)]))})`);
+    await tx.execute(sql`insert into drizzle.__dipbot_forward_migrations(hash,created_at)
+      values(${first.hash},${first.folderMillis})`);
+  });
+  return connection;
+};
+
+const alice = "aaaaaaaa-0000-4000-8000-000000000001";
+const bob = "bbbbbbbb-0000-4000-8000-000000000002";
+const btc = "11111111-0000-4000-8000-000000000001";
+const eth = "22222222-0000-4000-8000-000000000002";
+const seedReservationOwners = async (
+  connection: ReturnType<typeof createPostgresConnection>,
+) => {
+  await connection.pool.query(`insert into users(id,telegram_user_id) values
+    ('${alice}','111'),('${bob}','222');
+    insert into strategies(id,user_id,name,symbol,config) values
+    ('${btc}','${alice}','BTC','BTCUSDT','{}'),
+    ('${eth}','${alice}','ETH','ETHUSDT','{}')`);
 };
 afterAll(async () => {
   for (const connection of connections) await connection.pool.end();
@@ -133,27 +198,274 @@ const catalogOf = async (
 (testUrl ? describe : describe.skip)(
   "PostgreSQL 18 history convergence",
   () => {
+    it("rejects mismatched/nonfinite holds and freezes reserved economics without blocking delivery or settlement", async () => {
+      const connection = await fresh();
+      await migrateKnownHistory(connection.db, folder);
+      await seedReservationOwners(connection);
+      const reserve = async (
+        strategyId = btc,
+        reservationAmount = "100",
+        orderAmount = "100",
+      ) => {
+        const id = randomUUID();
+        await withPersonalTenant(connection.db, alice, async (tx) => {
+          await tx.execute(sql`insert into orders(id,user_id,strategy_id,symbol,side,quote_amount,status)
+            values(${id},${alice},${btc},'BTCUSDT','BUY',${orderAmount},'PENDING')`);
+          await tx.execute(sql`insert into order_reservations(user_id,strategy_id,order_id,quote_amount,
+            policy_version,config_revision,strategy_config,market_snapshot_key,market_snapshot,risk_snapshot)
+            values(${alice},${strategyId},${id},${reservationAmount},'TEST','test','{}','test','{}','{}')`);
+        });
+        return id;
+      };
+      for (const [strategyId, amount] of [
+        [eth, "100"],
+        [btc, "1"],
+      ]) {
+        await expect(reserve(strategyId, amount)).rejects.toMatchObject({
+          cause: { constraint: "order_reservations_order_economics_fk" },
+        });
+      }
+      for (const amount of ["NaN", "Infinity", "-Infinity"]) {
+        await expect(reserve(btc, amount)).rejects.toMatchObject({
+          cause: { constraint: "order_reservations_quote_positive_check" },
+        });
+        await expect(reserve(btc, "100", amount)).rejects.toMatchObject({
+          cause: { constraint: "orders_quote_finite_check" },
+        });
+      }
+
+      const id = await reserve();
+      for (const assignment of [
+        `id='${randomUUID()}'`,
+        `strategy_id='${eth}'`,
+        "quote_amount=1000",
+        "symbol='ETHUSDT'",
+        "mode='LIVE'",
+        "side='SELL'",
+        "price=1",
+        `risk_decision_id='${randomUUID()}'`,
+        "evaluation_key='changed'",
+        "created_at=created_at-interval '1 day'",
+      ]) {
+        await expect(
+          withPersonalTenant(connection.db, alice, (tx) =>
+            tx.execute(
+              sql`update orders set ${sql.raw(assignment)} where id=${id}`,
+            ),
+          ),
+        ).rejects.toMatchObject({
+          cause: { message: "RESERVED_ORDER_EVIDENCE_IMMUTABLE" },
+        });
+      }
+      await withPersonalTenant(connection.db, bob, async (tx) => {
+        expect(
+          (await tx.execute(sql`select id from order_reservations`)).rows,
+        ).toEqual([]);
+      });
+      await withPersonalTenant(connection.db, alice, async (tx) => {
+        await tx.execute(sql`update orders set execute_at=now(),tg_message_id=123,tg_chat_id='111',
+          quote_amount=quote_amount where id=${id}`);
+        await tx.execute(
+          sql`update orders set status='COMPLETED' where id=${id}`,
+        );
+        expect(
+          (
+            await tx.execute(sql`select status,resolved_at is not null as resolved
+          from order_reservations where order_id=${id}`)
+          ).rows,
+        ).toEqual([{ status: "CONSUMED", resolved: true }]);
+      });
+      await expect(
+        withPersonalTenant(connection.db, alice, (tx) =>
+          tx.execute(sql`update orders set quote_amount=0 where id=${id}`),
+        ),
+      ).rejects.toMatchObject({
+        cause: { message: "RESERVED_ORDER_EVIDENCE_IMMUTABLE" },
+      });
+      await expect(
+        withPersonalTenant(connection.db, alice, (tx) =>
+          tx.execute(sql`update orders set status='CANCELLED' where id=${id}`),
+        ),
+      ).rejects.toThrow();
+      const cancelledId = await reserve();
+      await withPersonalTenant(connection.db, alice, async (tx) => {
+        await tx.execute(
+          sql`update orders set status='CANCELLED' where id=${cancelledId}`,
+        );
+        expect(
+          (
+            await tx.execute(
+              sql`select status from order_reservations where order_id=${cancelledId}`,
+            )
+          ).rows,
+        ).toEqual([{ status: "RELEASED" }]);
+      });
+      await expect(
+        withPersonalTenant(connection.db, alice, (tx) =>
+          tx.execute(
+            sql`update orders set quote_amount=1 where id=${cancelledId}`,
+          ),
+        ),
+      ).rejects.toMatchObject({
+        cause: { message: "RESERVED_ORDER_EVIDENCE_IMMUTABLE" },
+      });
+    }, 60_000);
+
+    it("upgrades either released reservation history without rewrites and rolls back invalid economics", async () => {
+      for (const history of ["recovery", "cost-first"] as const) {
+        for (const defect of [
+          null,
+          "amount",
+          "strategy",
+          "NaN",
+          "Infinity",
+        ] as const) {
+          const connection = await reservationV0(history);
+          await seedReservationOwners(connection);
+          const id = randomUUID();
+          const orderAmount =
+            defect === "NaN" || defect === "Infinity" ? defect : "100";
+          await connection.pool.query(`begin;
+            insert into orders(id,user_id,strategy_id,symbol,side,quote_amount,status)
+            values('${id}','${alice}','${btc}','BTCUSDT','BUY','${orderAmount}','PENDING');
+            insert into order_reservations(user_id,strategy_id,order_id,quote_amount,
+              policy_version,config_revision,strategy_config,market_snapshot_key,market_snapshot,risk_snapshot)
+            values('${alice}','${defect === "strategy" ? eth : btc}','${id}',
+              '${defect === "amount" ? "1" : orderAmount}','TEST','test','{}','test','{}','{}');
+            commit`);
+          const snapshot = async () =>
+            (
+              await connection.pool.query(`select
+            (select jsonb_agg(to_jsonb(o)) from orders o) as orders,
+            (select jsonb_agg(to_jsonb(r)) from order_reservations r) as reservations,
+            (select jsonb_agg(to_jsonb(m) order by id) from drizzle.__drizzle_migrations m) as history,
+            (select jsonb_agg(to_jsonb(m)) from drizzle.__dipbot_convergence m) as bridge`)
+            ).rows;
+          const before = await snapshot();
+          if (defect) {
+            await expect(
+              migrateKnownHistory(connection.db, folder),
+            ).rejects.toMatchObject({
+              cause: {
+                message:
+                  defect === "amount" || defect === "strategy"
+                    ? "MIGRATION_RESERVATION_ECONOMICS_MISMATCH"
+                    : "MIGRATION_RESERVATION_AMOUNT_INVALID",
+              },
+            });
+            expect(
+              (
+                await connection.pool.query(
+                  `select count(*) from drizzle.__dipbot_forward_migrations`,
+                )
+              ).rows[0].count,
+            ).toBe("1");
+            expect(
+              (
+                await connection.pool.query(
+                  `select to_regclass('orders_reservation_economics_idx') as index`,
+                )
+              ).rows[0].index,
+            ).toBeNull();
+          } else {
+            await migrateKnownHistory(connection.db, folder);
+            await migrateKnownHistory(connection.db, folder);
+            expect(
+              (
+                await connection.pool.query(
+                  `select count(*) from drizzle.__dipbot_forward_migrations`,
+                )
+              ).rows[0].count,
+            ).toBe(String(forward.length));
+          }
+          expect(await snapshot()).toEqual(before);
+        }
+      }
+    }, 60_000);
+
+    it("serializes reservation attachment against a stale repeatable-read order edit", async () => {
+      const connection = await fresh();
+      await migrateKnownHistory(connection.db, folder);
+      await seedReservationOwners(connection);
+      const id = randomUUID();
+      await connection.pool.query(`insert into orders(id,user_id,strategy_id,symbol,side,quote_amount,status)
+        values('${id}','${alice}','${btc}','BTCUSDT','BUY',100,'COMPLETED')`);
+      const editor = await connection.pool.connect();
+      try {
+        await editor.query("begin isolation level repeatable read");
+        const tenant = (
+          await editor.query(
+            "select id from tenants where personal_owner_user_id=$1",
+            [alice],
+          )
+        ).rows[0].id;
+        await editor.query(
+          "select set_config('app.user_id',$1,true),set_config('app.tenant_id',$2,true)",
+          [alice, tenant],
+        );
+        await editor.query("set local role dipbot_app");
+        expect(
+          (await editor.query("select id from order_reservations")).rows,
+        ).toEqual([]);
+        await withPersonalTenant(connection.db, alice, (tx) =>
+          tx.execute(sql`
+          insert into order_reservations(user_id,strategy_id,order_id,quote_amount,status,resolved_at,
+            policy_version,config_revision,strategy_config,market_snapshot_key,market_snapshot,risk_snapshot)
+          values(${alice},${btc},${id},100,'CONSUMED',now(),'TEST','test','{}','test','{}','{}')`),
+        );
+        await expect(
+          editor.query("update orders set symbol='ETHUSDT' where id=$1", [id]),
+        ).rejects.toMatchObject({ code: "40001" });
+      } finally {
+        await editor.query("rollback");
+        editor.release();
+      }
+      expect(
+        (
+          await connection.pool.query("select symbol from orders where id=$1", [
+            id,
+          ])
+        ).rows,
+      ).toEqual([{ symbol: "BTCUSDT" }]);
+    }, 60_000);
+
+    it("refuses missing reservation protections even with an intact forward journal", async () => {
+      const connection = await fresh();
+      await migrateKnownHistory(connection.db, folder);
+      for (const change of [
+        "alter table orders disable trigger orders_reserved_evidence_immutable",
+        "alter table order_reservations disable row level security",
+        "alter table order_reservations drop constraint order_reservations_order_economics_fk",
+      ]) {
+        await connection.pool.query(change);
+        await expect(
+          migrateKnownHistory(connection.db, folder),
+        ).rejects.toThrow("MIGRATION_RESERVATION_CATALOG_DRIFT");
+        if (change.includes("disable trigger"))
+          await connection.pool.query(
+            "alter table orders enable trigger orders_reserved_evidence_immutable",
+          );
+        if (change.includes("disable row"))
+          await connection.pool.query(
+            "alter table order_reservations enable row level security",
+          );
+      }
+    }, 60_000);
+
     it("applies later SQL to both lineages once and rejects edited or failed forward migrations", async () => {
       const fixture = mkdtempSync(path.join(tmpdir(), "dipbot-forward-"));
       cpSync(folder, fixture, { recursive: true });
       const journal = path.join(fixture, "forward/meta/_journal.json");
-      const migration = path.join(fixture, "forward/0000_contract_probe.sql");
-      writeFileSync(
-        journal,
-        JSON.stringify({
-          version: "7",
-          dialect: "postgresql",
-          entries: [
-            {
-              idx: 0,
-              version: "7",
-              when: 1789344000000,
-              tag: "0000_contract_probe",
-              breakpoints: true,
-            },
-          ],
-        }),
-      );
+      const migration = path.join(fixture, "forward/0002_contract_probe.sql");
+      const manifest = JSON.parse(readFileSync(journal, "utf8"));
+      manifest.entries.push({
+        idx: manifest.entries.length,
+        version: "7",
+        when: 1790985600000,
+        tag: "0002_contract_probe",
+        breakpoints: true,
+      });
+      writeFileSync(journal, JSON.stringify(manifest));
       try {
         for (const history of [folder, costFirstFolder]) {
           const connection = await fresh();
@@ -170,7 +482,7 @@ const catalogOf = async (
                 "select count(*) from drizzle.__dipbot_forward_migrations",
               )
             ).rows[0].count,
-          ).toBe("1");
+          ).toBe(String(forward.length + 1));
           writeFileSync(migration, "create table changed_probe(id integer);");
           await expect(
             migrateKnownHistory(connection.db, fixture),

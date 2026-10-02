@@ -212,8 +212,9 @@ export const authRoutes = new Hono<AppEnv>()
             fingerprint: telegramLoginFingerprint(payload),
             telegramUserId,
             authDate: new Date(payload.auth_date * 1000),
+            // Verification accepts the entire final second, including clock skew.
             expiresAt: new Date(
-              now.getTime() + TELEGRAM_AUTH_MAX_AGE_SECONDS * 1000,
+              (payload.auth_date + TELEGRAM_AUTH_MAX_AGE_SECONDS + 1) * 1000,
             ),
           })
           .onConflictDoNothing()

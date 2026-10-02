@@ -8,6 +8,13 @@
       "when": 1789516800000,
       "tag": "0000_order_reservation_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790899200000,
+      "tag": "0001_reservation_economics",
+      "breakpoints": true
     }
   ]
 }

@@ -118,7 +118,8 @@ export const applyOwnedOnboardingStrategy = async (
           eq(schema.strategies.symbol, input.symbol),
         ),
       )
-      .limit(1);
+      .limit(1)
+      .for("update");
 
     if (existing) {
       await tx
@@ -254,6 +255,46 @@ export const toggleOwnedStrategy = async (
   correlationId: string = createCorrelationId(),
 ): Promise<StrategyToggleOutcome> => {
   return withPersonalTenant(db, callerId, async (tx) => {
+    const [strategy] = await tx
+      .select({ id: schema.strategies.id, enabled: schema.strategies.enabled })
+      .from(schema.strategies)
+      .where(
+        and(
+          eq(schema.strategies.userId, callerId),
+          eq(schema.strategies.symbol, symbol),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    if (!strategy) return { outcome: "NOT_FOUND" };
+
+    // The strategy lock serializes duplicate deliveries with the mutation and
+    // its immutable receipt. Replays return the original recorded result.
+    const [receipt] = await tx
+      .select({ payload: schema.auditEvents.payload })
+      .from(schema.auditEvents)
+      .where(
+        and(
+          eq(schema.auditEvents.userId, callerId),
+          eq(schema.auditEvents.entityId, strategy.id),
+          eq(schema.auditEvents.action, "STRATEGY_UPDATED"),
+          eq(schema.auditEvents.actorChannel, "TELEGRAM"),
+          eq(schema.auditEvents.reasonCode, "USER_REQUESTED"),
+          eq(schema.auditEvents.correlationId, correlationId),
+          sql`${schema.auditEvents.payload}->'fields' = '["enabled"]'::jsonb`,
+        ),
+      )
+      .limit(1);
+    if (receipt) {
+      const payload = receipt.payload as { enabled?: boolean };
+      return {
+        outcome: "UPDATED",
+        strategyId: strategy.id,
+        // Older audit records did not include the result. Never reapply them.
+        enabled: payload.enabled ?? strategy.enabled,
+      };
+    }
+
     const [updated] = await tx
       .update(schema.strategies)
       .set({ enabled: sql<boolean>`not ${schema.strategies.enabled}` })
@@ -280,7 +321,7 @@ export const toggleOwnedStrategy = async (
         correlationId,
         subject: { type: "STRATEGY", id: updated.id },
         payloadClass: "TENANT_CONFIGURATION",
-        payload: { fields: ["enabled"] },
+        payload: { fields: ["enabled"], enabled: updated.enabled },
       }),
     );
 

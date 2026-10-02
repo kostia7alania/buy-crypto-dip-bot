@@ -430,6 +430,60 @@ describe("session lifecycle", () => {
     expect(survivor.status).toBe(200);
   });
 
+  it("refuses a well-formed but unknown token while keeping logout idempotent", async () => {
+    const token = "a1b2c3d4".repeat(8);
+    const app = createApp();
+    expect((await app.request("/orders", asUser(token))).status).toBe(401);
+    const logout = await app.request(
+      "/auth/logout",
+      asUser(token, { method: "POST" }),
+    );
+    expect(logout.status).toBe(200);
+    expect(await logout.json()).toEqual({ success: true });
+  });
+
+  it("propagates session read failures without reporting a successful logout", async () => {
+    const { token } = await issueSession(appDb(), world.alice.userId);
+    const app = createApp();
+    const select = vi.spyOn(harness.db, "select").mockImplementation(() => {
+      throw new Error("synthetic session read failure");
+    });
+
+    try {
+      const failed = await app.request(
+        "/auth/logout",
+        asUser(token, { method: "POST" }),
+      );
+      expect(failed.status).toBe(500);
+      expect(await failed.json()).toEqual({ error: "INTERNAL_SERVER_ERROR" });
+
+      const identity = await app.request("/auth/me", asUser(token));
+      expect(identity.status).toBe(500);
+      expect(await identity.json()).toEqual({ error: "INTERNAL_SERVER_ERROR" });
+
+      const anonymous = await app.request("/auth/logout", { method: "POST" });
+      expect(anonymous.status).toBe(200);
+      expect(await anonymous.json()).toEqual({ success: true });
+
+      const malformed = await app.request(
+        "/auth/logout",
+        asUser("not-a-session", { method: "POST" }),
+      );
+      expect(malformed.status).toBe(200);
+      expect(await malformed.json()).toEqual({ success: true });
+    } finally {
+      select.mockRestore();
+    }
+
+    expect((await app.request("/auth/me", asUser(token))).status).toBe(200);
+    const retry = await app.request(
+      "/auth/logout",
+      asUser(token, { method: "POST" }),
+    );
+    expect(retry.status).toBe(200);
+    expect((await app.request("/auth/me", asUser(token))).status).toBe(401);
+  });
+
   it("refuses an expired session", async () => {
     const { schema } = await import("@buy-crypto-dip-bot/db");
     const { hashSessionToken, createSessionToken } = await import(
@@ -717,6 +771,70 @@ describe("Telegram Login presentation lifecycle", () => {
         error: "LOGIN_REPLAYED",
       });
     } finally {
+      if (previousBotToken === undefined) delete process.env.TELEGRAM_BOT_TOKEN;
+      else process.env.TELEGRAM_BOT_TOKEN = previousBotToken;
+    }
+  });
+
+  it("blocks a future-dated presentation through its last accepted second after revoke-all", async () => {
+    const botToken = "123456:integration-test-token";
+    const previousBotToken = process.env.TELEGRAM_BOT_TOKEN;
+    const now = Math.floor(Date.now() / 1000) * 1000;
+    process.env.TELEGRAM_BOT_TOKEN = botToken;
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(now);
+    try {
+      const { signTelegramLogin, TELEGRAM_AUTH_MAX_AGE_SECONDS } = await import(
+        "./auth.service.js"
+      );
+      const fields = {
+        id: 5_000_005,
+        auth_date: now / 1000 + 300,
+        first_name: "Eve",
+      };
+      const body = JSON.stringify({
+        ...fields,
+        hash: signTelegramLogin(fields, botToken),
+      });
+      const app = createApp();
+      const request = () =>
+        app.request("/auth/telegram", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-telegram-login-source": "e".repeat(64),
+          },
+          body,
+        });
+
+      const first = await request();
+      expect(first.status).toBe(200);
+      const { session } = await json<{ session: { token: string } }>(first);
+      const revoked = await app.request(
+        "/auth/sessions/revoke-all",
+        asUser(session.token, { method: "POST" }),
+      );
+      expect(revoked.status).toBe(200);
+      expect(await revoked.json()).toEqual({ revoked: 1 });
+
+      vi.setSystemTime(now + (TELEGRAM_AUTH_MAX_AGE_SECONDS + 1) * 1000);
+      const replay = await request();
+      expect(replay.status).toBe(401);
+      expect(await replay.json()).toEqual({ error: "LOGIN_REPLAYED" });
+
+      const lastAcceptedSecond =
+        (fields.auth_date + TELEGRAM_AUTH_MAX_AGE_SECONDS) * 1000;
+      vi.setSystemTime(lastAcceptedSecond + 999);
+      const boundaryReplay = await request();
+      expect(boundaryReplay.status).toBe(401);
+      expect(await boundaryReplay.json()).toEqual({ error: "LOGIN_REPLAYED" });
+
+      vi.setSystemTime(lastAcceptedSecond + 1000);
+      const stale = await request();
+      expect(stale.status).toBe(401);
+      expect(await stale.json()).toEqual({ error: "STALE_AUTH_DATE" });
+    } finally {
+      vi.useRealTimers();
       if (previousBotToken === undefined) delete process.env.TELEGRAM_BOT_TOKEN;
       else process.env.TELEGRAM_BOT_TOKEN = previousBotToken;
     }

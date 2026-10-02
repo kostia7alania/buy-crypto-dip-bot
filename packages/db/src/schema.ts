@@ -365,12 +365,23 @@ export const orders = pgTable(
       .on(table.userId, table.strategyId)
       .where(sql`${table.status} = 'PENDING'`),
     uniqueIndex("orders_user_id_id_idx").on(table.userId, table.id),
+    uniqueIndex("orders_reservation_economics_idx").on(
+      table.userId,
+      table.tenantId,
+      table.id,
+      table.strategyId,
+      table.quoteAmount,
+    ),
     foreignKey({
       name: "orders_user_id_strategy_id_strategies_user_id_id_fk",
       columns: [table.userId, table.strategyId],
       foreignColumns: [strategies.userId, strategies.id],
     }),
     check("orders_mode_dry_run_check", sql`${table.mode} = 'DRY_RUN'`),
+    check(
+      "orders_quote_finite_check",
+      sql`${table.quoteAmount} > '-Infinity'::numeric AND ${table.quoteAmount} < 'Infinity'::numeric`,
+    ),
   ],
 );
 
@@ -426,9 +437,26 @@ export const orderReservations = pgTable(
       columns: [table.userId, table.orderId],
       foreignColumns: [orders.userId, orders.id],
     }),
+    foreignKey({
+      name: "order_reservations_order_economics_fk",
+      columns: [
+        table.userId,
+        table.tenantId,
+        table.orderId,
+        table.strategyId,
+        table.quoteAmount,
+      ],
+      foreignColumns: [
+        orders.userId,
+        orders.tenantId,
+        orders.id,
+        orders.strategyId,
+        orders.quoteAmount,
+      ],
+    }),
     check(
       "order_reservations_quote_positive_check",
-      sql`${table.quoteAmount} > 0`,
+      sql`${table.quoteAmount} > 0 AND ${table.quoteAmount} < 'Infinity'::numeric`,
     ),
     check(
       "order_reservations_status_check",

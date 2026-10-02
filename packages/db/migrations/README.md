@@ -23,3 +23,11 @@ The startup guard validates migration history, bridge identity and critical RLS
 flags/triggers. It is not a general-purpose catalog drift detector. The real PG
 suite compares columns, constraints, indexes, policies and triggers across the
 three supported paths; production catalog inspection remains a release step.
+
+Forward `0001_reservation_economics` refuses nonfinite order/reservation amounts
+and existing mismatched holds without rewriting rows. Correct such historical
+data only through a separately authorized remediation; the failed migration
+rolls back its catalog and journal changes. Reserved order identity, economics
+and decision evidence stay immutable after settlement too. Status transitions,
+execution scheduling and Telegram delivery metadata retain their existing
+contracts. Startup also checks the reservation RLS, constraints and triggers.

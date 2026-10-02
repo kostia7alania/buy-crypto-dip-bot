@@ -4,7 +4,7 @@ export type ReadinessState = "starting" | "ready" | "failed";
 export interface RuntimeReadinessSnapshot {
   state: ReadinessState;
   database: ReadinessState;
-  runner: ReadinessState;
+  runner: ReadinessState | "disabled";
   bot: ReadinessState | "stale" | "not_required";
   botLastSeenAt: string | null;
   schemaVersion: string;
@@ -14,7 +14,7 @@ export interface RuntimeReadinessSnapshot {
 const schemaVersion = CONVERGED_CATALOG;
 export const BOT_HEARTBEAT_STALE_MS = 90_000;
 let database: ReadinessState = "starting";
-let runner: ReadinessState = "starting";
+let runner: RuntimeReadinessSnapshot["runner"] = "starting";
 let botRequired = false;
 let botLastSeenAt: Date | null = null;
 
@@ -33,13 +33,17 @@ export const markRunnerReady = () => {
   runner = "ready";
 };
 
+export const markRunnerDisabled = () => {
+  runner = "disabled";
+};
+
 export const markBotHeartbeat = (at: Date = new Date()) => {
   botLastSeenAt = at;
 };
 
 export const markStartupFailed = () => {
   if (database !== "ready") database = "failed";
-  if (runner !== "ready") runner = "failed";
+  if (runner !== "ready" && runner !== "disabled") runner = "failed";
 };
 
 export const getRuntimeReadiness = (
@@ -57,7 +61,7 @@ export const getRuntimeReadiness = (
       database === "failed" || runner === "failed" || bot === "stale"
         ? "failed"
         : database === "ready" &&
-            runner === "ready" &&
+            (runner === "ready" || runner === "disabled") &&
             (bot === "ready" || bot === "not_required")
           ? "ready"
           : "starting",

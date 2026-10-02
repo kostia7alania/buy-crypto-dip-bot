@@ -5,7 +5,7 @@ import type {
 } from "@buy-crypto-dip-bot/db/testing";
 import { createTestDb, seedTwoTenants } from "@buy-crypto-dip-bot/db/testing";
 import { eq } from "drizzle-orm";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   claimOwnedPendingOrder,
   findOwnedStrategyBySymbol,
@@ -30,6 +30,7 @@ beforeEach(async () => {
 }, 60_000);
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await harness?.close();
 });
 
@@ -50,11 +51,8 @@ const reservationStatusOf = async (orderId: string) => {
 };
 
 describe("claimOwnedPendingOrder", () => {
-  it("blocks buy-now for an unsupported legacy pair while preserving cancellation", async () => {
-    await harness.db
-      .update(schema.orders)
-      .set({ symbol: "SHIBUSDT" })
-      .where(eq(schema.orders.id, world.alice.pendingOrderId));
+  it("blocks buy-now after a symbol leaves policy while preserving cancellation", async () => {
+    vi.stubEnv("ALLOWLIST_SYMBOLS", "ETHUSDT");
     expect(
       await claimOwnedPendingOrder(
         db(),

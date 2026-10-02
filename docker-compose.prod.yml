@@ -42,6 +42,7 @@ services:
       OPERATOR_TELEGRAM_USER_ID: ${OPERATOR_TELEGRAM_USER_ID:-}
       ALLOWLIST_SYMBOLS: &symbol-policy ${ALLOWLIST_SYMBOLS-BTCUSDT,ETHUSDT,SOLUSDT}
       EXECUTION_MODE: DRY_RUN
+      RUNNER_ENABLED: ${RUNNER_ENABLED:-true}
       PORT: "8787"
     depends_on:
       db:
@@ -108,7 +109,7 @@ services:
       - traefik.http.routers.dipbot.rule=Host(`buy-crypto-dip-bot.com`) || Host(`www.buy-crypto-dip-bot.com`)
       - traefik.http.routers.dipbot.entrypoints=websecure
       - traefik.http.routers.dipbot.tls.certresolver=le
-      - traefik.http.routers.dipbot.middlewares=dipbot-www
+      - traefik.http.routers.dipbot.middlewares=dipbot-www,dipbot-security
       # Plain HTTP always redirects before serving application content.
       - traefik.http.routers.dipbot-http.rule=Host(`buy-crypto-dip-bot.com`) || Host(`www.buy-crypto-dip-bot.com`)
       - traefik.http.routers.dipbot-http.entrypoints=web
@@ -119,6 +120,17 @@ services:
       - traefik.http.middlewares.dipbot-www.redirectregex.regex=^https://www\.(.*)
       - traefik.http.middlewares.dipbot-www.redirectregex.replacement=https://$$1
       - traefik.http.middlewares.dipbot-www.redirectregex.permanent=true
+      - traefik.http.middlewares.dipbot-security.headers.contenttypenosniff=true
+      - traefik.http.middlewares.dipbot-security.headers.framedeny=true
+      - traefik.http.middlewares.dipbot-security.headers.referrerpolicy=strict-origin-when-cross-origin
+      - traefik.http.middlewares.dipbot-security.headers.stsseconds=31536000
+      - traefik.http.middlewares.dipbot-security.headers.stsincludesubdomains=true
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
 
 volumes:
   pgdata:

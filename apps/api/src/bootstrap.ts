@@ -7,6 +7,7 @@ import {
 import {
   beginStartup,
   markDatabaseReady,
+  markRunnerDisabled,
   markRunnerReady,
   markStartupFailed,
 } from "./runtime-readiness.js";
@@ -26,9 +27,11 @@ export const prepareApi = async (
   try {
     await startBackgroundRunner({
       connectionString: config.postgresConnectionString,
+      enabled: config.runnerEnabled,
       onMigrationsComplete: markDatabaseReady,
     });
-    markRunnerReady();
+    if (config.runnerEnabled) markRunnerReady();
+    else markRunnerDisabled();
   } catch (error) {
     markStartupFailed();
     throw error;

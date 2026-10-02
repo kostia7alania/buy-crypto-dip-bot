@@ -45,6 +45,7 @@ export type ReserveDryRunOrderOutcome =
       reason:
         | "NOT_ACTIVE"
         | "INVALID_CONFIG"
+        | "STALE_MARKET"
         | "NO_SIGNAL"
         | "PENDING"
         | "DUPLICATE"
@@ -92,13 +93,10 @@ const parseStrategyConfig = (value: unknown): StrategyConfigSnapshot | null => {
   return parsed;
 };
 
-const marketSnapshotFor = (ticker: MarketTicker) => ({
+const marketSourceSnapshotFor = (ticker: MarketTicker) => ({
   source: "BYBIT_SPOT_TICKER_V5",
   symbol: ticker.symbol,
   sourceAt: ticker.sourceAt,
-  receivedAt: ticker.receivedAt,
-  ageMs: ticker.ageMs,
-  ttlMs: ticker.ttlMs,
   lastPrice: ticker.lastPrice,
   high24h: ticker.high24h ?? null,
   low24h: ticker.low24h ?? null,
@@ -108,8 +106,6 @@ export const reserveDryRunOrder = async (
   db: Db,
   input: ReserveDryRunOrderInput,
 ): Promise<ReserveDryRunOrderOutcome> => {
-  const now = input.now ?? new Date();
-
   return withPersonalTenant(db, input.userId, async (tx) => {
     // The strategy row is the reservation mutex. Every process sees the
     // preceding commit before it totals spend or creates another hold.
@@ -128,8 +124,30 @@ export const reserveDryRunOrder = async (
       return { outcome: "SKIPPED", reason: "NOT_ACTIVE" };
     }
 
-    const marketSnapshot = marketSnapshotFor(input.ticker);
-    const marketSnapshotKey = `bybit-ticker-v1:${digest(marketSnapshot)}`;
+    const now = input.now ?? new Date();
+    const ageAtEvaluationMs = Math.max(
+      0,
+      now.getTime() - Date.parse(input.ticker.sourceAt),
+    );
+    if (
+      !Number.isFinite(ageAtEvaluationMs) ||
+      !Number.isFinite(input.ticker.ttlMs) ||
+      input.ticker.ttlMs <= 0 ||
+      ageAtEvaluationMs > input.ticker.ttlMs
+    ) {
+      return { outcome: "SKIPPED", reason: "STALE_MARKET" };
+    }
+
+    const sourceSnapshot = marketSourceSnapshotFor(input.ticker);
+    const marketSnapshotKey = `bybit-ticker-v2:${digest(sourceSnapshot)}`;
+    const marketSnapshot = {
+      ...sourceSnapshot,
+      receivedAt: input.ticker.receivedAt,
+      ageMs: input.ticker.ageMs,
+      ttlMs: input.ticker.ttlMs,
+      evaluatedAt: now.toISOString(),
+      ageAtEvaluationMs,
+    };
     const config = parseStrategyConfig(strategy.config);
     if (!config) {
       return { outcome: "SKIPPED", reason: "INVALID_CONFIG" };
@@ -187,9 +205,21 @@ export const reserveDryRunOrder = async (
       return { outcome: "SKIPPED", reason: "PENDING" };
     }
 
+    // Legacy completed orders have no hold; their creation time is the only
+    // available timestamp. New holds count when consumed, including after downtime.
+    const completedAt =
+      sql`coalesce(${schema.orderReservations.resolvedAt}, ${schema.orders.createdAt})`.mapWith(
+        schema.orders.createdAt,
+      );
+    const consumedReservationForOrder = and(
+      eq(schema.orderReservations.orderId, schema.orders.id),
+      eq(schema.orderReservations.userId, schema.orders.userId),
+      eq(schema.orderReservations.status, "CONSUMED"),
+    );
     const [lastCompletedOrder] = await tx
-      .select({ createdAt: schema.orders.createdAt })
+      .select({ completedAt })
       .from(schema.orders)
+      .leftJoin(schema.orderReservations, consumedReservationForOrder)
       .where(
         and(
           eq(schema.orders.userId, input.userId),
@@ -197,11 +227,11 @@ export const reserveDryRunOrder = async (
           eq(schema.orders.status, "COMPLETED"),
         ),
       )
-      .orderBy(desc(schema.orders.createdAt))
+      .orderBy(desc(completedAt))
       .limit(1);
     if (
       lastCompletedOrder &&
-      now.getTime() - lastCompletedOrder.createdAt.getTime() <
+      now.getTime() - lastCompletedOrder.completedAt.getTime() <
         config.cooldownMinutes * 60_000
     ) {
       return { outcome: "SKIPPED", reason: "COOLDOWN" };
@@ -215,12 +245,13 @@ export const reserveDryRunOrder = async (
           amount: sql<string>`coalesce(sum(cast(${schema.orders.quoteAmount} as numeric)), 0)`,
         })
         .from(schema.orders)
+        .leftJoin(schema.orderReservations, consumedReservationForOrder)
         .where(
           and(
             eq(schema.orders.userId, input.userId),
             eq(schema.orders.strategyId, strategy.id),
             eq(schema.orders.status, "COMPLETED"),
-            gte(schema.orders.createdAt, cutoff),
+            gte(completedAt, cutoff.toISOString()),
           ),
         );
       return Number(result?.amount ?? "0");

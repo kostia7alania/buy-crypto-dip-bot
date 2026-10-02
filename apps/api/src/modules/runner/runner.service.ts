@@ -63,10 +63,10 @@ let lastTickAt: Date | null = null;
 
 export const getRunnerStatus = () => ({
   lastTickAt: lastTickAt ? lastTickAt.toISOString() : null,
-  tickIntervalMs: RUN_INTERVAL_MS,
+  tickIntervalMs: tickIntervalId ? RUN_INTERVAL_MS : 0,
   sessionCleanup: {
     lastCompletedAt: lastSessionCleanupAt?.toISOString() ?? null,
-    intervalMs: SESSION_CLEANUP_INTERVAL_MS,
+    intervalMs: sessionCleanupIntervalId ? SESSION_CLEANUP_INTERVAL_MS : 0,
   },
 });
 
@@ -383,6 +383,7 @@ async function runCountdownEdits(
 
 interface StartRunnerOptions {
   connectionString: string;
+  enabled: boolean;
   onMigrationsComplete?: () => void;
 }
 
@@ -395,6 +396,12 @@ export async function startRunner(options: StartRunnerOptions) {
     await runMigrations(db);
     logApiEvent("DATABASE_MIGRATION_COMPLETED");
     options.onMigrationsComplete?.();
+
+    if (!options.enabled) {
+      logApiEvent("RUNNER_DISABLED");
+      await pool.end();
+      return;
+    }
 
     await seedDefaultStrategyIfNeeded(db);
 
@@ -484,6 +491,7 @@ export async function startRunner(options: StartRunnerOptions) {
             const event = {
               NOT_ACTIVE: "RUNNER_INACTIVE_STRATEGY_SKIPPED",
               INVALID_CONFIG: "RUNNER_INVALID_STRATEGY_CONFIG_SKIPPED",
+              STALE_MARKET: "RUNNER_STALE_MARKET_SKIPPED",
               NO_SIGNAL: "RUNNER_NO_SIGNAL",
               PENDING: "RUNNER_PENDING_ORDER_SKIPPED",
               DUPLICATE: "RUNNER_DUPLICATE_EVALUATION_SKIPPED",

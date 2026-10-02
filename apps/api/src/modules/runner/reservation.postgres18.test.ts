@@ -49,7 +49,7 @@ const ticker: MarketTicker = {
   ttlMs: 30_000,
 };
 
-describePostgres18("PostgreSQL 18 reservation concurrency and restart", () => {
+describePostgres18("PostgreSQL 18 reservation connections", () => {
   beforeAll(async () => {
     admin = connect(testUrl as string);
     const version = await admin.pool.query<{ server_version_num: string }>(
@@ -106,9 +106,9 @@ describePostgres18("PostgreSQL 18 reservation concurrency and restart", () => {
     }
   });
 
-  it("serializes competing reservations and settles the durable hold after restart", async () => {
-    const firstProcess = connect(databaseUrl);
-    const secondProcess = connect(databaseUrl);
+  it("serializes pools and settles on same-process reconnect", async () => {
+    const firstConnection = connect(databaseUrl);
+    const secondConnection = connect(databaseUrl);
     const input = {
       userId,
       strategyId,
@@ -117,11 +117,11 @@ describePostgres18("PostgreSQL 18 reservation concurrency and restart", () => {
       now: new Date("2026-09-16T03:00:00.000Z"),
     };
     const outcomes = await Promise.all([
-      reserveDryRunOrder(firstProcess.db, {
+      reserveDryRunOrder(firstConnection.db, {
         ...input,
         correlationId: "pg18_reserve_first_1234",
       }),
-      reserveDryRunOrder(secondProcess.db, {
+      reserveDryRunOrder(secondConnection.db, {
         ...input,
         correlationId: "pg18_reserve_second_1234",
       }),
@@ -130,22 +130,25 @@ describePostgres18("PostgreSQL 18 reservation concurrency and restart", () => {
       (outcome) => outcome.outcome === "RESERVED",
     );
     expect(winners).toHaveLength(1);
-    expect(outcomes).toContainEqual({ outcome: "SKIPPED", reason: "PENDING" });
+    expect(outcomes).toContainEqual({
+      outcome: "SKIPPED",
+      reason: "PENDING",
+    });
     const winner = winners[0];
     if (winner?.outcome !== "RESERVED") return;
 
-    await Promise.all([close(firstProcess), close(secondProcess)]);
+    await Promise.all([close(firstConnection), close(secondConnection)]);
 
-    const restartedProcess = connect(databaseUrl);
+    const reopenedConnection = connect(databaseUrl);
     const completed = await claimDueDryRunOrder(
-      restartedProcess.db,
+      reopenedConnection.db,
       winner.order.id,
-      "pg18_restart_claim_1234",
+      "pg18_reopened_claim_1234",
       new Date("2026-09-16T03:00:16.000Z"),
     );
     expect(completed?.status).toBe("COMPLETED");
 
-    const [reservation] = await restartedProcess.db
+    const [reservation] = await reopenedConnection.db
       .select()
       .from(schema.orderReservations)
       .where(eq(schema.orderReservations.orderId, winner.order.id));
@@ -156,7 +159,7 @@ describePostgres18("PostgreSQL 18 reservation concurrency and restart", () => {
     });
     expect(reservation?.resolvedAt).toBeInstanceOf(Date);
 
-    const completionEvidence = await restartedProcess.db
+    const completionEvidence = await reopenedConnection.db
       .select()
       .from(schema.auditEvents)
       .where(

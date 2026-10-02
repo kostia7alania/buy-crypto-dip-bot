@@ -5,7 +5,7 @@ import type {
 } from "@buy-crypto-dip-bot/db/testing";
 import { createTestDb, seedTwoTenants } from "@buy-crypto-dip-bot/db/testing";
 import { and, eq } from "drizzle-orm";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { claimDueDryRunOrder } from "./order.repository.js";
 
 let harness: TestDatabase;
@@ -28,15 +28,13 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await harness?.close();
 });
 
 describe("due-order atomic claim", () => {
-  it("leaves an unsupported legacy order pending instead of simulating it", async () => {
-    await harness.db
-      .update(schema.orders)
-      .set({ symbol: "PEPEUSDT" })
-      .where(eq(schema.orders.id, world.alice.pendingOrderId));
+  it("leaves an existing order pending when its symbol is removed from policy", async () => {
+    vi.stubEnv("ALLOWLIST_SYMBOLS", "ETHUSDT");
     expect(
       await claimDueDryRunOrder(
         db(),

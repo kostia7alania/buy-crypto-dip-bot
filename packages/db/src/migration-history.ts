@@ -58,6 +58,31 @@ const assertTenantCatalog = async (tx: Tx) => {
   if (!result.rows[0]?.ready) throw new Error("MIGRATION_TENANT_CATALOG_DRIFT");
 };
 
+const assertReservationCatalog = async (tx: Tx) => {
+  const result = await tx.execute<{ ready: boolean }>(sql`
+    select (
+      exists(select 1 from pg_class where oid=to_regclass('public.order_reservations')
+        and relrowsecurity and relforcerowsecurity)
+      and (select count(*)=7 from pg_trigger where not tgisinternal and tgenabled='O'
+        and (tgrelid,tgname) in (
+          ('public.orders'::regclass,'orders_reserved_evidence_immutable'),
+          ('public.orders'::regclass,'orders_resolve_reservation'),
+          ('public.orders'::regclass,'orders_reservation_consistency'),
+          ('public.order_reservations'::regclass,'order_reservations_owned_tenant'),
+          ('public.order_reservations'::regclass,'order_reservations_lock_order'),
+          ('public.order_reservations'::regclass,'order_reservations_immutable'),
+          ('public.order_reservations'::regclass,'order_reservations_order_consistency')))
+      and (select count(*)=3 from pg_constraint where convalidated
+        and (conrelid,conname) in (
+          ('public.orders'::regclass,'orders_quote_finite_check'),
+          ('public.order_reservations'::regclass,'order_reservations_quote_positive_check'),
+          ('public.order_reservations'::regclass,'order_reservations_order_economics_fk')))
+    ) as ready
+  `);
+  if (!result.rows[0]?.ready)
+    throw new Error("MIGRATION_RESERVATION_CATALOG_DRIFT");
+};
+
 const applyForwardMigrations = async (tx: Tx, history: Migration[]) => {
   await tx.execute(sql`create table if not exists drizzle.__dipbot_forward_migrations (
     id serial primary key, hash text not null, created_at bigint not null
@@ -169,6 +194,7 @@ export const migrateKnownHistory = async (db: Db, folder: string) => {
       }
       await assertTenantCatalog(tx);
       await applyForwardMigrations(tx, forward);
+      await assertReservationCatalog(tx);
       return;
     }
 
@@ -201,5 +227,6 @@ export const migrateKnownHistory = async (db: Db, folder: string) => {
     `);
     await assertTenantCatalog(tx);
     await applyForwardMigrations(tx, forward);
+    await assertReservationCatalog(tx);
   });
 };

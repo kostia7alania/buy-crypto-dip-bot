@@ -12,6 +12,7 @@ const runtimeEnvSchema = v.object({
   TELEGRAM_BOT_TOKEN: v.optional(v.string()),
   PORT: v.optional(v.string()),
   EXECUTION_MODE: v.optional(v.picklist(["DRY_RUN"])),
+  RUNNER_ENABLED: v.optional(v.picklist(["true", "false"])),
 });
 
 export type ApiRuntime = "local" | "non-local";
@@ -24,6 +25,7 @@ export interface ApiRuntimeConfig {
   telegramBotToken: string | undefined;
   port: number;
   executionMode: "DRY_RUN";
+  runnerEnabled: boolean;
 }
 
 const invalid = (code: string): never => {
@@ -96,5 +98,6 @@ export const resolveApiRuntimeConfig = (
     telegramBotToken,
     port,
     executionMode: parsed.output.EXECUTION_MODE ?? "DRY_RUN",
+    runnerEnabled: parsed.output.RUNNER_ENABLED === "true",
   };
 };

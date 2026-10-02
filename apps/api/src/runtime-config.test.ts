@@ -42,6 +42,22 @@ describe("API runtime configuration", () => {
     });
   });
 
+  it.each([
+    [undefined, false],
+    ["false", false],
+    ["true", true],
+  ])("enables the runner only for RUNNER_ENABLED=%s", (flag, expected) => {
+    const env = productionEnv();
+    if (flag !== undefined) env.RUNNER_ENABLED = flag;
+    expect(resolveApiRuntimeConfig(env).runnerEnabled).toBe(expected);
+  });
+
+  it("rejects an invalid runner flag instead of silently enabling execution", () => {
+    expect(() =>
+      resolveApiRuntimeConfig({ ...productionEnv(), RUNNER_ENABLED: "yes" }),
+    ).toThrow("API_RUNTIME_CONFIG_INVALID:ENV_SHAPE");
+  });
+
   it("rejects a missing non-local service key without echoing secrets", () => {
     const env = productionEnv();
     delete env.API_KEY;
