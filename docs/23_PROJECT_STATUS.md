@@ -1,6 +1,6 @@
 # Project status
 
-Reviewed: 2026-09-16. This document owns the current readiness verdict.
+Reviewed: 2026-10-02. This document owns the current readiness verdict.
 Historical plans preserve their original evidence and do not override it.
 
 **Gate 1: NO-GO. Execution: DRY_RUN only. Hosted, edge, Demo and live launch
@@ -8,8 +8,16 @@ remain unapproved.**
 
 ## Current source
 
-Reservation source: `37d986aa72d20f80b319ae6ebff7bfb628793a13`.
-Branch: `codex/remote-continuation-20260916`. It descends from the documented
+October review implementation: `fc47168`. Review and merge work is tracked in
+[plan 013](../plans/013-cost-first-merge-review.md). The architecture decision
+and provider limits were refreshed in the [cost-first strategy](15_COST_FIRST_SAAS_STRATEGY.md).
+The review adds auth replay/logout fixes, runner and budget safeguards,
+idempotent Telegram toggles, locked config edits and forward-only reservation
+economics constraints. These changes do not approve production or implement
+the edge/provider target.
+
+Reservation baseline: `37d986aa72d20f80b319ae6ebff7bfb628793a13`.
+Integration branch: `codex/remote-continuation-20260916`. It descends from the documented
 tenant-integration checkpoint `3b90246`, whose runtime merge
 `5ee012d1d4271333c24f4b195633a28cdd0cb71f` combines recovery `d183fa2` with
 the relevant cost-first foundation from main
@@ -60,8 +68,9 @@ contract is implemented.
 - Restricted-role pool reuse: A, forbidden foreign write, rollback, B, missing
   context and restored connection state. No developer or production DB used.
 - Disposable PostgreSQL 18: two independent runner connections serialize on
-  one strategy, exactly one creates the order/hold, and a newly opened process
-  later completes the durable order and consumes its hold. The existing 16-case
+  one strategy, exactly one creates the order/hold, and a newly opened pool in
+  the same process later completes the durable order and consumes its hold.
+  Process-crash recovery and startup discovery were not proved. The existing 16-case
   PostgreSQL contract lane also passes with the new forward migration.
 - API snapshot A/B isolation and anonymous refusal; BFF session forwarding,
   private caching headers and upstream outage behavior.

@@ -277,9 +277,10 @@ partially. The evaluation key suppresses an identical strategy/config/market
 tuple, but this is not a global market-candle identity. Approved reservations
 have full local snapshots; rejected decisions still lack equivalent config and
 market references. Dashboard valuation does not yet share this observation,
-and missing/stale/fees/slippage reporting remains open. A targeted two-process
-race and new-process settlement passed on disposable PostgreSQL 18, but that is
-not the complete N07 matrix or deployment evidence.
+and missing/stale/fees/slippage reporting remains open. A targeted two-pool
+race and reopened-pool settlement passed on disposable PostgreSQL 18 in one
+application process. Process-crash recovery and startup discovery were not
+proved; this is not the complete N07 matrix or deployment evidence.
 
 ## Preserved history and later work
 

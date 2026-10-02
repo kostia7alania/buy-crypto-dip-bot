@@ -1,9 +1,11 @@
 # Cost-First SaaS Strategy
 
-> Source snapshot: `origin/main` at `becc46b`, authored 2026-08-20, restored 2026-09-12. "Current" and "COMPLETE" below refer to that remote source, not this recovery checkout or verified production. See [current status](23_PROJECT_STATUS.md) before implementation. Provider prices and capabilities below retain their original check date.
+Originally authored 2026-08-20; reviewed against current provider documentation
+and local source on 2026-10-02. [Project status](23_PROJECT_STATUS.md) owns the
+release verdict. The target architecture below is still partly unimplemented.
 
 - Status: approved direction; tenant-safe VPS slice implemented, edge cutover pending
-- Last reviewed: 2026-08-20
+- Last reviewed: 2026-10-02
 - Decision record: [`ADR_008_COST_FIRST_HYBRID_EDGE.md`](../adr/ADR_008_COST_FIRST_HYBRID_EDGE.md)
 - Delivery plan: [`004-cost-first-multi-tenant-edge.md`](../plans/004-cost-first-multi-tenant-edge.md)
 
@@ -28,6 +30,67 @@ enough for free allowances. That is a target, not a guarantee: a public SaaS
 with paying users should upgrade when backups, availability, support, or
 usage make a paid plan the responsible choice.
 
+Starting from scratch today, I would choose the same Nuxt/Vue, TypeScript,
+Hono, PostgreSQL/Drizzle and Supabase Auth direction for this product. Use
+current stable, supported releases and pinned dependencies. A prerequisite
+upgrade to every newest major is unnecessary for reviewing this branch.
+Public assets should bypass Worker execution; backend work should run on
+events or bounded schedules. The expensive part is continuous strategy work,
+database traffic and retained evidence, rather than public-page rendering.
+
+Registry checks on 2026-10-02 returned Nuxt 4.5.2, Hono 4.13.12 and Better Auth
+1.7.7 as their latest releases. These are research observations, not versions
+installed by this review. The existing lockfile remains the reproducible build
+input; upgrade it in a focused compatibility change.
+
+## Questions used to review the decision
+
+### Stack and hosting
+
+1. Which work must run without visitors: price collection, strategy evaluation,
+   due orders, notification delivery and retries? What latency does each need?
+2. Which routes need build-time HTML, client rendering or request-time server
+   work? Can public asset requests avoid the Worker entirely?
+3. Does Astro save measurable browser JavaScript or editorial effort compared
+   with prerendered Nuxt, enough to justify another application?
+4. Can one small BFF own cookies and server credentials while the public pages
+   and private shell remain static? What still needs the domain API?
+5. Which allowance expires first: CPU, requests, queue operations, database
+   size, egress or authentication email? What happens when it is exhausted?
+6. What do 100, 1,000 and 10,000 daily dashboard users cost under explicit
+   viewing-time and refresh assumptions? How does pending-order polling differ?
+7. Can market observations be fetched once per symbol and reused across users?
+   Can one scheduled batch replace a queue message per user per minute?
+8. How are crawler requests, webhook retries and abusive clients charged, and
+   which limits stop unbounded work before it reaches the database?
+9. Which dependencies need Node APIs, permanent connections or a persistent
+   process? Are edge entries and deployment configuration actually present?
+10. What migration preserves accounts, tenant data and audit history when free
+    capacity runs out? Can one producer own work throughout cutover?
+11. Which stable framework/runtime releases fit together, and which upgrades
+    solve a concrete problem rather than changing version labels?
+12. What can the resume demonstrate with source and measurements: tenant
+    isolation, sessions, idempotency, migrations, observability and releases?
+
+### Authentication
+
+1. Is Telegram the primary identity for this audience, and which linked login
+   can restore access if the Telegram account becomes unavailable?
+2. Does managed Supabase Auth reduce total work compared with Clerk or owning
+   Better Auth operations when PostgreSQL is already needed?
+3. Which features have separate limits or charges: active users, SMTP, SMS,
+   MFA, organizations, session controls and custom domains?
+4. Where do tokens live, who refreshes them, and how are sessions expired,
+   revoked and cleared when the browser switches users?
+5. How does the API verify a principal and establish tenant context? Does the
+   actual database role enforce RLS, or bypass it?
+6. What prevents replay, login CSRF, account-linking takeover and foreign-tenant
+   reads/writes? Which negative cases have real evidence?
+7. How does bot notification eligibility bind a private Telegram chat to the
+   same application account without accepting a caller-selected recipient?
+8. Can users and external identity subjects move to a different auth provider
+   without replacing app-user IDs or losing their histories?
+
 ## Product truth today
 
 | Area | Current repository | Target after this plan |
@@ -38,7 +101,7 @@ usage make a paid plan the responsible choice.
 | Dashboard | CSR-only, noindex, one tenant snapshot refresh | Same contract behind Supabase session/JWT |
 | API | Hono Node server with interval runner | Hono Worker with JWT tenant context |
 | Bot | grammY long polling | Telegram webhook Worker with secret verification |
-| Scheduling | Idempotent minute-slot `setInterval` runner with a process kill switch | Cloudflare Cron producer plus Queue consumer |
+| Scheduling | Node intervals, single-flight runner, durable reservation/evaluation keys and typed notification outbox | Bounded Cron batches plus Queue consumers; one producer after cutover |
 | Deployment | Immutable-image VPS workflow with backup, migration and health gates | Cloudflare Workers plus Supabase migrations; VPS scheduler disabled after cutover |
 
 Until the target column is implemented and released, marketing and docs must
@@ -49,7 +112,7 @@ or database column named `LIVE` is not evidence that live trading exists.
 
 ### Nuxt instead of adding Astro now
 
-Astro is excellent for content-heavy static sites, but adding it here would
+Astro is useful for content-heavy static sites, but adding it here would
 create a second router, component system, SEO pipeline, and deployment. Nuxt
 already supports build-time prerendering for public routes, client-only
 rendering for private routes, and dynamic Nitro endpoints for the BFF. The
@@ -58,6 +121,11 @@ coherent SaaS codebase.
 
 Revisit Astro only if public content becomes a separate publishing product
 with independent ownership and release cadence.
+
+Astro's islands can reduce browser JavaScript on content pages. That is a
+different saving from request-time compute: both frameworks can emit static
+HTML. Choosing Astro alone does not remove auth, API or scheduled-work costs.
+[Astro islands](https://docs.astro.build/en/concepts/islands/)
 
 ### Prerender public pages
 
@@ -101,6 +169,36 @@ fails closed with `401` when a session is absent or invalid.
 
 ## Authentication and tenancy
 
+### Provider choice
+
+Supabase Auth is the preferred target here because the application already
+needs PostgreSQL and tenant isolation. Its current Free tier includes 50,000
+monthly active users; custom OAuth/OIDC supports up to three custom providers
+on Free. This makes Telegram plus an explicitly linked recovery identity a
+reasonable small-project choice. This recommendation is an engineering
+judgment, not a claim that the migration already exists.
+[Pricing](https://supabase.com/pricing),
+[custom providers](https://supabase.com/docs/guides/auth/custom-oauth-providers)
+
+Better Auth is the alternative when owning authentication operations and
+avoiding a separate hosted identity service matter more than maintenance
+effort. Its session, OAuth, passkey and MFA features are useful, but application
+hosting, the database, email, upgrades and incident handling remain ours.
+[Better Auth](https://better-auth.com/docs/introduction)
+
+Clerk is a valid managed alternative when ready-made account UI is the main
+priority. Its current Hobby allowance is 50,000 monthly retained users, a
+different metric from Supabase MAU. Its free sessions have a fixed seven-day
+lifetime and MFA is in Pro. For this PostgreSQL-backed product, another auth
+vendor has no demonstrated benefit yet. [Clerk pricing](https://clerk.com/pricing)
+
+Prefer provider login at the start. Email OTP or magic links require a delivery
+service: Supabase's default SMTP only sends to project-team addresses, is
+currently limited to two messages per hour and is not a production mail
+service. SMS adds a separate provider cost. A custom auth-service domain is
+optional; the application's own domain does not require that add-on.
+[Supabase SMTP](https://supabase.com/docs/guides/auth/auth-smtp)
+
 ### Login flow
 
 Telegram now exposes a standard OIDC authorization-code flow with PKCE. The
@@ -117,9 +215,19 @@ target flow is:
 - Optionally link a recovery provider later. Linking must preserve the same
   app user and tenant rather than creating parallel accounts.
 
-The current Telegram Login Widget HMAC flow now creates a personal tenant and
-feeds the restricted PostgreSQL RLS context. It is a safe VPS bootstrap, but
-it is not the target Supabase OIDC/JWT contract.
+The current Telegram Login Widget HMAC flow creates a personal tenant and
+feeds the restricted PostgreSQL RLS context. Its opaque API sessions remain
+the implemented VPS contract. Supabase OIDC/JWT is pending. Keep issuer plus
+subject as the external identity key; never merge users by a mutable username
+or an unverified email. Account linking requires proof of both identities.
+
+The BFF should own refresh tokens in HttpOnly cookies and perform refresh on
+the server. Verifying a JWT signature alone does not prove immediate session
+revocation: define the accepted access-token lifetime and sensitive-operation
+session checks before cutover. Supabase's configurable inactivity/time-box and
+single-session controls require a paid plan. Preserve the current logout and
+revocation behavior when choosing the replacement contract.
+[Supabase sessions](https://supabase.com/docs/guides/auth/sessions)
 
 ### Request flow
 
@@ -138,10 +246,12 @@ same app user before any read or write.
 
 ### Data ownership
 
-`tenant_id` is required on strategies, orders, audit facts, ledger events and
-outbox rows. Migration `0002_cost_first_tenancy.sql` first assigns provable
-personal ownership or quarantines ambiguous legacy data, then adds foreign
-keys, uniqueness rules and forced RLS policies in the same transaction.
+The integrated source requires matching owners and tenants for strategies,
+orders and reservations. Tenant audit visibility remains owner-scoped;
+historical and system audit records may retain a null tenant. Two frozen
+migration histories converge through guarded SQL. Ambiguous legacy ownership
+stops that migration for an explicit decision. See
+[migration authority](../packages/db/migrations/README.md).
 
 The Supabase service-role key stays server-only and is not a shortcut around
 tenant checks. Administrative jobs using elevated access must carry an
@@ -179,7 +289,8 @@ The former six independent polling loops generated about 48 BFF requests per
 minute for one visible dashboard tab. They are now replaced by one versioned
 `/dashboard/snapshot` contract that:
 
-- refresh every 30-60 seconds after the prior request completes;
+- refresh 30 seconds after the prior request completes, or three seconds while
+  an order is pending;
 - stop while the tab is hidden;
 - refresh stale data when the tab becomes visible;
 - refresh immediately after a successful mutation;
@@ -187,15 +298,17 @@ minute for one visible dashboard tab. They are now replaced by one versioned
 - return `401` without any dashboard data when auth fails;
 - use `private, no-store` and `Vary: Cookie` headers.
 
-This reduces the baseline to one or two BFF requests per minute per visible
-tab and removes all dashboard work for hidden tabs.
+The current normal cadence is at most about two BFF requests per minute per
+visible tab; the pending cadence is up to about twenty. Hidden tabs stop
+scheduled refreshes and cancel their current request. Backend strategy work
+continues independently.
 
 ## Free-tier capacity and what consumes it
 
-Provider allowances below were checked on 2026-08-20 and can change.
+Provider allowances below were checked on 2026-10-02 and can change.
 
-- Cloudflare Workers Free lists 100,000 dynamic requests per day, 10 ms CPU
-  per invocation, and five Cron triggers per account. Static asset requests
+- Cloudflare Workers Free lists 100,000 dynamic requests per day and 10 ms CPU
+  per invocation. Static asset requests
   are listed as free and unlimited.
 - Cloudflare Queues Free lists 10,000 operations per day. A normal message
   delivery is commonly three operations: write, read, and delete. Retries add
@@ -203,6 +316,12 @@ Provider allowances below were checked on 2026-08-20 and can change.
 - Supabase Free lists 50,000 monthly active users, a 500 MB database, 5 GB
   egress, and two active projects. Free projects can pause after one week of
   inactivity.
+
+Asset-first routing matters: `run_worker_first` invokes dynamic code even for
+matching assets. Cloudflare's optional Workers Caching also bills cached
+requests. The static allowance is not a promise that every CDN-cached request
+or CSR navigation is free. [Static asset billing](https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/),
+[Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/)
 
 The public visitor count is therefore not directly capped by the Worker
 request allowance when pages and assets are genuinely static. Authenticated
@@ -214,6 +333,31 @@ two snapshot refreshes per minute creates at least 6,000 dynamic BFF requests
 per day, before downstream API work. Measure real invocations and database
 egress rather than converting a marketing free-tier number into a promised
 visitor count.
+
+The following is a capacity model, not a measured benchmark. Assume 30 visible
+minutes per user per day, two refreshes per minute, 30 days per month, and
+10 KiB of database egress per refresh. Initial loads, mutations, login,
+downstream calls, retries, bots and scheduled jobs are additional.
+
+| Daily dashboard users | BFF requests per day | Modeled DB egress per month |
+| --- | ---: | ---: |
+| 100 | 6,000 | 1.84 GB |
+| 1,000 | 60,000 | 18.43 GB |
+| 10,000 | 600,000 | 184.32 GB |
+
+Database egress could therefore exceed a free allowance before the auth-user
+limit. Response bytes and database transfer are different measurements;
+replace the 10 KiB assumption with actual provider metrics. Sustained pending
+polling can multiply the request estimate by roughly ten.
+
+Queue work must also be batched: one message per strategy per minute is 1,440
+messages, usually about 4,320 operations per strategy per day before retries.
+A small number of constantly evaluated strategies would exhaust 10,000 daily
+operations. Fetch shared prices, scan bounded batches, and enqueue actions or
+resumable work. Queue delays are not an exact timer; execution must recheck
+the durable due time and expose overdue work.
+[Queue pricing](https://developers.cloudflare.com/queues/platform/pricing/),
+[queue delays](https://developers.cloudflare.com/queues/configuration/batching-retries/)
 
 Bots and crawlers are not free by definition:
 
@@ -227,6 +371,13 @@ Bots and crawlers are not free by definition:
   this is why they are removed from the cost-first target.
 
 ### Upgrade signals
+
+The first predictable paid baseline is currently Workers Paid from $5/month
+and Supabase Pro from $25/month, plus domain and any usage/add-ons. It is a
+starting budget, not an upper cap. Free Supabase lacks automatic backups;
+regular exports and verified restoration need their own storage and work.
+[Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/),
+[Supabase pricing](https://supabase.com/pricing)
 
 Move to paid infrastructure before an emergency when any of these becomes
 true:
@@ -269,6 +420,20 @@ has passed release review and is demonstrably available in production.
   cutover.
 - Provider limits and costs are monitored; free tier is an optimization, not
   an architectural dependency.
+
+## Resume value
+
+Show the working engineering decisions: a TypeScript monorepo, public static
+delivery, a private CSR dashboard, server-owned sessions, PostgreSQL tenant
+isolation, auditable state transitions, durable jobs, migrations and a checked
+release workflow. Explain one actual race or account-isolation failure and
+the fix. These are transferable SaaS skills without adding Kubernetes,
+Kafka or extra services solely for a technology list.
+
+State measured results and released features precisely. Cloudflare/Supabase
+deployment, provider OIDC and domain-only operating cost remain targets until
+they are implemented and measured. The current branch is a VPS dry-run
+foundation, not completion of all 22 edge migration items.
 
 ## Sources
 

@@ -496,3 +496,58 @@ fees/slippage, scheduler fairness/drain, real Telegram, destination restore and
 production catalog evidence remain open. No push, deployment, provider login,
 Telegram delivery, private exchange request or live order occurred. The final
 documentation-only checkpoint follows the implementation source.
+
+## 2026-10-02: cost-first review and main integration
+
+Review implementation: `fc47168`, based on `8dc038c`; remote main at review
+start was `becc46b`, already an ancestor. All three remote PRs were merged;
+the local cost-first branch had the same tree as remote main. The continuation
+is the only additional source line to integrate. No history rewrite is needed.
+
+Three bounded independent reviews covered auth/BFF, migrations/RLS and
+runner/order behavior. Confirmed fixes:
+
+- Session lookup failure cannot report logout success. Telegram replay
+  fingerprints survive the full signature acceptance window, including skew.
+- `RUNNER_ENABLED=false` keeps migrations/API available without background
+  loops. Readiness reports `disabled`, not a running scheduler.
+- Reservation approval rechecks freshness after the strategy lock; its source
+  identity excludes receipt metadata. Consumed time controls rolling budgets
+  and cooldown, with a documented creation-time fallback for legacy orders.
+- Config merges lock before reading. Telegram toggles atomically retain a
+  replay receipt and result in the existing immutable audit history.
+- Forward migration `0001_reservation_economics` rejects mismatched or
+  nonfinite legacy state without rewriting it, binds reservation economics to
+  the exact order, and prevents later mutation of reserved order evidence.
+  Both frozen source histories and forward migration 0000 are unchanged.
+- Existing Traefik security headers and the web healthcheck are preserved.
+  CI now runs the API PostgreSQL lane as well as the database lane.
+
+Verification on the combined implementation:
+
+- `TURBO_FORCE=true pnpm check`: passed; typecheck and all test tasks ran
+  without cache reuse. API 163, bot 65, DB 68 and web 36 ordinary tests passed;
+  supporting package suites passed too. PostgreSQL-only cases are separate.
+- `pnpm build`: 12 package tasks successful, including fresh API/bot/Nuxt
+  production builds; unchanged library tasks could reuse their build cache.
+- Disposable native PostgreSQL 18: DB `test:postgres18` 20/20 and API
+  `test:postgres18` 1/1. Evidence remains multiple pools in one Node process,
+  not process-crash recovery or startup discovery.
+- Built API against a separate disposable database: migrations succeeded,
+  `/health/ready` returned HTTP 200 with `runner: disabled`, and anonymous
+  `/orders` returned HTTP 401. The launch specified `DB_MIGRATIONS_DIR`, as
+  the Docker image does. No bot/exchange request was needed.
+- YAML parsing and `git diff --check` passed. Full `docker compose config`
+  rendering could not run because this host lacks the Compose plugin.
+- A cold concurrent package check exceeded two existing five-second PGlite
+  test budgets. Limiting package-level test concurrency to one made the full
+  uncached run pass; no assertion, check or timeout was weakened. Old order
+  fixtures now narrow symbol policy instead of rewriting immutable evidence.
+
+The cost-first strategy now contains detailed review questions, current
+provider sources, auth alternatives and explicit capacity assumptions.
+Cloudflare/Supabase/OIDC/webhook/Cron/Queues remain unimplemented targets.
+Gate 1 remains NO-GO. `DEPLOY_ENABLED` exists, but `GATE1_APPROVED` was absent
+at review; no production permission or provider setting was changed. Remote
+publication and CI outcomes are evidenced by the resulting GitHub history and
+Actions runs, separately from these local results.

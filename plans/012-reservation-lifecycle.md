@@ -2,6 +2,9 @@
 
 Started: 2026-09-16. Status: complete for the bounded local slice.
 
+Evidence wording corrected on 2026-10-02: the native PostgreSQL test uses
+multiple pools inside one Node process, not multiple application processes.
+
 ## Objective
 
 Deliver the bounded N10 reservation-correctness slice and the matching N07
@@ -32,8 +35,8 @@ captured by an active reservation.
 4. Route the runner through one atomic repository operation; retain existing
    risk audit and notification contracts.
 5. Prove rollback, release, consume, duplicate suppression and config-snapshot
-   retention locally. On disposable PostgreSQL 18, prove two-process
-   serialization and completion by a new process after restart.
+   retention locally. On disposable PostgreSQL 18, prove competing-connection
+   serialization and completion through a newly opened connection pool.
 6. Run the repository checks/build, update evidence/backlog/status honestly,
    and save local commits without push or deployment.
 
@@ -52,8 +55,9 @@ captured by an active reservation.
 - `pnpm check` and `pnpm build` passed. The ordinary API, bot and DB suites
   passed, with PostgreSQL-only cases skipped in that lane as designed.
 - A disposable loopback-only `postgres:18-alpine` instance passed the existing
-  16-case PostgreSQL contract suite and the new two-process reservation race
-  plus new-process restart settlement case. The container was removed after
+  16-case PostgreSQL contract suite and the two-pool reservation race
+  plus reopened-pool settlement case in one application process. These do not
+  prove process-crash recovery or startup discovery. The container was removed after
   verification; no persistent volume, provider credential or external action
   was used.
 - The first cold parallel `pnpm check` attempt exposed two five-second PGlite
