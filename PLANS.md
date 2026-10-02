@@ -8,6 +8,8 @@ Current priorities: [master backlog](tasks/00_MASTER_PLAN.md).
 
 ## Current work
 
+- [014: Low-cost pilot delivery](plans/014-low-cost-pilot-delivery.md),
+  destination inventory, minimal-cost hosting and verified DRY_RUN delivery.
 - [013: Cost-first architecture and merge review](plans/013-cost-first-merge-review.md),
   current provider research, security/correctness review and main integration.
 - [012: Durable dry-run reservation lifecycle](plans/012-reservation-lifecycle.md),
