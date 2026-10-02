@@ -4,14 +4,39 @@ Originally authored 2026-08-20; reviewed against current provider documentation
 and local source on 2026-10-02. [Project status](23_PROJECT_STATUS.md) owns the
 release verdict. The target architecture below is still partly unimplemented.
 
-- Status: approved direction; tenant-safe VPS slice implemented, edge cutover pending
+- Status: existing-VPS pilot chosen; edge remains an optional later migration
 - Last reviewed: 2026-10-02
 - Decision record: [`ADR_008_COST_FIRST_HYBRID_EDGE.md`](../adr/ADR_008_COST_FIRST_HYBRID_EDGE.md)
 - Delivery plan: [`004-cost-first-multi-tenant-edge.md`](../plans/004-cost-first-multi-tenant-edge.md)
 
 ## Executive decision
 
-Build one modern TypeScript SaaS with clear runtime boundaries:
+### Pilot decision after destination inspection
+
+Use the existing paid VPS for the first reviewed DRY_RUN release. The owner
+reported Singapore 1 GB and Russia 8 GB hosts and delegated the hosting choice.
+The configured deployment destination was inspected on October 2: 960 MB RAM,
+261 MB available and approximately 201 MiB across the four project containers.
+Swap is already in use. Keep builds and restore rehearsals off this small host;
+this snapshot does not establish spare capacity under load. Exact evidence is
+in [plan 014](../plans/014-low-cost-pilot-delivery.md).
+
+Keep Nuxt 4 public prerender, private CSR, the server-owned BFF/session boundary,
+Hono, PostgreSQL and the existing Telegram identity flow. Do not add a new auth
+provider or rewrite the runner just to avoid rent on a server already paid for.
+The pilot has no new hosting subscription; it is not a zero-total-cost system.
+The domain currently serves the older VPS revision, not the latest main build.
+
+Use free managed hosting when it saves total development and operational work.
+Revisit Cloudflare/Supabase on measured resource limits, reliability needs or
+costs, not automatically upon the first customer. Preserve normal PostgreSQL
+and explicit application/auth boundaries so relocation remains possible.
+For a Russian audience, verify the complete site/login/API path without VPN;
+static CDN delivery does not eliminate reachability problems or API latency.
+
+### Optional edge target
+
+The previously researched edge design remains a candidate, not a pilot blocker:
 
 - Nuxt 4 prerenders public SEO pages.
 - The authenticated dashboard is CSR and talks only to a dynamic Nuxt BFF.
@@ -30,8 +55,8 @@ enough for free allowances. That is a target, not a guarantee: a public SaaS
 with paying users should upgrade when backups, availability, support, or
 usage make a paid plan the responsible choice.
 
-Starting from scratch today, I would choose the same Nuxt/Vue, TypeScript,
-Hono, PostgreSQL/Drizzle and Supabase Auth direction for this product. Use
+Starting from scratch without an existing deployment, I would choose the same
+Nuxt/Vue, TypeScript, Hono, PostgreSQL/Drizzle and Supabase Auth direction. Use
 current stable, supported releases and pinned dependencies. A prerequisite
 upgrade to every newest major is unnecessary for reviewing this branch.
 Public assets should bypass Worker execution; backend work should run on
@@ -104,7 +129,8 @@ input; upgrade it in a focused compatibility change.
 | Scheduling | Node intervals, single-flight runner, durable reservation/evaluation keys and typed notification outbox | Bounded Cron batches plus Queue consumers; one producer after cutover |
 | Deployment | Immutable-image VPS workflow with backup, migration and health gates | Cloudflare Workers plus Supabase migrations; VPS scheduler disabled after cutover |
 
-Until the target column is implemented and released, marketing and docs must
+The target column is optional future work, not the current pilot commitment.
+Until it is implemented and released, marketing and docs must
 describe the product as a self-hosted dry-run simulator. A source file, plan,
 or database column named `LIVE` is not evidence that live trading exists.
 

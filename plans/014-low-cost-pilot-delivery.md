@@ -84,4 +84,14 @@ it cannot replace a pending production deployment. No gate was opened.
 - Local port 55439 belonged to an unrelated Colima profile and was left alone.
   The disposable crypto proof database uses 55449, container
   `dipbot-pilot-pg18-20261002`. No production data is in that fixture.
-- Fresh production backup restoration remains pending verified SSH identity.
+- The fresh-backup rehearsal workflow and local-only verifier were independently
+  reviewed. A driver query-string host override was found and fixed by refusing
+  all DSN query/fragment components. Missing/mismatched SSH keys fail closed.
+- A subsequent key-discovery run (37057984233) deliberately stopped before SSH
+  execution because no trusted fingerprint is configured. Its observed host key
+  is absent from available trusted local records; provider console requires
+  login. Fresh production backup restoration remains pending independent SSH
+  identity verification, not approved from `ssh-keyscan` alone.
+- The new runner process regression passes on PostgreSQL 18.6: committed hold,
+  SIGKILL, two fresh competing scheduler processes, one atomic settlement, then
+  another cold start without duplication. Parent rerun passed 2/2 API PG cases.

@@ -1,0 +1,81 @@
+name: Rehearse VPS Restore
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rehearse-vps
+  cancel-in-progress: false
+
+jobs:
+  rehearse:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      POSTGRES_CONNECTION_STRING: postgresql://postgres:rehearsal_local_only@127.0.0.1:55432/dipbot_rehearsal_restore
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec turbo build --filter=@buy-crypto-dip-bot/db...
+      - name: Stream a fresh backup without changing production
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          EXPECTED_FINGERPRINT: ${{ vars.VPS_SSH_FINGERPRINT }}
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          test -n "$EXPECTED_FINGERPRINT"
+          KEY_FILE="$RUNNER_TEMP/dipbot-ssh-key"
+          HOST_FILE="$RUNNER_TEMP/dipbot-known-hosts"
+          trap 'rm -f "$KEY_FILE"' EXIT
+          printf '%s\n' "$VPS_SSH_KEY" > "$KEY_FILE"
+          ssh-keyscan -T 10 -t ed25519 "$VPS_HOST" > "$HOST_FILE" 2>/dev/null
+          test "$(ssh-keygen -lf "$HOST_FILE" -E sha256 | awk '{print $2}')" = "$EXPECTED_FINGERPRINT"
+          ssh -T -i "$KEY_FILE" -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOST_FILE" \
+            -o HostKeyAlgorithms=ssh-ed25519 -o ConnectTimeout=15 \
+            "$VPS_USER@$VPS_HOST" \
+            'cd /opt/buy-crypto-dip-bot && docker compose exec -T db pg_dump -U postgres -d dipbot --format=custom --no-owner --no-acl' \
+            > "$RUNNER_TEMP/dipbot-rehearsal.dump"
+          test -s "$RUNNER_TEMP/dipbot-rehearsal.dump"
+          echo BACKUP_STREAMED_TO_EPHEMERAL_RUNNER
+      - name: Restore into an isolated PostgreSQL 18 container
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          docker run -d --name dipbot-rehearsal-db \
+            -e POSTGRES_PASSWORD=rehearsal_local_only \
+            -p 127.0.0.1:55432:5432 postgres:18-alpine
+          READY=0
+          for attempt in $(seq 1 30); do
+            if docker exec dipbot-rehearsal-db pg_isready -U postgres; then READY=1; break; fi
+            sleep 1
+          done
+          test "$READY" = 1
+          docker exec dipbot-rehearsal-db createdb -U postgres dipbot_rehearsal_restore
+          docker exec dipbot-rehearsal-db psql -X -v ON_ERROR_STOP=1 -U postgres -d dipbot_rehearsal_restore \
+            -c 'CREATE ROLE dipbot_app NOLOGIN NOSUPERUSER NOBYPASSRLS;'
+          if ! docker exec -i dipbot-rehearsal-db pg_restore --exit-on-error \
+            --no-owner --no-acl -U postgres -d dipbot_rehearsal_restore \
+            < "$RUNNER_TEMP/dipbot-rehearsal.dump" \
+            2> "$RUNNER_TEMP/dipbot-restore-private.log"; then
+            echo RESTORE_FAILED_PRIVATE_DIAGNOSTICS_NOT_PUBLISHED
+            exit 1
+          fi
+          echo BACKUP_RESTORED
+      - name: Check repeated migration and original financial/audit fields
+        run: node packages/db/scripts/rehearse-restore.mjs
+      - name: Remove private backup and disposable resources
+        if: always()
+        run: |
+          docker rm -fv dipbot-rehearsal-db >/dev/null 2>&1 || true
+          rm -f "$RUNNER_TEMP/dipbot-ssh-key" "$RUNNER_TEMP/dipbot-known-hosts" \
+            "$RUNNER_TEMP/dipbot-rehearsal.dump" "$RUNNER_TEMP/dipbot-restore-private.log"
