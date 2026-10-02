@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: deploy-production
+  group: inspect-vps
   cancel-in-progress: false
 
 jobs:
@@ -19,11 +19,25 @@ jobs:
     env:
       INSPECT_SHA: ${{ github.sha }}
     steps:
+      - name: Verify SSH host identity
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          EXPECTED_FINGERPRINT: ${{ vars.VPS_SSH_FINGERPRINT }}
+        run: |
+          set -Eeuo pipefail
+          KEY_FILE="$(mktemp)"
+          trap 'rm -f "$KEY_FILE"' EXIT
+          ssh-keyscan -T 10 -t ed25519 "$VPS_HOST" > "$KEY_FILE" 2>/dev/null
+          OBSERVED_FINGERPRINT="$(ssh-keygen -lf "$KEY_FILE" -E sha256 | awk '{print $2}')"
+          printf 'Observed SSH host fingerprint: %s\n' "$OBSERVED_FINGERPRINT"
+          test -n "$EXPECTED_FINGERPRINT"
+          test "$OBSERVED_FINGERPRINT" = "$EXPECTED_FINGERPRINT"
       - uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          fingerprint: ${{ vars.VPS_SSH_FINGERPRINT }}
           envs: INSPECT_SHA
           script: |
             set -Eeuo pipefail
