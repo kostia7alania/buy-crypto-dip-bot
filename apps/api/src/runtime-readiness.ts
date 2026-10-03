@@ -2,7 +2,7 @@ import { CONVERGED_CATALOG } from "@buy-crypto-dip-bot/db";
 export type ReadinessState = "starting" | "ready" | "failed";
 
 export interface RuntimeReadinessSnapshot {
-  state: ReadinessState;
+  state: ReadinessState | "stopping";
   database: ReadinessState;
   runner: ReadinessState | "disabled";
   bot: ReadinessState | "stale" | "not_required";
@@ -17,12 +17,18 @@ let database: ReadinessState = "starting";
 let runner: RuntimeReadinessSnapshot["runner"] = "starting";
 let botRequired = false;
 let botLastSeenAt: Date | null = null;
+let stopping = false;
 
 export const beginStartup = (requiresBot = false) => {
+  stopping = false;
   database = "starting";
   runner = "starting";
   botRequired = requiresBot;
   botLastSeenAt = null;
+};
+
+export const markStopping = () => {
+  stopping = true;
 };
 
 export const markDatabaseReady = () => {
@@ -57,8 +63,9 @@ export const getRuntimeReadiness = (
         ? "ready"
         : "stale";
   return {
-    state:
-      database === "failed" || runner === "failed" || bot === "stale"
+    state: stopping
+      ? "stopping"
+      : database === "failed" || runner === "failed" || bot === "stale"
         ? "failed"
         : database === "ready" &&
             (runner === "ready" || runner === "disabled") &&

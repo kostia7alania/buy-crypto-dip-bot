@@ -591,3 +591,31 @@ DB 68 ordinary tests and supporting packages. API native PostgreSQL passed 3/3;
 DB native PostgreSQL remained 20/20 on the unchanged schema. Build passed 12/12
 tasks. Actual Telegram provider authentication/delivery and restored destination
 backup acceptance remain open, as does release approval.
+
+## 2026-10-03: bounded shutdown and backtest disclosure
+
+The next source change adds an idempotent API SIGTERM/SIGINT owner, immediate
+admission stop, tracked HTTP/runner drain and pool-close ordering, with a total
+25-second deadline inside Docker's 30-second API grace. Cancellation during
+startup finishes an already-running migration without starting subsequent work.
+It does not change the separate polling bot's signal lifecycle.
+
+Native PostgreSQL proof extends the existing SIGKILL/two-runner recovery case
+with SIGTERM during an actual locked claim, one settlement and clean exit.
+Separate real API processes prove waiting for an in-flight locked login request,
+startup cancellation and the 25-second forced deadline. Detailed boundaries,
+the failed deadline-probe assumption and runtime ownership are in
+[plan 014](../plans/014-low-cost-pilot-delivery.md#runner-shutdown-follow-up).
+
+Backtest output now carries actual input/replay bounds, completeness, source
+clocks/cache age and method identity. The UI explains the existing equal-capital
+schedule and limitations; no strategy formula changed. Original R052/R057/R058
+acceptance was reviewed rather than expanded into a new cash-flow requirement.
+Actual production-build local HTTP/browser proof used public Bybit candles and
+a synthetic identity, not Telegram provider authentication or production data.
+
+Uncached `pnpm check` passed (API 192, bot 67, web 43, DB 68 ordinary tests plus
+supporting packages), production build passed 12/12 tasks, DB PG18 passed 20/20
+and API PG18 passed 3/3. Repository deployment variables still contain only
+`DEPLOY_ENABLED=true`; neither trusted SSH identity nor Gate 1 approval was
+created. No new hosting expense or production deployment follows from this proof.

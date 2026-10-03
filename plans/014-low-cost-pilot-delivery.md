@@ -162,3 +162,80 @@ text/input contrast, forced-colors switch visibility and 320 px overflow.
 Local browser evidence and remaining manual checks are recorded in
 [web quality budgets](../docs/22_WEB_QUALITY_BUDGETS.md#local-accessibility-follow-up-2026-10-03).
 R121 and deployment remain incomplete; no release gate was relaxed.
+
+## Runner shutdown follow-up
+
+R055 inspection found SIGTERM closing the runner pool without draining active
+jobs or the HTTP server. One idempotent API shutdown owner now stops admission,
+interrupts cosmetic waits, and drains active HTTP handlers/background work
+before closing pools. The total deadline is 25 seconds, including pool closure;
+timeout exits 1 with a redacted event. Docker grants the API 30 seconds.
+Recurring runner jobs are single-flight per process. An already-started durable
+claim/send finishes; no next claim starts after the stop flag is observed.
+Pending holds and outbox leases retain their existing durable recovery model.
+
+- Native PostgreSQL 18 process proof passed: SIGKILL recovery, two competing
+  fresh runners, SIGTERM while one claim waits on the actual row lock, one
+  committed settlement, clean drain exit, then an inert cold replay.
+- Actual API process with enabled runner reached readiness, then SIGTERM
+  produced both drain-completed events and exit 0; the port stopped serving.
+- Actual HTTP login with a synthetic signature waited on a PostgreSQL users
+  table lock. After SIGTERM the runner finished but API remained alive until
+  the lock was released; HTTP 200, one committed session and exit 0 followed.
+  No real Telegram identity or provider call was involved.
+- Focused lifecycle tests protect idempotence, pool-close ordering, disconnected
+  handlers and the total timeout; they are not a general coverage expansion.
+
+Independent review against original plan 008 found R052/R057/R058 already meet
+their source acceptance. A matched-cash-flow rewrite is not an R058 requirement
+and R101 was originally after Gate 1, not an added release blocker. Current
+backlog/status wording is corrected; destination/provider gates remain unchanged.
+The bounded R101 pass exposes actual consumed/replay history, missing hours,
+unconfirmed candles and original page clocks/cache age. The existing algorithm
+is unchanged; equal-capital purchase schedules, PnL definition, unmodelled costs
+and missing-data behavior are disclosed. Malformed history yields no result;
+short/gappy/provisional history stays explicitly incomplete.
+
+Final checks for this follow-up:
+
+- Uncached `pnpm check` passed: API 192, bot 67, web 43 and DB 68 ordinary tests
+  plus supporting packages; native PostgreSQL checks are separate. The first
+  attempt stopped on one newly edited line's formatting, corrected before rerun.
+- `pnpm build` passed 12/12 tasks; changed API and web rebuilt. DB native PG18
+  passed 20/20, and the final API PG18 lane passed 3/3.
+- Startup review found cancellation was initially delayed until preparation
+  returned. Signal propagation and admission checks now stop seeding/cleanup
+  and initial scheduling after migration. Actual SIGINT during the migration
+  advisory lock wait exited 0 without starting any of those stages or HTTP.
+- Holding that migration lock to test the global deadline instead reached the
+  existing five-second migration lock timeout first, correctly exiting 1. It
+  is not counted as proof of the 25-second global deadline. A separate admitted
+  HTTP request with an incomplete body then proved the actual global deadline:
+  runner drained, `API_SHUTDOWN_TIMED_OUT`, exit 1 after 25,030 ms.
+- Production API/BFF builds with disposable PostgreSQL and a synthetic local
+  identity fetched public Bybit BTCUSDT history: 361 input candles, 24 warm-up,
+  337 replay, no missing hours and one unconfirmed current candle. Repeated
+  runs retained original page clocks and the incomplete status through cache.
+- Browser verified the same report and expanded calculation/source disclosure
+  at 1280 px; 390 and 320 px had no page/control overflow. Logout removed the
+  private report. Synthetic cookies and temporary viewport overrides were removed.
+  Screenshots: `/tmp/dipbot-pilot-proof-20261003/backtest-method-desktop.png` and
+  `/tmp/dipbot-pilot-proof-20261003/backtest-history-mobile.png` (local only).
+
+### Current runtime ownership
+
+| Job | Runtime owner / cadence | Stop and restart contract |
+| --- | --- | --- |
+| Strategy evaluation | API runner, immediate then 30 seconds | Per-process single-flight; stop between symbols/strategies, finish already-started reservation; durable evaluations/holds survive restart |
+| Due orders | API runner, 3 seconds | Atomic DB claim/settlement; stop before the next claim, drain current claim; fresh runner discovers due PENDING orders |
+| Notification outbox | API runner, immediate then 5 seconds, at most 20 attempts | One just-in-time claim per send; stop before next claim, finish bounded send and durable result; recover stale leases, external delivery at-least-once |
+| Daily digest | API runner, check every 10 minutes during 06:00 UTC | Per-process single-flight; stop between recipients; existing enqueue/dedupe retained; reproducible financial cutoff remains R059 |
+| Cosmetic countdown | API runner, per-order 1-second loop | Abort waits at shutdown; never executes orders; distributed ownership/restart display recovery and shared budgets remain R053/R054 |
+| Expired sessions | API runner, every 6 hours | Single-flight cleanup drains before runner pool closes; future interval retries after restart |
+| Telegram polling / heartbeat | Separate bot process; grammY polling, heartbeat every 30 seconds | Heartbeat interval clears when polling returns; coordinated signal drain and in-flight heartbeat completion are not implemented by this API change |
+| Generic outbox / minute-slot scheduler | Preserved schema only; no active second dispatcher | Must not run beside the current runner/outbox during a future cutover |
+| Private exchange reconciliation | None; not implemented | No exchange order execution or reconciliation is enabled |
+
+The deployment runs one API runner and one polling bot. DB atomicity protects
+settlement under overlapping processes, but it does not elect one global owner
+for every cosmetic/notification job. No horizontal-scaling claim follows.

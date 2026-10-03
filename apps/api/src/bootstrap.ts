@@ -1,5 +1,8 @@
 import { createApp } from "./app.js";
-import { startRunner } from "./modules/runner/runner.service.js";
+import {
+  type RunnerHandle,
+  startRunner,
+} from "./modules/runner/runner.service.js";
 import {
   type ApiRuntimeConfig,
   resolveApiRuntimeConfig,
@@ -14,21 +17,28 @@ import {
 
 interface PrepareApiOptions {
   env?: NodeJS.ProcessEnv;
+  signal?: AbortSignal;
   startBackgroundRunner?: typeof startRunner;
 }
 
 export const prepareApi = async (
   options: PrepareApiOptions = {},
-): Promise<{ app: ReturnType<typeof createApp>; config: ApiRuntimeConfig }> => {
+): Promise<{
+  app: ReturnType<typeof createApp>;
+  config: ApiRuntimeConfig;
+  runner: RunnerHandle;
+}> => {
   const config = resolveApiRuntimeConfig(options.env);
   beginStartup(Boolean(config.telegramBotToken));
   const startBackgroundRunner = options.startBackgroundRunner ?? startRunner;
 
+  let runner: RunnerHandle;
   try {
-    await startBackgroundRunner({
+    runner = await startBackgroundRunner({
       connectionString: config.postgresConnectionString,
       enabled: config.runnerEnabled,
       onMigrationsComplete: markDatabaseReady,
+      ...(options.signal ? { signal: options.signal } : {}),
     });
     if (config.runnerEnabled) markRunnerReady();
     else markRunnerDisabled();
@@ -44,5 +54,6 @@ export const prepareApi = async (
       runtime: config.runtime,
     }),
     config,
+    runner,
   };
 };

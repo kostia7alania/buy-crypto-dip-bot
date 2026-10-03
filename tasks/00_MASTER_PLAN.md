@@ -18,7 +18,7 @@ integration and September 16 reservation extension are recorded in
 | N07 | P0, Verification/Release | PRE_GO | Native PG18 proves reservation and callback/executor races plus real SIGKILL recovery with fresh schedulers and one settlement. Local two-identity BFF/API flow and stalled-recipient isolation pass. Complete destination/provider acceptance and immutable artifact review before GO. |
 | N08 | P0, Operations | PRE_GO | Destination revision, capacity and migration lineage inventoried. Fresh backup rehearsal is implemented but blocked by independently trusted SSH fingerprint. Still verify forwarding trust, per-service secrets, current migration/readiness ordering and incident restore. |
 | N09 | P1, Web/UX | OPEN | Missing login config, auth outages and retry are explicit. Local 390/1440 px setup/caps/audit/logout and API outage recovery pass. Finish actual Telegram login/account-switch/private-start delivery and remaining R121 checks. Synthetic identities are not provider proof. |
-| N10 | P0, Product/Reporting | PARTIAL | New rejected decisions retain config/market/risk provenance. Dashboard shares quotes and final freshness cutoff; missing values stay null; reports identify DRY_RUN and unmodelled fees/slippage. Complete remaining R052-R058 benchmark contracts; no historical evidence backfill or deployment claimed. |
+| N10 | P0, Product/Reporting | PARTIAL | Original R052/R057/R058/R101 source acceptance is satisfied: explicit simulation, partial/stale PnL, source/window/method and visible backtest limitations. Broader observation identity and reproducible digest cutoff remain; no matched-cash-flow rewrite, historical evidence backfill or deployment is implied. |
 | N11 | P1, Platform/Auth | LATER | Optional Cloudflare/Supabase/OIDC/webhook/Cron/Queue target, not a prerequisite to the existing-VPS pilot. Reconsider when measured cost/capacity justifies migration; prove exactly one scheduler/bot mode at cutover. No private exchange work. |
 | N12 | P1, Product/Content | OPEN_EXTERNAL | Refresh claims on the actual published revision; complete keyword/content map, privacy QA, real interviews and pricing discovery. Leave tariffs, revenue, SLA and legal conclusions unannounced until supported. |
 
@@ -45,13 +45,14 @@ old blanket DONE counts and the status list at the end of plan 009.
 
 R070 is now partial: the current DRY_RUN policy bypass is fixed by N01, while
 future instrument metadata and Demo eligibility remain gated. R093 still
-needs pair discovery in the UI. R052 remains gated by truthful execution and
-reporting semantics even though the local reservation state core exists and the
-present ledger correctly labels completion as simulation.
+needs pair discovery in the UI. Original acceptance review confirms R052,
+R057 and R058 in local source; this does not prove production delivery. R055
+now has bounded API/runner drain, while countdown fairness/restart ownership
+R053/R054 and separate bot lifecycle work remain open.
 R089/R090/R092 remain partial until source-specific claims and the complete
 first-run journey agree, including authenticated backtests.
 
-Index totals: EXTERNAL 4, GATED 41, LATER 1, LOCAL_SOURCE 53, OPEN 4, PARTIAL 15, PRE_GO 5. Total: 123. These are not release completion percentages.
+Index totals: EXTERNAL 4, GATED 36, LATER 1, LOCAL_SOURCE 59, OPEN 3, PARTIAL 15, PRE_GO 5. Total: 123. These are not release completion percentages.
 
 | Ticket | Priority | Current state | Acceptance item |
 | --- | --- | --- | --- |
@@ -106,13 +107,13 @@ Index totals: EXTERNAL 4, GATED 41, LATER 1, LOCAL_SOURCE 53, OPEN 4, PARTIAL 15
 | R049 | P1 | PARTIAL | Exact strategy/config/market evaluations are duplicate-suppressed; broader observation identity and scheduler semantics remain |
 | R050 | P0 | LOCAL_SOURCE | Separate durable hold lifecycle from order lifecycle; commit, consume and release invariants pass locally |
 | R051 | P1 | LOCAL_SOURCE | Preserve the effective strategy snapshot for an active hold; later strategy edits do not rewrite evidence |
-| R052 | P0 | GATED | Separate simulated completion from exchange execution semantics |
+| R052 | P0 | LOCAL_SOURCE | Schema and execution enforce DRY_RUN; ledger labels completion Simulated, distinct from future exchange acceptance/fill/unknown states |
 | R053 | P1 | GATED | Model countdown scalability independently of execution |
 | R054 | P1 | GATED | Define countdown ownership and restart recovery |
-| R055 | P1 | GATED | Define graceful runner drain |
-| R056 | P1 | OPEN | Publish scheduler ownership map |
-| R057 | P1 | GATED | Make PnL partial/stale valuation explicit |
-| R058 | P1 | GATED | Record benchmark source/window evidence |
+| R055 | P1 | LOCAL_SOURCE | Stop admission, drain active jobs/HTTP before pools, interrupt cosmetic waits, and enforce 25-second API deadline; actual PG18 claim and HTTP lock proofs pass locally |
+| R056 | P1 | PARTIAL | Current ownership/cadence/restart map published in plan 014; countdown election and separate bot graceful lifecycle remain unproved |
+| R057 | P1 | LOCAL_SOURCE | Valuation time, stale/error symbols and completeness are explicit; incomplete whole-portfolio totals remain null |
+| R058 | P1 | LOCAL_SOURCE | Benchmark exposes source/window/timestamps/completeness/method and non-comparable state; original acceptance does not require matched cash flows |
 | R059 | P1 | GATED | Freeze digest financial cutoff semantics |
 | R060 | P1 | LOCAL_SOURCE | Minimize durable outbox payload data |
 | R061 | P1 | GATED | Dispatch outbox work fairly across tenants |
@@ -155,7 +156,7 @@ Index totals: EXTERNAL 4, GATED 41, LATER 1, LOCAL_SOURCE 53, OPEN 4, PARTIAL 15
 | R098 | P0 | GATED | Define loading/empty/error/stale/unauthorized states |
 | R099 | P0 | GATED | Separate identity from notification readiness |
 | R100 | P0 | LOCAL_SOURCE | Make pause/activate semantics explicit |
-| R101 | P0 | GATED | Publish benchmark methodology in the product |
+| R101 | P0 | LOCAL_SOURCE | Actual backtest history/completeness, capital schedule, costs, missing-data policy and PnL definitions are visible; production-build local API/browser proof passes, algorithm unchanged |
 | R102 | P1 | OPEN | Define a canonical keyword-to-page map |
 | R103 | P1 | OPEN | Build a topic hub and contextual internal links |
 | R104 | P0 | PARTIAL | Correct SoftwareApplication/Offer structured data |

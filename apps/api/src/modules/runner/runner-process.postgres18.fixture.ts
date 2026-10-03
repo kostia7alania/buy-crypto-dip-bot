@@ -72,7 +72,17 @@ if (process.argv[2] === "reserve") {
   setInterval(() => {}, 60_000);
 } else if (process.argv[2] === "runner") {
   // No order ID or in-memory reservation is supplied to the restarted runner.
-  await startRunner({ connectionString, enabled: true });
+  const runner = await startRunner({ connectionString, enabled: true });
+  process.once("SIGTERM", () => {
+    void runner.stop().then(
+      () => process.disconnect?.(),
+      () => {
+        process.stderr.write("RUNNER_PROCESS_DRAIN_FAILED\n");
+        process.exitCode = 1;
+        process.disconnect?.();
+      },
+    );
+  });
   process.send?.("runner");
 } else {
   throw new Error("RUNNER_PROCESS_MODE_REQUIRED");

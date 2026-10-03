@@ -53,7 +53,7 @@ from inventory or local source integration. Exact source/check identities are re
 | Tenant access | Personal tenants, memberships, owner constraints, forced RLS and restricted transactions for owned API routes and bot/runner mutations | Full integrated matrix, independent review and service-credential separation |
 | Login | Recovery opaque sessions, replay/abuse, CSRF, revocation and authoritative BFF retained | Real Telegram login/private start/provider smoke; OIDC later |
 | Dashboard | One private snapshot, account invalidation and 401 pause; explicit login/API outages; local setup and recovery checked; keyboard focus, 320/390 px reflow and shared-control contrast improved | Provider login, VoiceOver/Safari and actual 200% zoom remain open; see web quality evidence |
-| Audit, reservation and Telegram | Immutable approved and new rejected decision evidence; atomic dry-run holds; process restart and callback/executor contention proof; bounded Telegram requests and just-in-time outbox claims; truthful shared reports | Actual provider delivery, broader fairness and benchmark contracts; historical rejection evidence is not backfilled |
+| Audit, reservation and Telegram | Immutable approved and new rejected decision evidence; atomic dry-run holds; process restart and callback/executor contention proof; bounded Telegram requests and just-in-time outbox claims; truthful shared reports and backtest disclosure | Actual provider delivery, broader fairness and reproducible digest cutoff; historical rejection evidence is not backfilled |
 | Release | Immutable digest, commit-pinned files, separate migration service, writer quiescence, backup and readiness ordering; no automatic old-image restart after attempted DDL | Restore/incident rehearsal and production approval |
 | Public web | Public prerender; private CSR/noindex/no-store; truthful signed-out backtest copy | Published revision and claims/analytics QA |
 | Platform | Cloudflare/Supabase remain targets | OIDC/JWT, edge entries, webhook, Cron/Queues and cutover proof |
@@ -65,7 +65,11 @@ config, public-market and risk evidence for approved dry-run reservations.
 New rejected decisions now retain their config, market and risk snapshots.
 Dashboard reports share quotes and one final freshness cutoff; missing values
 remain null and partial sums are not presented as whole-portfolio totals.
-Broader benchmark contracts and scheduler cutover remain N10/N11. Identity profile
+The original R052/R057/R058 source contracts are satisfied: simulation stays
+distinct from exchange execution, incomplete PnL stays explicit, and benchmarks
+carry their source/window/method and non-comparable states. R101 now exposes
+actual backtest history, completeness, capital schedule and limitations without
+changing the algorithm. Scheduler cutover remains separate work. Identity profile
 fields are compatibility snapshots until a future canonical OIDC/profile
 contract is implemented.
 
@@ -89,6 +93,21 @@ contract is implemented.
   backoff while the next recipient proceeds. Rows are claimed just before send,
   not held idle in an expiring batch lease. Timeouts can still mean Telegram
   accepted a message, so external delivery remains at-least-once, not exactly-once.
+- API shutdown: SIGTERM/SIGINT stop new HTTP/background work, drain active
+  requests and runner jobs before closing pools, and exit nonzero after a total
+  25-second deadline. Docker grants the API 30 seconds. Native PostgreSQL proof
+  holds a claimed order during SIGTERM; the process waits, settles once and exits
+  cleanly. A separate actual API process also waited for a login request blocked
+  on the users table, committed its synthetic session and exited 0. This does
+  not establish graceful shutdown of the separate Telegram polling process.
+- Startup cancellation: actual SIGINT during a migration advisory-lock wait
+  allowed migration to finish but started no seeding, cleanup, HTTP or scheduler.
+  A stalled actual HTTP request hit the 25-second shutdown deadline and exit 1.
+- Backtest: production API/BFF/browser against public Bybit history reported the
+  consumed/replay windows and unconfirmed current candle. Cache reads retained
+  source clocks and incompleteness. Methodology disclosed equal total capital,
+  different purchase times, missing-data policy and unmodelled fees/slippage.
+  Disclosure and logout were checked at 1280, 390 and 320 px, with no page overflow.
 - API snapshot A/B isolation and anonymous refusal; BFF session forwarding,
   private caching headers and upstream outage behavior.
 - Browser with fixtures: immediate first A snapshot, logout/re-login, one
@@ -117,9 +136,12 @@ contract is implemented.
    and current dependency-aware readiness still need a destination rehearsal.
 4. Actual Telegram login, private `/start`, delivery and the complete R121
    accessibility checks remain open.
-5. Remaining N10 benchmark/matched-cash-flow contracts are not completed by
-   truthful report metadata. New provenance/reporting and reservation changes
-   are verified source, not deployed evidence; old audit rows remain unchanged.
+
+Reporting follow-up is not an invented release gate: original R058 requires
+source/window/completeness/method disclosure, not a new matched-cash-flow
+algorithm. R101 is product disclosure work originally scheduled after Gate 1.
+New provenance/reporting and reservation changes remain verified source, not
+deployed evidence; old audit rows remain unchanged.
 
 The next release step needs independently trusted SSH identity, a restored
 destination backup rehearsal and real Telegram/provider proof, together with

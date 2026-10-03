@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { prepareApi } from "./bootstrap.js";
-import { getRuntimeReadiness } from "./runtime-readiness.js";
+import { getRuntimeReadiness, markStopping } from "./runtime-readiness.js";
 
 const env = (): NodeJS.ProcessEnv => ({
   APP_RUNTIME: "non-local",
@@ -14,8 +14,44 @@ const env = (): NodeJS.ProcessEnv => ({
 });
 
 describe("API bootstrap ordering", () => {
+  it("forwards cancellation during pending startup without restoring readiness", async () => {
+    const controller = new AbortController();
+    const initialization = Promise.withResolvers<void>();
+    const runnerHandle = { stop: vi.fn(async () => {}) };
+    const startBackgroundRunner = vi.fn(
+      async (options: {
+        signal?: AbortSignal;
+        onMigrationsComplete?: () => void;
+      }) => {
+        expect(options.signal).toBe(controller.signal);
+        expect(options.signal?.aborted).toBe(false);
+        await initialization.promise;
+        expect(options.signal?.aborted).toBe(true);
+        options.onMigrationsComplete?.();
+        return runnerHandle;
+      },
+    );
+    const preparation = prepareApi({
+      env: { APP_RUNTIME: "local", RUNNER_ENABLED: "true" },
+      signal: controller.signal,
+      startBackgroundRunner,
+    });
+
+    markStopping();
+    controller.abort();
+    expect(getRuntimeReadiness().state).toBe("stopping");
+    initialization.resolve();
+
+    const { app, runner } = await preparation;
+    expect(runner).toBe(runnerHandle);
+    expect(runner.stop).not.toHaveBeenCalled();
+    expect(getRuntimeReadiness().state).toBe("stopping");
+    expect((await app.request("/health/ready")).status).toBe(503);
+  });
+
   it("becomes ready only after migration and runner initialization finish", async () => {
     const events: string[] = [];
+    const runnerHandle = { stop: vi.fn(async () => {}) };
     const startBackgroundRunner = vi.fn(
       async (options: {
         connectionString: string;
@@ -24,15 +60,18 @@ describe("API bootstrap ordering", () => {
         events.push("migration");
         options.onMigrationsComplete?.();
         events.push("runner");
+        return runnerHandle;
       },
     );
 
-    const { app } = await prepareApi({
+    const { app, runner } = await prepareApi({
       env: env(),
       startBackgroundRunner,
     });
     events.push("prepared");
 
+    expect(runner).toBe(runnerHandle);
+    expect(runner.stop).not.toHaveBeenCalled();
     expect(startBackgroundRunner).toHaveBeenCalledWith(
       expect.objectContaining({ enabled: true }),
     );
@@ -66,17 +105,21 @@ describe("API bootstrap ordering", () => {
   });
 
   it("keeps the migrated API ready when the runner is explicitly disabled", async () => {
+    const runnerHandle = { stop: vi.fn(async () => {}) };
     const startBackgroundRunner = vi.fn(
       async (options: { onMigrationsComplete?: () => void }) => {
         expect(getRuntimeReadiness().state).toBe("starting");
         options.onMigrationsComplete?.();
+        return runnerHandle;
       },
     );
-    const { app } = await prepareApi({
+    const { app, runner } = await prepareApi({
       env: { APP_RUNTIME: "local", RUNNER_ENABLED: "false" },
       startBackgroundRunner,
     });
 
+    expect(runner).toBe(runnerHandle);
+    expect(runner.stop).not.toHaveBeenCalled();
     expect(startBackgroundRunner).toHaveBeenCalledWith(
       expect.objectContaining({ enabled: false }),
     );
@@ -87,6 +130,10 @@ describe("API bootstrap ordering", () => {
       database: "ready",
       runner: "disabled",
     });
+    markStopping();
+    const stopping = await app.request("/health/ready");
+    expect(stopping.status).toBe(503);
+    expect(await stopping.json()).toMatchObject({ state: "stopping" });
   });
 
   it.each([

@@ -42,7 +42,9 @@ const run = async () => {
     error.value =
       getStatusMessage(caught) === "NOT_ENOUGH_HISTORY"
         ? "Not enough price history for this pair."
-        : "Backtest failed — check the symbol and try again.";
+        : getStatusMessage(caught) === "INVALID_HISTORY"
+          ? "Price history is invalid or not chronological. No result is available."
+          : "Backtest failed. Check the symbol and try again.";
   } finally {
     loading.value = false;
   }
@@ -52,28 +54,29 @@ const money = (value: number) => formatMoney(value);
 const sign = (n: number) => (n >= 0 ? "+" : "");
 const pnlClass = (n: number) => (n >= 0 ? "bt__green" : "bt__red");
 
-const verdict = computed(() => {
-  const b = report.value?.benchmarks;
-  if (!b) return null;
-  const beatsDca = b.actual.pnlPercent > b.calendarDca.pnlPercent;
-  const beatsHold = b.actual.pnlPercent > b.hold.pnlPercent;
-  if (beatsDca && beatsHold)
-    return {
-      cls: "bt__green",
-      text: "Dip-buying beat both benchmarks on this window.",
-    };
-  if (!beatsDca && !beatsHold)
-    return {
-      cls: "bt__red",
-      text: "Dip-buying lagged both benchmarks on this window.",
-    };
-  return {
-    cls: "bt__mixed",
-    text: beatsDca
-      ? "Beat calendar DCA, lagged buy-and-hold."
-      : "Beat buy-and-hold, lagged calendar DCA.",
-  };
-});
+const time = (value: number | string | null | undefined) => {
+  const date = value == null ? null : new Date(value);
+  return date && Number.isFinite(date.getTime())
+    ? date.toISOString()
+    : "Unavailable";
+};
+
+const historyIssueText = {
+  SHORT_HISTORY: "Fewer candles returned than requested.",
+  MISSING_HOURS: "There are missing hours within the consumed history.",
+  INVALID_CANDLES: "Invalid candle prices are present.",
+  IRREGULAR_TIMESTAMPS:
+    "Hourly timestamps are invalid, duplicated or out of order.",
+  UNCONFIRMED_CLOSE:
+    "Some candles were not closed at the original source time; their close prices are provisional.",
+  STALE_HISTORY: "The latest closed hour at the source time is missing.",
+  UNKNOWN_SOURCE_TIME:
+    "Source time is unavailable; candle closure cannot be confirmed.",
+} satisfies Record<BacktestReport["history"]["issues"][number], string>;
+
+const historyIssues = computed(() =>
+  (report.value?.history?.issues ?? []).map((issue) => historyIssueText[issue]),
+);
 </script>
 
 <template>
@@ -81,8 +84,8 @@ const verdict = computed(() => {
     <div class="bt__header">
       <h2 class="bt__title">Backtest the strategy</h2>
       <p class="bt__hint">
-        Replay the exact dip-buying rules over real Bybit history — before
-        trusting them with anything.
+        Hourly-price simulation using Bybit spot history. Not a simulation of
+        live fills.
       </p>
     </div>
 
@@ -117,6 +120,35 @@ const verdict = computed(() => {
     <p v-if="error" class="bt__error">{{ error }}</p>
 
     <div v-if="report" class="bt__result">
+      <div v-if="report.history" class="bt__history">
+        <p class="bt__history-line">
+          {{ report.symbol }}: requested {{ report.days }} days.
+          <strong :class="{ 'bt__warning': report.history.status !== 'COMPLETE' }">
+            {{ report.history.status === 'COMPLETE' ? 'Continuous, closed hourly input at source time.' : 'Incomplete history. Results are provisional.' }}
+          </strong>
+        </p>
+        <p class="bt__history-line">
+          Consumed input (candle-open timestamps, UTC):
+          {{ time(report.history.inputStartAt) }} to {{ time(report.history.inputEndAt) }}.
+        </p>
+        <p class="bt__history-line">
+          Actual replay (candle-open timestamps, UTC):
+          {{ time(report.history.replayStartAt) }} to {{ time(report.history.replayEndAt) }}.
+          Prices use each candle's close field, not its opening price.
+        </p>
+        <p class="bt__history-line">
+          {{ report.history.receivedCandles }} / {{ report.history.expectedCandles }} requested candles:
+          {{ report.history.warmupCandles }} warm-up + {{ report.history.replayCandles }} replay.
+          Missing hours between records: {{ report.history.missingHours }}.
+          Unconfirmed candles: {{ report.history.unconfirmedCandles }}.
+        </p>
+        <ul v-if="historyIssues.length" class="bt__issues bt__warning">
+          <li v-for="issue in historyIssues" :key="issue">{{ issue }}</li>
+        </ul>
+      </div>
+      <p v-else class="bt__history-line bt__warning">
+        History completeness is unavailable. Do not treat this as a full selected window.
+      </p>
       <div class="bt__stats">
         <div class="bt__stat">
           <dt>Simulated buys</dt>
@@ -127,11 +159,11 @@ const verdict = computed(() => {
           <dd class="tabular">{{ money(report.spentUsdt) }} USDT</dd>
         </div>
         <div class="bt__stat">
-          <dt>Value at window end</dt>
+          <dt>Value at last supplied price</dt>
           <dd class="tabular">{{ money(report.valueUsdt) }} USDT</dd>
         </div>
         <div class="bt__stat">
-          <dt>Result</dt>
+          <dt>PnL before costs</dt>
           <dd class="tabular" :class="pnlClass(report.pnlUsdt)">
             {{ sign(report.pnlUsdt) }}{{ money(report.pnlUsdt) }} USDT
             ({{ sign(report.pnlPercent) }}{{ report.pnlPercent.toFixed(2) }}%)
@@ -147,26 +179,107 @@ const verdict = computed(() => {
           </strong>
         </div>
         <div class="bt__bench-row">
-          <span>Calendar DCA, same budget</span>
+          <span>DCA, equal total capital</span>
           <strong class="tabular" :class="pnlClass(report.benchmarks.calendarDca.pnlPercent)">
             {{ sign(report.benchmarks.calendarDca.pnlPercent) }}{{ report.benchmarks.calendarDca.pnlPercent.toFixed(2) }}%
           </strong>
         </div>
         <div class="bt__bench-row">
-          <span>Buy &amp; hold from day one</span>
+          <span>Hold, equal total capital</span>
           <strong class="tabular" :class="pnlClass(report.benchmarks.hold.pnlPercent)">
             {{ sign(report.benchmarks.hold.pnlPercent) }}{{ report.benchmarks.hold.pnlPercent.toFixed(2) }}%
           </strong>
         </div>
-        <p v-if="verdict" class="bt__verdict" :class="verdict.cls">
-          {{ verdict.text }}
+        <p class="bt__disclaimer">
+          Equal total spend, different investment times. These are not matched
+          cash flows or evidence of an investable advantage.
         </p>
       </div>
 
+      <details v-if="report.methodology && report.provenance" class="bt__methodology">
+        <summary class="bt__summary">Calculation method and data provenance</summary>
+        <dl class="bt__definitions">
+          <div>
+            <dt class="bt__term">Dip replay</dt>
+            <dd class="bt__definition">
+              After 24 warm-up records, compare each hourly close field with
+              the highest high in the previous 24 records, excluding the current
+              candle. Buy {{ money(report.config.buyAmountUsdt) }} USDT when the
+              drop reaches {{ report.config.thresholdPercent }}%, subject to a
+              {{ report.config.cooldownMinutes }}-minute cooldown and rolling
+              24-hour / 7-day caps of {{ money(report.config.maxDailySpendUsdt) }} /
+              {{ money(report.config.maxWeeklySpendUsdt) }} USDT. Trades and cap
+              cutoffs use candle-open timestamps. Intrahour signals and fills
+              are not replayed.
+            </dd>
+          </div>
+          <div>
+            <dt class="bt__term">Capital schedule</dt>
+            <dd class="bt__definition">
+              Each benchmark uses the dip strategy's total simulated spend,
+              {{ money(report.methodology.benchmarkCapitalUsdt) }} USDT, known
+              only after the replay. Hold invests it all at the close field of
+              the first replay candle. DCA divides it equally across every 24th
+              replay record, starting with that same candle, not UTC daily closes.
+              <template v-if="report.benchmarks && report.methodology.dcaAmountUsdt !== null">
+                {{ report.methodology.benchmarkSampleTimes.length }} DCA buys of
+                {{ money(report.methodology.dcaAmountUsdt) }} USDT each (rounded for display),
+                from {{ time(report.methodology.benchmarkSampleTimes[0]) }} to
+                {{ time(report.methodology.benchmarkSampleTimes.at(-1)) }}
+                (candle-open timestamps, UTC).
+              </template>
+              No capital-availability schedule is modelled; benchmark purchases
+              do not inherit the dip strategy's cooldown or spending caps.
+            </dd>
+          </div>
+          <div>
+            <dt class="bt__term">Value and PnL</dt>
+            <dd class="bt__definition">
+              Value = accumulated quantity × last supplied close field.
+              PnL = value − total simulated spend; PnL % = PnL / spend × 100.
+              This is an unrealized return on deployed capital, not an annualized,
+              time-weighted or money-weighted return. Unspent cash and its return
+              are excluded. With no buys, PnL is shown as zero and benchmarks are
+              unavailable. Fees and slippage are not modelled.
+            </dd>
+          </div>
+          <div>
+            <dt class="bt__term">Missing and provisional data</dt>
+            <dd class="bt__definition">
+              The request targets days × 24 + 25 candles: 24 for warm-up, then
+              replay samples including both endpoints. Missing hours are not
+              filled or interpolated. Short or gappy history is replayed as
+              supplied and marked incomplete; 24 records may span more than
+              24 hours. Invalid prices or irregular timestamps prevent a result.
+              An unconfirmed candle is retained with its provisional close
+              field and marked incomplete, even if it has since aged in cache.
+              Completeness applies to the original source snapshot, not live data.
+            </dd>
+          </div>
+          <div>
+            <dt class="bt__term">Source and cache</dt>
+            <dd class="bt__definition">
+              Bybit spot, 60-minute candles. Fetched {{ time(report.provenance.fetchedAt) }}.
+              {{ report.provenance.cacheHit ? 'Cached response' : 'Fetched for this run' }};
+              cache age {{ Math.round(report.provenance.cacheAgeMs / 1000) }} seconds,
+              TTL {{ report.provenance.cacheTtlMs / 60000 }} minutes.
+              Closure is checked against the earliest source/receipt clock across
+              all pages. These timestamps are preserved on cache reads.
+              <ul class="bt__sources">
+                <li v-for="(page, index) in report.provenance.pages" :key="index">
+                  Page {{ index + 1 }}: source {{ time(page.sourceAt) }},
+                  received {{ time(page.receivedAt) }}.
+                </li>
+              </ul>
+            </dd>
+          </div>
+        </dl>
+      </details>
+
       <p class="bt__disclaimer">
-        Past performance doesn't predict the future — a backtest can't see the
-        next regime change. Use it to understand the strategy, not to promise
-        returns.
+        Fees and slippage are not modelled. Historical simulation, not an
+        investment recommendation or a forecast. Past performance does not
+        predict future returns.
       </p>
     </div>
   </section>
@@ -243,6 +356,59 @@ const verdict = computed(() => {
   gap: 1.1rem;
 }
 
+.bt__history {
+  display: grid;
+  gap: var(--space-2);
+  font-size: var(--text-small);
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.bt__history-line {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.bt__warning {
+  color: var(--color-warning);
+}
+
+.bt__issues,
+.bt__sources {
+  margin: 0;
+  padding-inline-start: var(--space-5);
+}
+
+.bt__methodology {
+  padding-block: var(--space-3);
+  border-block: 1px solid var(--color-border-subtle);
+  font-size: var(--text-small);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.bt__summary {
+  cursor: pointer;
+  color: var(--color-text-primary);
+  font-weight: 650;
+}
+
+.bt__definitions {
+  display: grid;
+  gap: var(--space-4);
+  margin-block: var(--space-4) 0;
+}
+
+.bt__term {
+  color: var(--color-text-primary);
+  font-weight: 650;
+}
+
+.bt__definition {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
 .bt__stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 1fr));
@@ -286,28 +452,14 @@ const verdict = computed(() => {
   color: var(--color-text-muted);
 }
 
-.bt__verdict {
-  margin: 0.4rem 0 0;
-  font-weight: 650;
-  font-size: var(--text-small);
-}
-
 .bt__stat .bt__green,
-.bt__bench .bt__green,
-.bt__verdict.bt__green {
+.bt__bench .bt__green {
   color: var(--color-success);
 }
 
 .bt__stat .bt__red,
-.bt__bench .bt__red,
-.bt__verdict.bt__red {
+.bt__bench .bt__red {
   color: var(--color-danger);
-}
-
-.bt__stat .bt__mixed,
-.bt__bench .bt__mixed,
-.bt__verdict.bt__mixed {
-  color: var(--color-warning);
 }
 
 .bt__disclaimer {

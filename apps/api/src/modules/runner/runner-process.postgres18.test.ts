@@ -145,7 +145,7 @@ describePostgres18("PostgreSQL 18 runner process recovery", () => {
     }
   }, 15_000);
 
-  it("discovers a reservation after SIGKILL and settles once across competing fresh runners", async () => {
+  it("recovers after SIGKILL and drains a SIGTERM runner during competing settlement", async () => {
     const reserving = await startProcess("reserve");
     const pending = await readLedger();
     expect(pending.orders).toEqual([
@@ -206,6 +206,14 @@ describePostgres18("PostgreSQL 18 runner process recovery", () => {
         { timeout: 15_000, interval: 25 },
       );
       expect(await readLedger()).toEqual(pending);
+      first.child.kill("SIGTERM");
+      await vi.waitFor(
+        () =>
+          expect(first.output()).toContain('"event":"RUNNER_DRAIN_STARTED"'),
+        { timeout: 5_000, interval: 25 },
+      );
+      expect(first.child.exitCode, first.output()).toBeNull();
+      expect(first.child.signalCode, first.output()).toBeNull();
       await lock.query("COMMIT");
     } finally {
       await lock.query("ROLLBACK");
@@ -254,12 +262,16 @@ describePostgres18("PostgreSQL 18 runner process recovery", () => {
       },
       { timeout: 15_000, interval: 25 },
     );
-    for (const worker of [first, second]) {
-      expect(worker.child.exitCode, worker.output()).toBeNull();
-      expect(worker.child.signalCode, worker.output()).toBeNull();
-      expect(worker.output()).not.toMatch(/"level":"ERROR"/);
-      await killProcess(worker);
-    }
+    expect(await first.closed, first.output()).toEqual({
+      code: 0,
+      signal: null,
+    });
+    expect(first.output()).toContain('"event":"RUNNER_DRAIN_COMPLETED"');
+    expect(first.output()).not.toMatch(/"level":"ERROR"/);
+    expect(second.child.exitCode, second.output()).toBeNull();
+    expect(second.child.signalCode, second.output()).toBeNull();
+    expect(second.output()).not.toMatch(/"level":"ERROR"/);
+    await killProcess(second);
     expect(await readLedger()).toEqual(settled);
 
     const replay = await startProcess("runner");

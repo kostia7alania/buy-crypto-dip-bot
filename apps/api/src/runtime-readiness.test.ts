@@ -6,9 +6,22 @@ import {
   markBotHeartbeat,
   markDatabaseReady,
   markRunnerReady,
+  markStopping,
 } from "./runtime-readiness.js";
 
 describe("dependency-aware readiness", () => {
+  it("keeps readiness stopping even if startup or a heartbeat completes later", () => {
+    beginStartup(true);
+    markStopping();
+    markDatabaseReady();
+    markRunnerReady();
+    markBotHeartbeat();
+
+    expect(getRuntimeReadiness().state).toBe("stopping");
+    beginStartup();
+    expect(getRuntimeReadiness().state).toBe("starting");
+  });
+
   it("distinguishes a fresh bot from a stale bot", () => {
     const heartbeatAt = new Date("2026-08-02T20:00:00.000Z");
     beginStartup(true);

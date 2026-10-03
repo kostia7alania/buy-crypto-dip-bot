@@ -9,6 +9,11 @@ import { Hono } from "hono";
 import * as v from "valibot";
 import { logApiError } from "../../operational-log.js";
 import type { AppEnv } from "../auth/principal.middleware.js";
+import {
+  type BacktestHistory,
+  describeBacktestHistory,
+  type HistorySource,
+} from "./backtest-history.js";
 
 const querySchema = v.object({
   symbol: v.pipe(v.string(), v.regex(/^[A-Z0-9]{3,20}$/)),
@@ -20,24 +25,31 @@ const querySchema = v.object({
   cooldown: v.pipe(v.number(), v.minValue(0), v.maxValue(10080)),
 });
 
-// Historical prices don't change — cache klines per symbol/window briefly
-// so repeated runs with different strategy knobs are instant and Bybit
-// isn't hammered.
-const klineCache = new Map<string, { at: number; candles: Candle[] }>();
+interface CachedHistory {
+  at: number;
+  candles: Candle[];
+  sources: HistorySource[];
+}
+
+// Retain source clocks: the latest cached candle may still be provisional.
+const klineCache = new Map<string, CachedHistory>();
 const KLINE_CACHE_MS = 10 * 60 * 1000;
 const BYBIT_PAGE_LIMIT = 1000;
 
 async function fetchHourlyCandles(
   symbol: string,
   days: number,
-): Promise<Candle[]> {
+): Promise<CachedHistory & { cacheHit: boolean }> {
   const key = `${symbol}:${days}`;
   const hit = klineCache.get(key);
-  if (hit && Date.now() - hit.at < KLINE_CACHE_MS) return hit.candles;
+  if (hit && Date.now() - hit.at < KLINE_CACHE_MS) {
+    return { ...hit, cacheHit: true };
+  }
 
   const client = createBybitPublicClient({ baseUrl: "https://api.bybit.com" });
   const needed = days * 24 + 25; // extra day for the first rolling high
   const pages: Candle[][] = [];
+  const sources: HistorySource[] = [];
   let end: number | undefined;
 
   while (pages.reduce((n, p) => n + p.length, 0) < needed) {
@@ -47,19 +59,25 @@ async function fetchHourlyCandles(
       limit: BYBIT_PAGE_LIMIT,
       ...(end !== undefined ? { end } : {}),
     });
+    sources.push({
+      sourceAt: snapshot.sourceAt,
+      receivedAt: snapshot.receivedAt,
+    });
     const page = snapshot.candles;
-    if (page.length === 0) break;
+    const first = page[0];
+    if (!first) break;
     pages.push(page);
     // Next page: everything strictly before the oldest candle we have.
-    end = page[0]!.openTime - 1;
+    end = first.openTime - 1;
     if (page.length < BYBIT_PAGE_LIMIT) break; // history exhausted
   }
 
   // Pages are newest-block-last-fetched; each page is chronological.
   const candles = pages.reverse().flat().slice(-needed);
 
-  klineCache.set(key, { at: Date.now(), candles });
-  return candles;
+  const history = { at: Date.now(), candles, sources };
+  klineCache.set(key, history);
+  return { ...history, cacheHit: false };
 }
 
 export interface BacktestResponse extends BacktestResult {
@@ -67,6 +85,24 @@ export interface BacktestResponse extends BacktestResult {
   days: number;
   // trades[] is truncated for transport; this is the real total.
   tradeCount: number;
+  history: BacktestHistory;
+  provenance: {
+    source: "BYBIT_SPOT";
+    interval: "60";
+    pages: HistorySource[];
+    fetchedAt: string;
+    cacheHit: boolean;
+    cacheAgeMs: number;
+    cacheTtlMs: number;
+  };
+  methodology: {
+    version: "HOURLY_CLOSE_EQUAL_CAPITAL_V1";
+    fees: "NOT_MODELLED";
+    slippage: "NOT_MODELLED";
+    benchmarkCapitalUsdt: number;
+    benchmarkSampleTimes: number[];
+    dcaAmountUsdt: number | null;
+  };
   config: {
     thresholdPercent: number;
     buyAmountUsdt: number;
@@ -96,9 +132,17 @@ export const backtestRoutes = new Hono<AppEnv>().get("/", async (c) => {
   }
 
   try {
-    const candles = await fetchHourlyCandles(p.symbol, p.days);
+    const fetched = await fetchHourlyCandles(p.symbol, p.days);
+    const { candles } = fetched;
+    const history = describeBacktestHistory(candles, p.days, fetched.sources);
+    if (
+      history.issues.includes("INVALID_CANDLES") ||
+      history.issues.includes("IRREGULAR_TIMESTAMPS")
+    ) {
+      return c.json({ error: "INVALID_HISTORY", history }, 502);
+    }
     if (candles.length < 25) {
-      return c.json({ error: "NOT_ENOUGH_HISTORY" }, 400);
+      return c.json({ error: "NOT_ENOUGH_HISTORY", history }, 400);
     }
 
     const config = {
@@ -111,6 +155,10 @@ export const backtestRoutes = new Hono<AppEnv>().get("/", async (c) => {
     const result = runDipBacktest(candles, config);
     if (!result) return c.json({ error: "NOT_ENOUGH_HISTORY" }, 400);
 
+    const benchmarkSampleTimes = candles
+      .filter((_, index) => index >= 24 && (index - 24) % 24 === 0)
+      .map((candle) => candle.openTime);
+
     const response: BacktestResponse = {
       ...result,
       // Don't ship hundreds of trades to the client; the last 20 tell the story.
@@ -119,10 +167,45 @@ export const backtestRoutes = new Hono<AppEnv>().get("/", async (c) => {
       symbol: p.symbol,
       days: p.days,
       config,
+      history,
+      provenance: {
+        source: "BYBIT_SPOT",
+        interval: "60",
+        pages: fetched.sources,
+        fetchedAt: new Date(fetched.at).toISOString(),
+        cacheHit: fetched.cacheHit,
+        cacheAgeMs: Math.max(0, Date.now() - fetched.at),
+        cacheTtlMs: KLINE_CACHE_MS,
+      },
+      methodology: {
+        version: "HOURLY_CLOSE_EQUAL_CAPITAL_V1",
+        fees: "NOT_MODELLED",
+        slippage: "NOT_MODELLED",
+        benchmarkCapitalUsdt: result.spentUsdt,
+        benchmarkSampleTimes,
+        dcaAmountUsdt: result.benchmarks
+          ? result.spentUsdt / benchmarkSampleTimes.length
+          : null,
+      },
     };
     return c.json(response);
   } catch (error) {
     logApiError("BACKTEST_FAILED", error, c.get("correlationId"));
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      [
+        "INVALID_RESPONSE",
+        "INVALID_NUMBER",
+        "INVALID_CANDLE",
+        "EMPTY_RESULT",
+      ].includes(String(error.code))
+    ) {
+      return c.json(
+        { error: "INVALID_HISTORY", history: { status: "INCOMPLETE" } },
+        502,
+      );
+    }
     return c.json({ error: "BACKTEST_FAILED" }, 500);
   }
 });

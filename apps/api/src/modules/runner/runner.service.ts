@@ -1,3 +1,4 @@
+import { setTimeout as sleep } from "node:timers/promises";
 import {
   getAllowedSymbols,
   orderExecutionDelaySeconds,
@@ -38,6 +39,7 @@ import { computePnlReport } from "../pnl/pnl.route.js";
 import { getCountdownSecondsLeft } from "./countdown.js";
 import { claimDueDryRunOrder } from "./order.repository.js";
 import { reserveDryRunOrder } from "./reservation.repository.js";
+import { createRunnerLifecycle } from "./runner-lifecycle.js";
 import { createSingleFlightTask } from "./single-flight.js";
 
 let tickIntervalId: NodeJS.Timeout | null = null;
@@ -56,8 +58,6 @@ const NOTIFICATION_OUTBOX_POLL_MS = 5_000;
 const NOTIFICATION_OUTBOX_BATCH_LIMIT = 20;
 const TELEGRAM_REQUEST_TIMEOUT_MS = 5_000;
 const SESSION_CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000;
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Heartbeat for /risk/status: lets the dashboard show whether the trading
 // loop is actually alive instead of pretending.
@@ -80,7 +80,8 @@ type Db = ReturnType<typeof createPostgresConnection>["db"];
 // create nothing at all. Ownerless seeded rows were safe when the product had
 // exactly one user, but in a multi-user world they are ambiguous tenants that
 // nobody can safely claim later — see the I05 migration notes.
-async function seedDefaultStrategyIfNeeded(db: Db) {
+async function seedDefaultStrategyIfNeeded(db: Db, signal?: AbortSignal) {
+  if (signal?.aborted) return;
   const operatorTelegramUserId = process.env.OPERATOR_TELEGRAM_USER_ID;
   if (!operatorTelegramUserId) {
     logApiEvent("DEFAULT_STRATEGY_SEED_NOT_CONFIGURED");
@@ -101,6 +102,7 @@ async function seedDefaultStrategyIfNeeded(db: Db) {
   const defaultSymbols = getAllowedSymbols(process.env.ALLOWLIST_SYMBOLS);
 
   for (const symbol of defaultSymbols) {
+    if (signal?.aborted) return;
     const correlationId = createCorrelationId();
     const inserted = await withPersonalTenant(db, operator.id, async (tx) => {
       const [strategy] = await tx
@@ -142,7 +144,8 @@ async function seedDefaultStrategyIfNeeded(db: Db) {
 // Executes every PENDING order whose execute_at has passed. DB-driven so
 // orders survive restarts; the atomic status flip below also guards against
 // double execution.
-async function processDueOrders(db: Db) {
+async function processDueOrders(db: Db, signal: AbortSignal) {
+  if (signal.aborted) return;
   const correlationId = createCorrelationId();
   const dueOrders = await db
     .select()
@@ -178,6 +181,7 @@ async function processDueOrders(db: Db) {
   };
 
   for (const order of dueOrders) {
+    if (signal.aborted) return;
     const claimed = await claimDueDryRunOrder(db, order.id, correlationId);
     if (!claimed) continue;
 
@@ -219,7 +223,8 @@ async function processDueOrders(db: Db) {
 // last 24h and where the simulated portfolio stands. The retention loop.
 let lastDigestDay: string | null = null;
 
-async function maybeSendDailyDigest(db: Db) {
+async function maybeSendDailyDigest(db: Db, signal: AbortSignal) {
+  if (signal.aborted) return;
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
   if (now.getUTCHours() !== DIGEST_UTC_HOUR || lastDigestDay === today) return;
@@ -242,8 +247,10 @@ async function maybeSendDailyDigest(db: Db) {
     );
 
   for (const user of users) {
+    if (signal.aborted) return;
     try {
       const inputs = await buildDigestRenderInputsForUser(db, user.id);
+      if (signal.aborted) return;
       if (!inputs || !user.telegramChatId) continue;
       const correlationId = createCorrelationId();
       await enqueueNotification(db, {
@@ -349,12 +356,13 @@ async function runCountdownEdits(
   executeAt: Date,
   textFor: (secondsLeft: number) => string,
   chatId: string | null,
+  signal: AbortSignal,
 ) {
   try {
     let lastRenderedSeconds = getCountdownSecondsLeft(executeAt);
 
     while (true) {
-      await sleep(COUNTDOWN_TICK_MS);
+      await sleep(COUNTDOWN_TICK_MS, undefined, { signal });
       const secondsLeft = getCountdownSecondsLeft(executeAt);
       if (secondsLeft <= 0) return;
       if (secondsLeft === lastRenderedSeconds) continue;
@@ -367,6 +375,7 @@ async function runCountdownEdits(
         .where(eq(schema.orders.id, orderId))
         .limit(1);
       if (currentOrder?.status !== "PENDING") return;
+      if (signal.aborted) return;
 
       const retryAfterSeconds = await editTelegramMessage(
         messageId,
@@ -375,11 +384,11 @@ async function runCountdownEdits(
         orderId,
       );
       if (retryAfterSeconds) {
-        await sleep(retryAfterSeconds * 1000);
+        await sleep(retryAfterSeconds * 1000, undefined, { signal });
       }
     }
   } catch (err) {
-    logApiError("COUNTDOWN_EDIT_LOOP_FAILED", err);
+    if (!signal.aborted) logApiError("COUNTDOWN_EDIT_LOOP_FAILED", err);
   }
 }
 
@@ -387,9 +396,16 @@ interface StartRunnerOptions {
   connectionString: string;
   enabled: boolean;
   onMigrationsComplete?: () => void;
+  signal?: AbortSignal;
 }
 
-export async function startRunner(options: StartRunnerOptions) {
+export interface RunnerHandle {
+  stop: () => Promise<void>;
+}
+
+export async function startRunner(
+  options: StartRunnerOptions,
+): Promise<RunnerHandle> {
   logApiEvent("RUNNER_DATABASE_INITIALIZING");
   const { db, pool } = createPostgresConnection(options.connectionString);
 
@@ -399,23 +415,28 @@ export async function startRunner(options: StartRunnerOptions) {
     logApiEvent("DATABASE_MIGRATION_COMPLETED");
     options.onMigrationsComplete?.();
 
-    if (!options.enabled) {
-      logApiEvent("RUNNER_DISABLED");
+    if (!options.enabled || options.signal?.aborted) {
+      logApiEvent(
+        options.signal?.aborted
+          ? "RUNNER_STARTUP_CANCELLED"
+          : "RUNNER_DISABLED",
+      );
       await pool.end();
-      return;
+      return { stop: async () => undefined };
     }
 
-    await seedDefaultStrategyIfNeeded(db);
+    await seedDefaultStrategyIfNeeded(db, options.signal);
 
-    const correlationId = createCorrelationId();
-    try {
-      await deleteExpiredSessions(db);
-      lastSessionCleanupAt = new Date();
-      logApiEvent("SESSION_CLEANUP_COMPLETED", "INFO", correlationId);
-    } catch (error) {
-      // Retention cleanup must be observable, but a temporary cleanup failure
-      // does not make already-expired sessions usable again.
-      logApiError("SESSION_CLEANUP_FAILED", error, correlationId);
+    if (!options.signal?.aborted) {
+      const correlationId = createCorrelationId();
+      try {
+        await deleteExpiredSessions(db);
+        lastSessionCleanupAt = new Date();
+        logApiEvent("SESSION_CLEANUP_COMPLETED", "INFO", correlationId);
+      } catch (error) {
+        // Cleanup failure must not make already-expired sessions usable again.
+        logApiError("SESSION_CLEANUP_FAILED", error, correlationId);
+      }
     }
   } catch (error) {
     logApiError("DATABASE_MIGRATION_FAILED", error);
@@ -423,9 +444,18 @@ export async function startRunner(options: StartRunnerOptions) {
     throw error;
   }
 
+  if (options.signal?.aborted) {
+    logApiEvent("RUNNER_STARTUP_CANCELLED");
+    await pool.end();
+    return { stop: async () => undefined };
+  }
+
   const client = createBybitPublicClient({ baseUrl: "https://api.bybit.com" });
+  const lifecycle = createRunnerLifecycle();
+  const { signal } = lifecycle;
 
   const tick = async () => {
+    if (signal.aborted) return;
     const correlationId = createCorrelationId();
     lastTickAt = new Date();
     try {
@@ -461,6 +491,7 @@ export async function startRunner(options: StartRunnerOptions) {
       );
 
       for (const symbol of symbols) {
+        if (signal.aborted) return;
         let ticker: import("@buy-crypto-dip-bot/exchange-core").MarketTicker;
         try {
           ticker = await client.getTicker(symbol);
@@ -474,6 +505,7 @@ export async function startRunner(options: StartRunnerOptions) {
         );
 
         for (const strategy of strategiesForSymbol) {
+          if (signal.aborted) return;
           // The inner join guarantees this at runtime; narrowing it here keeps
           // every write below owner-typed rather than owner-optional.
           const ownerId = strategy.userId;
@@ -507,7 +539,7 @@ export async function startRunner(options: StartRunnerOptions) {
             logApiEvent("RISK_DECISION_REJECTED", "WARN", correlationId);
             if (result.shouldNotify) {
               if (strategy.ownerChatId) {
-                enqueueNotification(db, {
+                await enqueueNotification(db, {
                   userId: ownerId,
                   chatId: strategy.ownerChatId,
                   correlationId,
@@ -567,14 +599,17 @@ export async function startRunner(options: StartRunnerOptions) {
               .set({ tgMessageId: alert.messageId })
               .where(eq(schema.orders.id, order.id));
 
-            // Fire-and-forget: cosmetic countdown edits
-            void runCountdownEdits(
-              db,
-              order.id,
-              alert.messageId,
-              executeAt,
-              textFor,
-              strategy.ownerChatId,
+            // Cosmetic work is separate from execution, but still drained on stop.
+            void lifecycle.run(() =>
+              runCountdownEdits(
+                db,
+                order.id,
+                alert.messageId,
+                executeAt,
+                textFor,
+                strategy.ownerChatId,
+                signal,
+              ),
             );
           }
         }
@@ -585,7 +620,34 @@ export async function startRunner(options: StartRunnerOptions) {
   };
 
   logApiEvent("RUNNER_EXECUTION_LOOP_STARTED");
-  const runTick = createSingleFlightTask(tick);
+  const managedTask = (task: () => Promise<void>, failureEvent: string) =>
+    createSingleFlightTask(() =>
+      lifecycle.run(async () => {
+        try {
+          await task();
+        } catch (error) {
+          logApiError(failureEvent, error);
+        }
+      }),
+    );
+  const runTick = managedTask(tick, "RUNNER_TICK_FAILED");
+  const runDueOrders = managedTask(
+    () => processDueOrders(db, signal),
+    "DUE_ORDER_PROCESSING_FAILED",
+  );
+  const runDigest = managedTask(
+    () => maybeSendDailyDigest(db, signal),
+    "DAILY_DIGEST_FAILED",
+  );
+  const runOutbox = managedTask(
+    () => processNotificationOutbox(db, signal),
+    "NOTIFICATION_OUTBOX_PROCESSING_FAILED",
+  );
+  const runSessionCleanup = managedTask(async () => {
+    await deleteExpiredSessions(db);
+    lastSessionCleanupAt = new Date();
+    logApiEvent("SESSION_CLEANUP_COMPLETED");
+  }, "SESSION_CLEANUP_FAILED");
   // Run first tick immediately. Later interval attempts are skipped while a
   // prior tick is still active, so one process cannot overlap itself.
   void runTick();
@@ -595,37 +657,23 @@ export async function startRunner(options: StartRunnerOptions) {
     });
   }, RUN_INTERVAL_MS);
   dueOrdersIntervalId = setInterval(() => {
-    processDueOrders(db).catch((err) =>
-      logApiError("DUE_ORDER_PROCESSING_FAILED", err),
-    );
+    void runDueOrders();
   }, DUE_ORDERS_POLL_MS);
   digestIntervalId = setInterval(() => {
-    maybeSendDailyDigest(db).catch((err) =>
-      logApiError("DAILY_DIGEST_FAILED", err),
-    );
+    void runDigest();
   }, DIGEST_CHECK_MS);
-  void processNotificationOutbox(db).catch((err) =>
-    logApiError("NOTIFICATION_OUTBOX_PROCESSING_FAILED", err),
-  );
+  void runOutbox();
   notificationOutboxIntervalId = setInterval(() => {
-    processNotificationOutbox(db).catch((err) =>
-      logApiError("NOTIFICATION_OUTBOX_PROCESSING_FAILED", err),
-    );
+    void runOutbox();
   }, NOTIFICATION_OUTBOX_POLL_MS);
   sessionCleanupIntervalId = setInterval(() => {
-    const correlationId = createCorrelationId();
-    deleteExpiredSessions(db)
-      .then(() => {
-        lastSessionCleanupAt = new Date();
-        logApiEvent("SESSION_CLEANUP_COMPLETED", "INFO", correlationId);
-      })
-      .catch((error) =>
-        logApiError("SESSION_CLEANUP_FAILED", error, correlationId),
-      );
+    void runSessionCleanup();
   }, SESSION_CLEANUP_INTERVAL_MS);
 
-  // Close connection pool on process exit
-  process.on("SIGTERM", async () => {
+  let stopping: Promise<void> | undefined;
+  const stop = async () => {
+    logApiEvent("RUNNER_DRAIN_STARTED");
+    const draining = lifecycle.stop();
     if (tickIntervalId) clearInterval(tickIntervalId);
     if (dueOrdersIntervalId) clearInterval(dueOrdersIntervalId);
     if (digestIntervalId) clearInterval(digestIntervalId);
@@ -633,8 +681,16 @@ export async function startRunner(options: StartRunnerOptions) {
       clearInterval(notificationOutboxIntervalId);
     }
     if (sessionCleanupIntervalId) clearInterval(sessionCleanupIntervalId);
+    tickIntervalId = null;
+    dueOrdersIntervalId = null;
+    digestIntervalId = null;
+    notificationOutboxIntervalId = null;
+    sessionCleanupIntervalId = null;
+    await draining;
     await pool.end();
-  });
+    logApiEvent("RUNNER_DRAIN_COMPLETED");
+  };
+  return { stop: () => (stopping ??= stop()) };
 }
 
 // Telegram delivery.
@@ -803,13 +859,18 @@ const deliverOutboxRecord = async (
   }
 };
 
-export async function processNotificationOutbox(db: Db): Promise<void> {
+export async function processNotificationOutbox(
+  db: Db,
+  signal?: AbortSignal,
+): Promise<void> {
+  if (signal?.aborted) return;
   await recoverStaleSendingNotifications(db);
   for (
     let attempt = 0;
     attempt < NOTIFICATION_OUTBOX_BATCH_LIMIT;
     attempt += 1
   ) {
+    if (signal?.aborted) return;
     // Lease only the next send so queued rows cannot expire while waiting.
     const [record] = await claimDueNotifications(db, new Date(), 1);
     if (!record) return;

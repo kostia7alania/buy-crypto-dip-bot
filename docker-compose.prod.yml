@@ -33,6 +33,7 @@ services:
     image: ${DIPBOT_IMAGE:?set an immutable image digest}
     command: ["node", "apps/api/dist/server.mjs"]
     restart: unless-stopped
+    stop_grace_period: 30s
     environment:
       APP_RUNTIME: non-local
       POSTGRES_CONNECTION_STRING: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/dipbot
