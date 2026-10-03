@@ -37,6 +37,7 @@ jobs:
       - run: pnpm check
       - run: pnpm --filter @buy-crypto-dip-bot/db test:postgres18
       - run: pnpm build
+      - run: pnpm --filter @buy-crypto-dip-bot/api test:postgres18
 
   build:
     needs: verify
@@ -76,11 +77,16 @@ jobs:
       TARGET_IMAGE: ghcr.io/${{ github.repository }}@${{ needs.build.outputs.digest }}
       TARGET_SHA: ${{ github.sha }}
     steps:
+      - name: Require independently verified SSH identity
+        env:
+          VPS_SSH_FINGERPRINT: ${{ vars.VPS_SSH_FINGERPRINT }}
+        run: test -n "$VPS_SSH_FINGERPRINT"
       - uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          fingerprint: ${{ vars.VPS_SSH_FINGERPRINT }}
           envs: TARGET_IMAGE,TARGET_SHA
           script: |
             set -Eeuo pipefail

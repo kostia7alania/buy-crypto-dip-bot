@@ -4,9 +4,9 @@ export type NotificationClassification = "TENANT_FINANCIAL";
 
 interface DigestPortfolioInputs {
   investedUsdt: number;
-  currentValueUsdt: number;
-  pnlUsdt: number;
-  pnlPercent: number;
+  currentValueUsdt: number | null;
+  pnlUsdt: number | null;
+  pnlPercent: number | null;
 }
 
 interface TelegramTemplateBase {
@@ -254,12 +254,32 @@ export const parseTelegramTemplate = (input: unknown): TelegramTemplateV1 => {
         investedUsdt: finiteNumber(value.investedUsdt, "DIGEST_INVESTED", {
           min: 0,
         }),
-        currentValueUsdt: finiteNumber(value.currentValueUsdt, "DIGEST_VALUE", {
-          min: 0,
-        }),
-        pnlUsdt: finiteNumber(value.pnlUsdt, "DIGEST_PNL"),
-        pnlPercent: finiteNumber(value.pnlPercent, "DIGEST_PNL_PERCENT"),
+        currentValueUsdt:
+          value.currentValueUsdt === null
+            ? null
+            : finiteNumber(value.currentValueUsdt, "DIGEST_VALUE", {
+                min: 0,
+              }),
+        pnlUsdt:
+          value.pnlUsdt === null
+            ? null
+            : finiteNumber(value.pnlUsdt, "DIGEST_PNL"),
+        pnlPercent:
+          value.pnlPercent === null
+            ? null
+            : finiteNumber(value.pnlPercent, "DIGEST_PNL_PERCENT"),
       };
+      const valuations = [
+        portfolio.currentValueUsdt,
+        portfolio.pnlUsdt,
+        portfolio.pnlPercent,
+      ];
+      if (
+        valuations.some((value) => value === null) &&
+        !valuations.every((value) => value === null)
+      ) {
+        invalid("DIGEST_PARTIAL_TOTALS");
+      }
     }
     return {
       version: TELEGRAM_TEMPLATE_VERSION,
@@ -356,11 +376,18 @@ export const renderTelegramTemplate = (
     .map((dip) => `${escapeTelegramHtml(dip.symbol)}×${dip.count.toString()}`)
     .join(", ");
   const portfolio = template.inputs.portfolio;
-  const sign = portfolio && portfolio.pnlUsdt >= 0 ? "+" : "";
+  const sign =
+    portfolio && portfolio.pnlUsdt !== null && portfolio.pnlUsdt >= 0
+      ? "+"
+      : "";
   const portfolioLine = portfolio
     ? `• <b>Portfolio:</b> <code>${money(portfolio.investedUsdt)} USDT</code> invested, ` +
-      `now <code>${money(portfolio.currentValueUsdt)}</code> ` +
-      `(<code>${sign}${money(portfolio.pnlUsdt)} / ${sign}${money(portfolio.pnlPercent)}%</code>)\n`
+      (portfolio.currentValueUsdt !== null &&
+      portfolio.pnlUsdt !== null &&
+      portfolio.pnlPercent !== null
+        ? `now <code>${money(portfolio.currentValueUsdt)}</code> ` +
+          `(<code>${sign}${money(portfolio.pnlUsdt)} / ${sign}${money(portfolio.pnlPercent)}%</code>)\n`
+        : "valuation unavailable: missing or stale market data.\n")
     : "";
   return {
     parseMode: "HTML",
@@ -370,6 +397,7 @@ export const renderTelegramTemplate = (
       (dips ? `• <b>Dips caught:</b> ${dips}\n` : "") +
       `• <b>Spent (24h):</b> <code>${money(template.inputs.spent24hUsdt)} USDT</code>\n` +
       portfolioLine +
+      `\nDRY_RUN. Fees and slippage are not modelled.\n` +
       `\nSee /pnl, /performance or /backtest for details.`,
   };
 };

@@ -1,8 +1,8 @@
-import { schema } from "@buy-crypto-dip-bot/db";
+import { auditEventFromRow, schema } from "@buy-crypto-dip-bot/db";
 import type { TestDatabase } from "@buy-crypto-dip-bot/db/testing";
 import { createTestDb } from "@buy-crypto-dip-bot/db/testing";
 import type { MarketTicker } from "@buy-crypto-dip-bot/exchange-core";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { claimDueDryRunOrder } from "./order.repository.js";
 import { reserveDryRunOrder } from "./reservation.repository.js";
@@ -121,6 +121,117 @@ describe("dry-run reservation", () => {
       "AUDIT_EVENT_INVALID:CORRELATION_ID",
     );
 
+    expect(await harness.db.select().from(schema.orders)).toHaveLength(0);
+    expect(
+      await harness.db.select().from(schema.orderReservations),
+    ).toHaveLength(0);
+  });
+
+  it("retains rejected decision provenance after edits without orders or holds, suppressing only hourly notifications", async () => {
+    const rejectedConfig = { ...CONFIG, maxDailySpendUsdt: 10 };
+    await harness.db
+      .update(schema.strategies)
+      .set({ config: rejectedConfig })
+      .where(eq(schema.strategies.id, strategyId));
+    await expect(reserve()).resolves.toMatchObject({
+      outcome: "REJECTED",
+      reasonCodes: ["DAILY_LIMIT_EXCEEDED"],
+      shouldNotify: true,
+    });
+    const [original] = await harness.db.select().from(schema.auditEvents);
+    if (!original) throw new Error("test rejection audit missing");
+    const event = auditEventFromRow(original);
+    if (event?.type !== "RISK_DECISION_REJECTED" || !event.payload.provenance) {
+      throw new Error("test rejection provenance missing from V1 read-back");
+    }
+    const provenance = event.payload.provenance;
+    expect(event.payload).toEqual({
+      mode: "DRY_RUN",
+      policyVersion: "RISK_V1",
+      reasonCodes: ["DAILY_LIMIT_EXCEEDED"],
+      provenance: {
+        evaluationKey: expect.stringMatching(/^evaluation-v1:[0-9a-f]{64}$/),
+        configRevision: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+        marketSnapshotKey: expect.stringMatching(
+          /^bybit-ticker-v2:[0-9a-f]{64}$/,
+        ),
+        strategyConfig: {
+          ...rejectedConfig,
+          symbol: "BTCUSDT",
+          mode: "DRY_RUN",
+        },
+        marketSnapshot: {
+          ...ticker(),
+          source: "BYBIT_SPOT_TICKER_V5",
+          evaluatedAt: NOW.toISOString(),
+          ageAtEvaluationMs: 5_000,
+        },
+        riskSnapshot: {
+          dailyCompletedUsdt: 0,
+          weeklyCompletedUsdt: 0,
+          activeReservedUsdt: 0,
+          dailyCommittedUsdt: 0,
+          weeklyCommittedUsdt: 0,
+          proposedQuoteAmountUsdt: 20,
+          decision: {
+            signalId: provenance.evaluationKey,
+            strategyId,
+            symbol: "BTCUSDT",
+            mode: "DRY_RUN",
+            dailySpentUsdt: 0,
+            weeklySpentUsdt: 0,
+            liveTradingEnabled: false,
+          },
+        },
+      },
+    });
+    const [size] = await harness.db
+      .select({
+        bytes: sql<number>`octet_length(${schema.auditEvents.payload}::text)`,
+      })
+      .from(schema.auditEvents)
+      .where(eq(schema.auditEvents.id, original.id));
+    expect(size?.bytes).toBeLessThanOrEqual(8192);
+
+    const editedConfig = { ...rejectedConfig, suggestedQuoteAmount: 25 };
+    await harness.db
+      .update(schema.strategies)
+      .set({ config: editedConfig })
+      .where(eq(schema.strategies.id, strategyId));
+    await expect(
+      reserve("reservation_rejected_edit", { ...ticker(), lastPrice: 85 }),
+    ).resolves.toMatchObject({ outcome: "REJECTED", shouldNotify: false });
+    const audits = await harness.db
+      .select()
+      .from(schema.auditEvents)
+      .orderBy(schema.auditEvents.createdAt);
+    expect(audits).toHaveLength(2);
+    expect(audits[0]).toEqual(original);
+    const edited = audits[1];
+    if (!edited) throw new Error("test second rejection audit missing");
+    expect(edited.payload).toMatchObject({
+      provenance: {
+        configRevision: expect.not.stringMatching(provenance.configRevision),
+        evaluationKey: expect.not.stringMatching(provenance.evaluationKey),
+        strategyConfig: editedConfig,
+        marketSnapshot: { lastPrice: 85 },
+        riskSnapshot: { proposedQuoteAmountUsdt: 25 },
+      },
+    });
+
+    const afterHour = new Date(edited.createdAt.getTime() + 60 * 60 * 1000 + 1);
+    await expect(
+      reserve(
+        "reservation_rejected_after_hour",
+        {
+          ...ticker(afterHour.toISOString()),
+          receivedAt: afterHour.toISOString(),
+          ageMs: 0,
+        },
+        afterHour,
+      ),
+    ).resolves.toMatchObject({ outcome: "REJECTED", shouldNotify: true });
+    expect(await harness.db.select().from(schema.auditEvents)).toHaveLength(3);
     expect(await harness.db.select().from(schema.orders)).toHaveLength(0);
     expect(
       await harness.db.select().from(schema.orderReservations),

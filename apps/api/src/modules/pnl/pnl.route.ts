@@ -1,5 +1,9 @@
 import { schema } from "@buy-crypto-dip-bot/db";
-import { createBybitPublicClient } from "@buy-crypto-dip-bot/exchange-bybit";
+import {
+  type PnlPosition,
+  type PnlReport,
+  reportAssumptions,
+} from "@buy-crypto-dip-bot/shared-types";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { logApiError } from "../../operational-log.js";
@@ -8,28 +12,12 @@ import {
   requireTenantDb,
   requireUser,
 } from "../auth/principal.middleware.js";
-
-export interface SymbolPnl {
-  symbol: string;
-  orders: number;
-  spentUsdt: number;
-  baseQty: number;
-  avgBuyPrice: number;
-  currentPrice: number;
-  currentValueUsdt: number;
-  pnlUsdt: number;
-  pnlPercent: number;
-}
-
-export interface PnlReport {
-  positions: SymbolPnl[];
-  totals: {
-    spentUsdt: number;
-    currentValueUsdt: number;
-    pnlUsdt: number;
-    pnlPercent: number;
-  };
-}
+import {
+  createReportMarketSnapshot,
+  isFreshForReport,
+  marketSource,
+  reportStatus,
+} from "../market-data/report-snapshot.js";
 
 type Db = Pick<ReturnType<typeof requireTenantDb>, "select">;
 
@@ -42,6 +30,7 @@ type Db = Pick<ReturnType<typeof requireTenantDb>, "select">;
 export async function computePnlReport(
   db: Db,
   userId: string,
+  market = createReportMarketSnapshot(),
 ): Promise<PnlReport> {
   const completedBuys = await db
     .select()
@@ -58,8 +47,13 @@ export async function computePnlReport(
   for (const order of completedBuys) {
     const spent = Number(order.quoteAmount);
     const price = Number(order.price);
-    if (!Number.isFinite(spent) || !Number.isFinite(price) || price <= 0) {
-      continue;
+    if (
+      !Number.isFinite(spent) ||
+      spent <= 0 ||
+      !Number.isFinite(price) ||
+      price <= 0
+    ) {
+      throw new Error("PNL_INVALID_ORDER_ECONOMICS");
     }
     const acc = bySymbol.get(order.symbol) ?? { spent: 0, qty: 0, n: 0 };
     acc.spent += spent;
@@ -68,20 +62,12 @@ export async function computePnlReport(
     bySymbol.set(order.symbol, acc);
   }
 
-  const client = createBybitPublicClient({
-    baseUrl: "https://api.bybit.com",
-  });
-
-  const positions: SymbolPnl[] = [];
+  const positions: PnlPosition[] = [];
   for (const [symbol, acc] of bySymbol) {
-    let currentPrice = 0;
-    try {
-      currentPrice = (await client.getTicker(symbol)).lastPrice;
-    } catch (error) {
-      logApiError("PNL_TICKER_FETCH_FAILED", error);
-      continue;
-    }
-    const currentValue = acc.qty * currentPrice;
+    const { ticker, issue } = await market.getTicker(symbol);
+    const currentPrice = ticker?.lastPrice ?? null;
+    const currentValue = currentPrice === null ? null : acc.qty * currentPrice;
+    const pnl = currentValue === null ? null : currentValue - acc.spent;
     positions.push({
       symbol,
       orders: acc.n,
@@ -90,25 +76,64 @@ export async function computePnlReport(
       avgBuyPrice: acc.spent / acc.qty,
       currentPrice,
       currentValueUsdt: currentValue,
-      pnlUsdt: currentValue - acc.spent,
-      pnlPercent:
-        acc.spent > 0 ? ((currentValue - acc.spent) / acc.spent) * 100 : 0,
+      pnlUsdt: pnl,
+      pnlPercent: pnl === null ? null : (pnl / acc.spent) * 100,
+      issue,
+      quote: ticker ? marketSource(ticker, "BYBIT_SPOT_TICKER_V5") : null,
     });
   }
 
   positions.sort((a, b) => b.spentUsdt - a.spentUsdt);
+  return finalizePnlReport(positions);
+}
 
+export function finalizePnlReport(
+  collected: PnlPosition[],
+  asOf = Date.now(),
+): PnlReport {
+  const positions = collected.map(
+    (position): PnlPosition =>
+      position.quote && !isFreshForReport(position.quote, asOf)
+        ? {
+            ...position,
+            currentPrice: null,
+            currentValueUsdt: null,
+            pnlUsdt: null,
+            pnlPercent: null,
+            issue: "STALE_MARKET",
+          }
+        : position,
+  );
   const totalSpent = positions.reduce((s, p) => s + p.spentUsdt, 0);
-  const totalValue = positions.reduce((s, p) => s + p.currentValueUsdt, 0);
+  const status = reportStatus(
+    positions.length,
+    positions.filter((p) => p.issue === null).length,
+  );
+  // Partial sums are not a portfolio valuation, even when some quotes exist.
+  const totalValue = positions.reduce<number | null>(
+    (sum, position) =>
+      sum === null || position.currentValueUsdt === null
+        ? null
+        : sum + position.currentValueUsdt,
+    0,
+  );
+  const totalPnl = totalValue === null ? null : totalValue - totalSpent;
 
   return {
+    status,
+    generatedAt: new Date(asOf).toISOString(),
+    assumptions: reportAssumptions,
     positions,
     totals: {
       spentUsdt: totalSpent,
       currentValueUsdt: totalValue,
-      pnlUsdt: totalValue - totalSpent,
+      pnlUsdt: totalPnl,
       pnlPercent:
-        totalSpent > 0 ? ((totalValue - totalSpent) / totalSpent) * 100 : 0,
+        totalPnl === null
+          ? null
+          : totalSpent > 0
+            ? (totalPnl / totalSpent) * 100
+            : 0,
     },
   };
 }

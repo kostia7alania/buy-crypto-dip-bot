@@ -1,6 +1,6 @@
 # Master backlog
 
-Reviewed: 2026-09-16. [Project status](../docs/23_PROJECT_STATUS.md) owns source
+Reviewed: 2026-10-03. [Project status](../docs/23_PROJECT_STATUS.md) owns source
 identity, verification and the Gate 1 NO-GO verdict. The September 14
 integration and September 16 reservation extension are recorded in
 [the research](../docs/24_TENANT_INTEGRATION_RESEARCH.md).
@@ -15,11 +15,11 @@ integration and September 16 reservation extension are recorded in
 | N04 | P1, Web/Auth | LOCAL_DONE | Reinstall a single Telegram widget after logout; clean its callback; failed logout remains signed in with an actionable error. Browser fixture flow passed. |
 | N05 | P0, Release/DB | LOCAL_DONE | Both original histories preserved; strict guarded forward convergence and common subsequent migration journal implemented. Real PG18 proves clean/recovery/main catalog equivalence, preservation, refusal and atomicity. Destination ownership decisions remain N08. |
 | N06 | P0, API/DB/Web | LOCAL_DONE | Personal tenants/RLS integrated with opaque sessions, replay/CSRF, allowlist, immutable audit and typed outbox. Owned API and bot/runner mutations use restricted transactions; dashboard uses one private snapshot. Immutable release source integrated. Privileged service credentials and full proof remain N07/N08. |
-| N07 | P0, Verification/Release | PRE_GO | Targeted PostgreSQL 18 reservation race/reopened-pool settlement passes in one process. Independent process-crash recovery/startup discovery remain unproved. Still run the complete clean/upgrade, A/B, failure/restart/concurrency and outbox matrix on the final integrated revision; record catalog, commands, reviewer and immutable artifact before GO. |
-| N08 | P0, Operations | PRE_GO | Verify deployed revision/catalog, trusted forwarding headers, per-service secrets, migration/readiness ordering, backup/restore and rollback. Rehearsal preserves tenant and audit evidence. |
-| N09 | P1, Web/UX | OPEN | Finish actual Telegram login/account-switch/private-start delivery and R121 keyboard, screen-reader, zoom, contrast and mobile checks. Signed-out backtest copy corrected; snapshot A/B/late-response, hidden visibility and 401 fixtures pass. Fixture tests are not provider proof. |
-| N10 | P0, Product/Reporting | GATED | Local source now covers approved dry-run config/public-market/risk snapshots and atomic consume/release reservation semantics (R047-R051 slice). Finish rejected-decision provenance, shared snapshot semantics, R052-R058 and truthful missing-data/freshness/fees/slippage reporting. |
-| N11 | P1, Platform/Auth | GATED | Implement cost-first Supabase identity/OIDC/JWT, edge-compatible Hono/BFF, verified Telegram webhook, bounded Cron/Queue and idempotency. Verify paid/free cost signals and exactly one scheduler/bot mode at cutover. No private exchange work. |
+| N07 | P0, Verification/Release | PRE_GO | Native PG18 proves reservation race and real SIGKILL recovery with competing fresh schedulers, one settlement and another duplicate-free cold start. Local two-identity BFF/API flow passes. Complete remaining integrated outbox/failure acceptance and immutable artifact review before GO. |
+| N08 | P0, Operations | PRE_GO | Destination revision, capacity and migration lineage inventoried. Fresh backup rehearsal is implemented but blocked by independently trusted SSH fingerprint. Still verify forwarding trust, per-service secrets, current migration/readiness ordering and incident restore. |
+| N09 | P1, Web/UX | OPEN | Missing login config, auth outages and retry are explicit. Local 390/1440 px setup/caps/audit/logout and API outage recovery pass. Finish actual Telegram login/account-switch/private-start delivery and remaining R121 checks. Synthetic identities are not provider proof. |
+| N10 | P0, Product/Reporting | PARTIAL | New rejected decisions retain config/market/risk provenance. Dashboard shares quotes and final freshness cutoff; missing values stay null; reports identify DRY_RUN and unmodelled fees/slippage. Complete remaining R052-R058 benchmark contracts; no historical evidence backfill or deployment claimed. |
+| N11 | P1, Platform/Auth | LATER | Optional Cloudflare/Supabase/OIDC/webhook/Cron/Queue target, not a prerequisite to the existing-VPS pilot. Reconsider when measured cost/capacity justifies migration; prove exactly one scheduler/bot mode at cutover. No private exchange work. |
 | N12 | P1, Product/Content | OPEN_EXTERNAL | Refresh claims on the actual published revision; complete keyword/content map, privacy QA, real interviews and pricing discovery. Leave tariffs, revenue, SLA and legal conclusions unannounced until supported. |
 
 `LOCAL_DONE` closes a recovery finding. It does not mark the remote deployment
@@ -101,8 +101,8 @@ Index totals: EXTERNAL 4, GATED 41, LATER 1, LOCAL_SOURCE 53, OPEN 4, PARTIAL 15
 | R044 | P1 | GATED | Add an upstream market-data circuit-breaker policy |
 | R045 | P1 | GATED | Share market-data budgets and snapshots |
 | R046 | P1 | GATED | Define per-tenant scheduler fairness and backpressure |
-| R047 | P0 | PARTIAL | Approved dry-run reservations persist an immutable public-market snapshot/key; rejected decisions and shared dashboard provenance remain |
-| R048 | P0 | PARTIAL | Approved reservations persist risk-policy and effective-config revisions; rejected-decision references remain |
+| R047 | P0 | PARTIAL | Approved reservations and new rejected decisions persist immutable market evidence; dashboard reports share quotes and a final freshness cutoff. Historical rejection evidence and broader observation identity remain limited |
+| R048 | P0 | LOCAL_SOURCE | Approved reservations and new rejected decisions persist risk-policy and effective-config revisions; original audit rows are preserved without invented backfill |
 | R049 | P1 | PARTIAL | Exact strategy/config/market evaluations are duplicate-suppressed; broader observation identity and scheduler semantics remain |
 | R050 | P0 | LOCAL_SOURCE | Separate durable hold lifecycle from order lifecycle; commit, consume and release invariants pass locally |
 | R051 | P1 | LOCAL_SOURCE | Preserve the effective strategy snapshot for an active hold; later strategy edits do not rewrite evidence |

@@ -1,12 +1,17 @@
 # Project status
 
-Reviewed: 2026-10-02. This document owns the current readiness verdict.
+Reviewed: 2026-10-03. This document owns the current readiness verdict.
 Historical plans preserve their original evidence and do not override it.
 
 **Gate 1: NO-GO. Execution: DRY_RUN only. Hosted, edge, Demo and live launch
 remain unapproved.**
 
 ## Current source
+
+Overnight pilot work is tracked in [plan 014](../plans/014-low-cost-pilot-delivery.md).
+It adds truthful incomplete reports, new rejected-decision provenance, actual
+process-crash recovery proof and actionable auth outage states. The pilot stays
+on the existing VPS without a new hosting subscription; edge migration is optional.
 
 October review implementation: `fc47168`. Review and merge work is tracked in
 [plan 013](../plans/013-cost-first-merge-review.md). The architecture decision
@@ -31,9 +36,12 @@ recovered on September 12. The September 14 integration preserves them. The
 September 16 continuation adds the bounded reservation lifecycle and targeted
 concurrency/restart proof described below.
 
-The running production revision, catalog and provider configuration have not
-been inspected. No deployment or provider-delivery claim follows from this
-local source integration. Exact source/check identities are recorded in
+Read-only destination inventory on October 2 confirmed API/bot/web still run
+`becc46bb3b957c484324dbc3c517d5db7762be97`, PostgreSQL 18.4 and the exact
+three-migration cost-first lineage. This is not the current main revision.
+Further SSH access and backup rehearsal require an independently verified
+host fingerprint, currently unavailable. No provider-delivery claim follows
+from inventory or local source integration. Exact source/check identities are recorded in
 [implementation evidence](20_GATE1_IMPLEMENTATION_EVIDENCE.md).
 
 ## What changed in this integration
@@ -41,11 +49,11 @@ local source integration. Exact source/check identities are recorded in
 | Area | Current local result | Remaining acceptance |
 | --- | --- | --- |
 | Migration history | Strict recognition of both original histories; guarded transactional bridges to `gate1_tenants_v1`; one authority for subsequent forward SQL | Destination catalog review and explicit decisions for any unresolved ownership |
-| Data preservation | Original migration journals preserved; original audit fields and numeric amounts retained; quarantine strategy/order preflight refuses without writes | Real destination inventory and restored-backup comparison |
+| Data preservation | Original migration journals preserved; original audit fields and numeric amounts retained; quarantine preflight refuses without writes; destination lineage inventoried | Fresh destination backup restoration and comparison |
 | Tenant access | Personal tenants, memberships, owner constraints, forced RLS and restricted transactions for owned API routes and bot/runner mutations | Full integrated matrix, independent review and service-credential separation |
 | Login | Recovery opaque sessions, replay/abuse, CSRF, revocation and authoritative BFF retained | Real Telegram login/private start/provider smoke; OIDC later |
-| Dashboard | One private snapshot, visibility-aware refresh, account invalidation, 401 pause; first-request cancellation race fixed | Full accessibility/mobile/provider checks in N09 |
-| Audit, reservation and Telegram | Recovery immutable versioned audit, private notification binding, typed outbox and digest retained; owner-scoped dry-run holds now commit with order and approval evidence, then consume or release atomically | Full integrated restart/delivery matrix, fairness, rejected-decision provenance and truthful reporting |
+| Dashboard | One private snapshot, account invalidation and 401 pause; missing login config and API outages are distinct; local mobile/desktop setup and outage recovery checked | Full accessibility/provider checks in N09 |
+| Audit, reservation and Telegram | Immutable approved and new rejected decision evidence; atomic dry-run hold lifecycle; true process-restart proof; shared report quotes, explicit missing/stale values and simulation assumptions | Full integrated delivery matrix, fairness and remaining benchmark contracts; historical rejection evidence is not backfilled |
 | Release | Immutable digest, commit-pinned files, separate migration service, writer quiescence, backup and readiness ordering; no automatic old-image restart after attempted DDL | Restore/incident rehearsal and production approval |
 | Public web | Public prerender; private CSR/noindex/no-store; truthful signed-out backtest copy | Published revision and claims/analytics QA |
 | Platform | Cloudflare/Supabase remain targets | OIDC/JWT, edge entries, webhook, Cron/Queues and cutover proof |
@@ -54,8 +62,10 @@ The migration retains main's event ledger, generic outbox and evaluation keys
 as data/schema. It does not activate main's minute-slot/generic dispatch path
 alongside recovery's runner/outbox. The local runner now stores immutable
 config, public-market and risk evidence for approved dry-run reservations.
-Rejected-decision provenance, common dashboard market snapshots, truthful
-partial/stale reporting and scheduler cutover remain N10/N11. Identity profile
+New rejected decisions now retain their config, market and risk snapshots.
+Dashboard reports share quotes and one final freshness cutoff; missing values
+remain null and partial sums are not presented as whole-portfolio totals.
+Broader benchmark contracts and scheduler cutover remain N10/N11. Identity profile
 fields are compatibility snapshots until a future canonical OIDC/profile
 contract is implemented.
 
@@ -67,17 +77,23 @@ contract is implemented.
   subsequent forward migration atomicity.
 - Restricted-role pool reuse: A, forbidden foreign write, rollback, B, missing
   context and restored connection state. No developer or production DB used.
-- Disposable PostgreSQL 18: two independent runner connections serialize on
-  one strategy, exactly one creates the order/hold, and a newly opened pool in
-  the same process later completes the durable order and consumes its hold.
-  Process-crash recovery and startup discovery were not proved. The existing 16-case
-  PostgreSQL contract lane also passes with the new forward migration.
+- Disposable PostgreSQL 18: reservation race plus an actual child-process
+  SIGKILL after committed reservation, two fresh competing scheduler processes,
+  one settlement/consumed hold/completion event, and another cold start without
+  duplication. This does not prove a PostgreSQL crash or live exchange recovery.
 - API snapshot A/B isolation and anonymous refusal; BFF session forwarding,
   private caching headers and upstream outage behavior.
 - Browser with fixtures: immediate first A snapshot, logout/re-login, one
   widget/callback, B remains B after a delayed A result, no refreshes during
   179 seconds of simulated hidden visibility, and private data cleared on 401.
   This does not prove real Telegram authentication or delivery.
+- Local HTTP BFF/API/PostgreSQL flow: two synthetic signed identities, public
+  Bybit-backed strategy creation, owner-only reads/updates, foreign 404,
+  cross-origin 403, private/no-store snapshot and logout/revoked-cookie refusal.
+- Local browser at 390 and 1440 px: create a paused pair, edit/read back caps,
+  audit events, public-history backtest and logout. Stopping the API hides private
+  data with an unavailable state; restarting and retrying restores the same
+  account. Telegram identity used a synthetic local signature, not the provider.
 - Local source checks, build and compose validation are detailed in the
   evidence appendix, including failures corrected during development.
 
@@ -88,16 +104,18 @@ contract is implemented.
 2. The privileged connection still supports trusted auth, discovery, delivery
    and some owner-qualified bot reads. RLS is proved in designated restricted
    transactions, not as containment of arbitrary SQL through the privileged pool.
-3. Actual production catalog, secrets, forwarding trust, restore/incident
-   procedure and dependency-aware readiness need a destination rehearsal.
+3. Destination source/lineage inventory is complete, but SSH identity trust,
+   service secrets, forwarding trust, fresh-backup restore/incident procedure
+   and current dependency-aware readiness still need a destination rehearsal.
 4. Actual Telegram login, private `/start`, delivery and the complete R121
    accessibility checks remain open.
-5. Rejected-decision provenance, cross-view market snapshot semantics and
-   truthful missing/partial/stale reporting remain explicit N10 work. The
-   approved dry-run reservation slice is local source, not deployed evidence.
+5. Remaining N10 benchmark/matched-cash-flow contracts are not completed by
+   truthful report metadata. New provenance/reporting and reservation changes
+   are verified source, not deployed evidence; old audit rows remain unchanged.
 
-The next deliverable is the complete integrated proof plus the remaining N10
-reporting/provenance contract. Gate 1 checks happen before GO. Demo requires GO
+The next release step needs independently trusted SSH identity, a restored
+destination backup rehearsal and real Telegram/provider proof, together with
+the remaining integrated acceptance. Gate 1 checks happen before GO. Demo requires GO
 plus a separate reviewed scope; live execution remains unavailable and requires
 later explicit approval.
 

@@ -7,7 +7,7 @@
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
-    "test:postgres18": "REQUIRE_POSTGRES18_TEST=1 vitest run src/modules/runner/reservation.postgres18.test.ts"
+    "test:postgres18": "REQUIRE_POSTGRES18_TEST=1 vitest run --no-file-parallelism src/modules/runner/reservation.postgres18.test.ts src/modules/runner/runner-process.postgres18.test.ts"
   },
   "dependencies": {
     "@buy-crypto-dip-bot/config": "workspace:*",

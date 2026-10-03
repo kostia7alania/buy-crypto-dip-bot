@@ -1,3 +1,4 @@
+import { upstreamError } from "../../utils/api-fetch.js";
 import {
   TELEGRAM_LOGIN_SOURCE_HEADER,
   telegramLoginRateLimitFrom,
@@ -24,13 +25,17 @@ export default defineEventHandler(async (event) => {
       },
     });
   } catch (error) {
-    logWebError(event, "TELEGRAM_LOGIN_REJECTED", error);
+    logWebError(event, "TELEGRAM_LOGIN_FAILED", error);
     const rateLimit = telegramLoginRateLimitFrom(error);
     if (rateLimit) {
       setResponseHeader(event, "Retry-After", rateLimit.retryAfterSeconds);
       throw createError({ statusCode: 429, statusMessage: "RATE_LIMITED" });
     }
-    throw createError({ statusCode: 401, statusMessage: "LOGIN_REJECTED" });
+    const failure = upstreamError(error, "LOGIN_UNAVAILABLE");
+    if (failure.statusCode === 401) {
+      throw createError({ statusCode: 401, statusMessage: "LOGIN_REJECTED" });
+    }
+    throw failure;
   }
 
   if (!verified.session?.token) {

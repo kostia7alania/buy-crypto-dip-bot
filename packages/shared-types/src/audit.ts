@@ -28,6 +28,43 @@ interface SystemAuditBase extends AuditBase {
   userId: null;
 }
 
+interface RejectedRiskProvenance {
+  evaluationKey: string;
+  configRevision: string;
+  marketSnapshotKey: string;
+  strategyConfig: {
+    symbol: string;
+    mode: string;
+    thresholdPercent: number;
+    suggestedQuoteAmount: number;
+    maxDailySpendUsdt: number;
+    maxWeeklySpendUsdt: number;
+    cooldownMinutes: number;
+  };
+  marketSnapshot: {
+    source: string;
+    symbol: string;
+    sourceAt: string;
+    receivedAt: string;
+    evaluatedAt: string;
+    lastPrice: number;
+    high24h: number | null;
+    low24h: number | null;
+    ageMs: number;
+    ttlMs: number;
+    ageAtEvaluationMs: number;
+  };
+  riskSnapshot: {
+    dailyCompletedUsdt: number;
+    weeklyCompletedUsdt: number;
+    activeReservedUsdt: number;
+    dailyCommittedUsdt: number;
+    weeklyCommittedUsdt: number;
+    proposedQuoteAmountUsdt: number;
+    decision: Record<string, unknown>;
+  };
+}
+
 export type AuditEventV1 =
   | (TenantAuditBase & {
       type: "AUTH_LOGIN_SUCCEEDED";
@@ -109,15 +146,28 @@ export type AuditEventV1 =
       payload: { affectedCount: number };
     })
   | (TenantAuditBase & {
-      type: "RISK_DECISION_REJECTED" | "RISK_DECISION_APPROVED";
+      type: "RISK_DECISION_REJECTED";
       actor: { kind: "SYSTEM"; channel: "RUNNER" };
-      reasonCode: "RISK_POLICY_REJECTED" | "RISK_POLICY_APPROVED";
+      reasonCode: "RISK_POLICY_REJECTED";
       payloadClass: "TENANT_FINANCIAL";
       payload: {
         mode: "DRY_RUN";
         policyVersion: "RISK_V1";
         reasonCodes: string[];
-        orderId?: string;
+        // Pre-provenance V1 rows remain readable without rewriting history.
+        provenance?: RejectedRiskProvenance;
+      };
+    })
+  | (TenantAuditBase & {
+      type: "RISK_DECISION_APPROVED";
+      actor: { kind: "SYSTEM"; channel: "RUNNER" };
+      reasonCode: "RISK_POLICY_APPROVED";
+      payloadClass: "TENANT_FINANCIAL";
+      payload: {
+        mode: "DRY_RUN";
+        policyVersion: "RISK_V1";
+        reasonCodes: string[];
+        orderId: string;
       };
     })
   | (TenantAuditBase & {
@@ -226,6 +276,135 @@ const positiveInteger = (value: unknown, code: string): number => {
   return integer;
 };
 
+const provenanceObject = (value: unknown, keys: readonly string[]) => {
+  const record = isRecord(value) ? value : invalid("RISK_PROVENANCE_OBJECT");
+  exactKeys(record, keys, "RISK_PROVENANCE_KEYS");
+  return record;
+};
+
+const nonNegativeNumber = (value: unknown): void => {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    invalid("RISK_PROVENANCE_NUMBER");
+  }
+};
+
+const assertRejectedRiskProvenance = (
+  value: unknown,
+  strategyId: string,
+): void => {
+  const provenance = provenanceObject(value, [
+    "evaluationKey",
+    "configRevision",
+    "marketSnapshotKey",
+    "strategyConfig",
+    "marketSnapshot",
+    "riskSnapshot",
+  ]);
+  for (const [key, pattern] of [
+    ["evaluationKey", /^evaluation-v1:[0-9a-f]{64}$/],
+    ["configRevision", /^sha256:[0-9a-f]{64}$/],
+    ["marketSnapshotKey", /^bybit-ticker-v2:[0-9a-f]{64}$/],
+  ] as const) {
+    if (typeof provenance[key] !== "string" || !pattern.test(provenance[key])) {
+      invalid("RISK_PROVENANCE_KEY");
+    }
+  }
+
+  const configFields = [
+    "thresholdPercent",
+    "suggestedQuoteAmount",
+    "maxDailySpendUsdt",
+    "maxWeeklySpendUsdt",
+    "cooldownMinutes",
+  ];
+  const config = provenanceObject(provenance.strategyConfig, [
+    "symbol",
+    "mode",
+    ...configFields,
+  ]);
+  for (const field of configFields) nonNegativeNumber(config[field]);
+  if (
+    typeof config.symbol !== "string" ||
+    !SYMBOL_PATTERN.test(config.symbol) ||
+    config.mode !== "DRY_RUN" ||
+    config.suggestedQuoteAmount === 0
+  ) {
+    invalid("RISK_PROVENANCE_CONFIG");
+  }
+
+  const market = provenanceObject(provenance.marketSnapshot, [
+    "source",
+    "symbol",
+    "sourceAt",
+    "receivedAt",
+    "evaluatedAt",
+    "lastPrice",
+    "high24h",
+    "low24h",
+    "ageMs",
+    "ttlMs",
+    "ageAtEvaluationMs",
+  ]);
+  if (
+    market.source !== "BYBIT_SPOT_TICKER_V5" ||
+    market.symbol !== config.symbol
+  ) {
+    invalid("RISK_PROVENANCE_MARKET");
+  }
+  for (const key of ["sourceAt", "receivedAt", "evaluatedAt"]) {
+    const timestamp = market[key];
+    if (
+      typeof timestamp !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(timestamp) ||
+      !Number.isFinite(Date.parse(timestamp))
+    ) {
+      invalid("RISK_PROVENANCE_TIMESTAMP");
+    }
+  }
+  for (const key of ["lastPrice", "ageMs", "ttlMs", "ageAtEvaluationMs"]) {
+    nonNegativeNumber(market[key]);
+  }
+  for (const key of ["high24h", "low24h"]) {
+    if (market[key] !== null) nonNegativeNumber(market[key]);
+  }
+  if (market.ttlMs === 0) invalid("RISK_PROVENANCE_MARKET");
+
+  const spendFields = [
+    "dailyCompletedUsdt",
+    "weeklyCompletedUsdt",
+    "activeReservedUsdt",
+    "dailyCommittedUsdt",
+    "weeklyCommittedUsdt",
+    "proposedQuoteAmountUsdt",
+  ];
+  const risk = provenanceObject(provenance.riskSnapshot, [
+    ...spendFields,
+    "decision",
+  ]);
+  for (const field of spendFields) nonNegativeNumber(risk[field]);
+  const decision = provenanceObject(risk.decision, [
+    "signalId",
+    "strategyId",
+    "symbol",
+    "mode",
+    "dailySpentUsdt",
+    "weeklySpentUsdt",
+    "liveTradingEnabled",
+  ]);
+  if (
+    decision.signalId !== provenance.evaluationKey ||
+    decision.strategyId !== strategyId ||
+    decision.symbol !== config.symbol ||
+    decision.mode !== config.mode ||
+    decision.liveTradingEnabled !== false ||
+    decision.dailySpentUsdt !== risk.dailyCommittedUsdt ||
+    decision.weeklySpentUsdt !== risk.weeklyCommittedUsdt ||
+    risk.proposedQuoteAmountUsdt !== config.suggestedQuoteAmount
+  ) {
+    invalid("RISK_PROVENANCE_DECISION");
+  }
+};
+
 const assertActor = (
   actorInput: unknown,
   scope: unknown,
@@ -264,6 +443,7 @@ const assertPayload = (
   type: string,
   payloadInput: unknown,
   reasonCode: unknown,
+  subjectId: string,
 ): void => {
   const payload = isRecord(payloadInput)
     ? payloadInput
@@ -338,7 +518,9 @@ const assertPayload = (
       const expected =
         type === "RISK_DECISION_APPROVED"
           ? ["mode", "policyVersion", "reasonCodes", "orderId"]
-          : ["mode", "policyVersion", "reasonCodes"];
+          : payload.provenance === undefined
+            ? ["mode", "policyVersion", "reasonCodes"]
+            : ["mode", "policyVersion", "reasonCodes", "provenance"];
       exactKeys(payload, expected, "PAYLOAD_KEYS");
       if (payload.mode !== "DRY_RUN" || payload.policyVersion !== "RISK_V1") {
         invalid("RISK_VERSION");
@@ -357,6 +539,12 @@ const assertPayload = (
         invalid("RISK_REASON_CODES");
       }
       if (type === "RISK_DECISION_APPROVED") uuid(payload.orderId, "ORDER_ID");
+      if (
+        type === "RISK_DECISION_REJECTED" &&
+        payload.provenance !== undefined
+      ) {
+        assertRejectedRiskProvenance(payload.provenance, subjectId);
+      }
       return;
     }
     case "PENDING_ORDER_DUPLICATE_SUPPRESSED":
@@ -583,7 +771,7 @@ export const assertAuditEventV1: (
   ) {
     invalid("SUBJECT_TYPE");
   }
-  uuid(subject.id, "SUBJECT_ID");
+  const subjectId = uuid(subject.id, "SUBJECT_ID");
   if (
     !new Set([
       "SECURITY",
@@ -596,7 +784,7 @@ export const assertAuditEventV1: (
   }
 
   assertSemantics(input);
-  assertPayload(eventType, input.payload, input.reasonCode);
+  assertPayload(eventType, input.payload, input.reasonCode, subjectId);
 
   let serialized = "";
   try {

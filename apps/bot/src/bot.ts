@@ -1,6 +1,10 @@
 import { getAllowedSymbols, isAllowedSymbol } from "@buy-crypto-dip-bot/config";
 import { schema } from "@buy-crypto-dip-bot/db";
 import { createBybitPublicClient } from "@buy-crypto-dip-bot/exchange-bybit";
+import type {
+  PerformanceReport,
+  PnlReport,
+} from "@buy-crypto-dip-bot/shared-types";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { Bot } from "grammy";
 import {
@@ -25,6 +29,7 @@ import {
   claimOwnedPendingOrder,
   setEnabledForCaller,
 } from "./order.repository.js";
+import { renderPerformanceReport, renderPnlReport } from "./reports.js";
 import { fetchServiceApi } from "./runtime-config.js";
 import {
   escapeTelegramHtml,
@@ -401,33 +406,8 @@ export const createBot = (token: string) => {
         ctx.update.update_id,
       );
       if (!response.ok) throw new Error(`API ${response.status}`);
-      const data = (await response.json()) as {
-        positions: Array<{
-          symbol: string;
-          actual: { pnlPercent: number };
-          calendarDca: { pnlPercent: number };
-          hold: { pnlPercent: number };
-        }>;
-      };
-      if (data.positions.length === 0) {
-        return ctx.reply(
-          "📭 No simulated purchases yet — the comparison appears after the first executed dry-run order.",
-        );
-      }
-      const sign = (n: number) => (n >= 0 ? "+" : "");
-      const p2 = (n: number) => `${sign(n)}${n.toFixed(2)}%`;
-      let msg = `📊 *Strategy vs Benchmarks*\n_Same capital, same window_\n\n`;
-      for (const p of data.positions) {
-        const won =
-          p.actual.pnlPercent >= p.calendarDca.pnlPercent &&
-          p.actual.pnlPercent >= p.hold.pnlPercent;
-        msg +=
-          `${won ? "🏆" : "•"} *${escapeTelegramMarkdown(p.symbol)}*\n` +
-          `  └ Dip buying: \`${p2(p.actual.pnlPercent)}\`\n` +
-          `  └ Calendar DCA: \`${p2(p.calendarDca.pnlPercent)}\`\n` +
-          `  └ Buy & hold: \`${p2(p.hold.pnlPercent)}\`\n\n`;
-      }
-      return ctx.reply(msg, { parse_mode: "Markdown" });
+      const data = (await response.json()) as PerformanceReport;
+      return ctx.reply(renderPerformanceReport(data), { parse_mode: "HTML" });
     } catch (error) {
       logBotError("PERFORMANCE_COMMAND_FAILED", error, ctx.update.update_id);
       return ctx.reply("❌ Failed to fetch performance from the API.");
@@ -441,41 +421,8 @@ export const createBot = (token: string) => {
     try {
       const response = await fetchAsUser(caller, "/pnl", ctx.update.update_id);
       if (!response.ok) throw new Error(`API ${response.status}`);
-      const data = (await response.json()) as {
-        positions: Array<{
-          symbol: string;
-          orders: number;
-          spentUsdt: number;
-          avgBuyPrice: number;
-          currentPrice: number;
-          pnlUsdt: number;
-          pnlPercent: number;
-        }>;
-        totals: {
-          spentUsdt: number;
-          pnlUsdt: number;
-          pnlPercent: number;
-        } | null;
-      };
-
-      if (!data.totals || data.positions.length === 0) {
-        return ctx.reply(
-          "📭 No simulated purchases yet — PnL appears after the first executed dry-run order.",
-        );
-      }
-
-      const sign = (n: number) => (n >= 0 ? "+" : "");
-      let msg = `💼 *Simulated Portfolio PnL*\n\n`;
-      for (const p of data.positions) {
-        msg +=
-          `• *${escapeTelegramMarkdown(p.symbol)}* (${p.orders} buys)\n` +
-          `  └ Invested: \`${p.spentUsdt.toFixed(2)} USDT\`\n` +
-          `  └ Avg buy: \`$${p.avgBuyPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}\` → now \`$${p.currentPrice.toLocaleString()}\`\n` +
-          `  └ PnL: \`${sign(p.pnlUsdt)}${p.pnlUsdt.toFixed(2)} USDT (${sign(p.pnlPercent)}${p.pnlPercent.toFixed(2)}%)\`\n\n`;
-      }
-      msg += `*Total:* \`${sign(data.totals.pnlUsdt)}${data.totals.pnlUsdt.toFixed(2)} USDT (${sign(data.totals.pnlPercent)}${data.totals.pnlPercent.toFixed(2)}%)\` on \`${data.totals.spentUsdt.toFixed(2)} USDT\``;
-
-      return ctx.reply(msg, { parse_mode: "Markdown" });
+      const data = (await response.json()) as PnlReport;
+      return ctx.reply(renderPnlReport(data), { parse_mode: "HTML" });
     } catch (error) {
       logBotError("PNL_COMMAND_FAILED", error, ctx.update.update_id);
       return ctx.reply("❌ Failed to fetch PnL from the API.");

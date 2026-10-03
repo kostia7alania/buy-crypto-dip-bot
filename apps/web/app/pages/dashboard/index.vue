@@ -24,14 +24,36 @@ const { data: publicRisk } = await useFetch<SafetyStatus>("/api/risk-status", {
 // Panels below this line show one person's own trading data and the API now
 // refuses them without a session — rendering them signed-out would produce
 // empty widgets that look like "you have no orders" rather than "sign in".
-const { data: me } = await useFetch<MeResponse>("/api/auth/me", {
+const {
+  data: me,
+  error: authError,
+  status: authStatus,
+} = await useFetch<MeResponse>("/api/auth/me", {
   key: "auth-me",
 });
-const isSignedIn = computed(() => Boolean(me.value?.user));
+const authChecking = computed(
+  () => authStatus.value === "idle" || authStatus.value === "pending",
+);
+const authUnavailable = computed(
+  () => Boolean(authError.value) && !isUnauthenticated(authError.value),
+);
+const signedInUserId = computed(() =>
+  authChecking.value || authError.value ? undefined : me.value?.user?.id,
+);
+const isSignedIn = computed(() => Boolean(signedInUserId.value));
+const botConfigured = Boolean(
+  useRuntimeConfig().public.telegramBotUsername.trim(),
+);
+const signInTitle = computed(() => {
+  if (authChecking.value) return "Checking sign-in";
+  if (authUnavailable.value) return "Sign-in status unavailable";
+  if (!botConfigured) return "Sign-in unavailable";
+  return "Sign in to create a tenant-scoped evidence chain";
+});
 const { snapshot, error, status, refreshDashboard, setDashboardAuthenticated } =
   useDashboardRefresh();
 watch(
-  () => me.value?.user?.id,
+  signedInUserId,
   (userId) => {
     setDashboardAuthenticated(false);
     if (userId) setDashboardAuthenticated(true);
@@ -316,11 +338,22 @@ const announceJourney = async (message: string) => {
       <section class="ops-dashboard__signin" aria-labelledby="signin-title">
         <p class="ops-dashboard__journey-step">First-run proof journey</p>
         <h2 id="signin-title" class="ops-dashboard__signin-title">
-          Sign in to create a tenant-scoped evidence chain
+          {{ signInTitle }}
         </h2>
-        <p class="ops-dashboard__signin-body">
+        <p v-if="authChecking" class="ops-dashboard__signin-body">
+          Private strategies and history stay hidden until your session is confirmed.
+        </p>
+        <p v-else-if="authUnavailable" class="ops-dashboard__signin-body">
+          Your session could not be checked. Private strategies and history stay
+          hidden. Retry sign-in status above; this does not mean you were signed out.
+        </p>
+        <p v-else-if="!botConfigured" class="ops-dashboard__signin-body">
+          Telegram login is not configured on this site. Private strategies and
+          history are unavailable until the site operator enables sign-in.
+        </p>
+        <p v-else class="ops-dashboard__signin-body">
           Your bounded strategies, decisions and simulated orders belong to
-          your Telegram account. Sign in with the button above, then follow the
+          your Telegram account. Sign in with Telegram above, then follow the
           numbered setup → decision → limitations → ledger journey. No exchange
           API key is requested.
         </p>

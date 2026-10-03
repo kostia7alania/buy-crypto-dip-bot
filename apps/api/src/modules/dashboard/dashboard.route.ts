@@ -7,9 +7,13 @@ import {
   requireTenantDb,
   requireUser,
 } from "../auth/principal.middleware.js";
+import { createReportMarketSnapshot } from "../market-data/report-snapshot.js";
 import { listOrders } from "../orders/orders.route.js";
-import { computePerformanceReport } from "../performance/performance.route.js";
-import { computePnlReport } from "../pnl/pnl.route.js";
+import {
+  computePerformanceReport,
+  finalizePerformanceReport,
+} from "../performance/performance.route.js";
+import { computePnlReport, finalizePnlReport } from "../pnl/pnl.route.js";
 import { getRunnerStatus } from "../runner/runner.service.js";
 import { listStrategies } from "../strategies/strategies.route.js";
 
@@ -23,11 +27,14 @@ export const dashboardRoutes = new Hono<AppEnv>().get(
     const strategies = await listStrategies(db, userId);
     const orders = await listOrders(db, userId);
     const audit = await listAuditEvents(db, userId);
-    const pnl = await computePnlReport(db, userId);
-    const performance = await computePerformanceReport(db, userId);
+    const market = createReportMarketSnapshot();
+    const pnl = await computePnlReport(db, userId, market);
+    const performance = await computePerformanceReport(db, userId, market);
+    // Later provider calls may expire earlier quotes. Both reports share this cutoff.
+    const asOf = Date.now();
     return c.json({
       schemaVersion: 1,
-      generatedAt: new Date().toISOString(),
+      generatedAt: new Date(asOf).toISOString(),
       risk: {
         ...createDefaultRiskGuard(
           getAllowedSymbols(process.env.ALLOWLIST_SYMBOLS),
@@ -37,8 +44,8 @@ export const dashboardRoutes = new Hono<AppEnv>().get(
       strategies,
       orders,
       audit,
-      pnl,
-      performance,
+      pnl: finalizePnlReport(pnl.positions, asOf),
+      performance: finalizePerformanceReport(performance.positions, asOf),
     });
   },
 );

@@ -18,6 +18,8 @@ const cls = (n: number) => (n >= 0 ? "perf__pnl--green" : "perf__pnl--red");
 
 // Did the dip strategy beat both naive baselines?
 const verdict = (p: PerformancePosition) => {
+  if (!p.actual || !p.calendarDca || !p.hold)
+    return { label: "Not comparable", kind: "mixed" };
   const a = p.actual.pnlPercent;
   if (a >= p.calendarDca.pnlPercent && a >= p.hold.pnlPercent) {
     return { label: "Dip strategy won", kind: "win" };
@@ -30,6 +32,7 @@ const verdict = (p: PerformancePosition) => {
 
 // Bar width relative to the best leg, for a quick visual scan.
 const barWidth = (value: number, p: PerformancePosition) => {
+  if (!p.actual || !p.calendarDca || !p.hold) return "0%";
   const vals = [p.actual.valueUsdt, p.calendarDca.valueUsdt, p.hold.valueUsdt];
   const max = Math.max(...vals, 1);
   const min = Math.min(...vals) * 0.98;
@@ -43,15 +46,19 @@ const barWidth = (value: number, p: PerformancePosition) => {
       <div>
         <h2 class="perf__title">Strategy vs Benchmarks</h2>
         <p class="perf__subtitle">
-          Same capital, same window: dip-buying against dumb daily DCA and buy-and-hold.
+          DRY_RUN. Equal-capital daily-close illustrations, not matched cash flows.
+          Fees and slippage are not modelled.
         </p>
       </div>
     </div>
+    <p v-if="!props.error && (props.performance?.status === 'PARTIAL' || props.performance?.status === 'UNAVAILABLE')" class="perf__subtitle" role="status">
+      {{ props.performance.status === 'PARTIAL' ? 'Partial comparison' : 'Comparison unavailable' }}. Missing or stale data is not a zero return.
+    </p>
 
     <p v-if="props.error" class="perf__empty">Benchmark data is unavailable.</p>
     <p v-else-if="!props.performance" class="perf__empty">Loading benchmarks...</p>
     <p v-else-if="positions.length === 0" class="perf__empty">
-      No simulated purchases yet — the comparison appears after the first executed dry-run order.
+      No simulated purchases yet.
     </p>
 
     <div v-else class="perf__grid">
@@ -63,7 +70,7 @@ const barWidth = (value: number, p: PerformancePosition) => {
           </span>
         </header>
 
-        <div class="perf__legs">
+        <div v-if="p.actual && p.calendarDca && p.hold" class="perf__legs">
           <div class="perf__leg">
             <div class="perf__leg-top">
               <span class="perf__leg-name perf__leg-name--primary">Dip buying</span>
@@ -94,8 +101,15 @@ const barWidth = (value: number, p: PerformancePosition) => {
             </div>
           </div>
         </div>
+        <p v-else class="perf__subtitle">
+          {{ p.issue === 'INCOMPLETE_HISTORY' ? 'Not comparable: a complete closed-day history is unavailable (up to 200 days).' : p.issue === 'STALE_MARKET' ? 'Not comparable: market data is stale.' : 'Not comparable: market data is unavailable.' }}
+        </p>
 
-        <footer class="perf__foot">Invested {{ p.spentUsdt.toFixed(0) }} USDT over {{ p.orders }} buys</footer>
+        <footer class="perf__foot">
+          Recorded spend {{ p.spentUsdt.toFixed(2) }} USDT over {{ p.orders }} buys.
+          <span v-if="p.window.from && p.window.through">Daily-close window: {{ p.window.from.slice(0, 10) }} to {{ p.window.through.slice(0, 10) }} UTC (end exclusive).</span>
+          <span v-if="p.quote">Quote as of <time :datetime="p.quote.sourceAt">{{ p.quote.sourceAt }}</time>.</span>
+        </footer>
       </article>
     </div>
   </section>
@@ -123,6 +137,7 @@ const barWidth = (value: number, p: PerformancePosition) => {
   margin: 0.35rem 0 0;
   font-size: 0.875rem;
   color: var(--color-text-subtle);
+  overflow-wrap: anywhere;
 }
 
 .perf__empty {
@@ -245,6 +260,10 @@ const barWidth = (value: number, p: PerformancePosition) => {
   color: var(--color-text-subtle);
   border-block-start: 1px solid var(--color-border-subtle);
   padding-block-start: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 36rem) {

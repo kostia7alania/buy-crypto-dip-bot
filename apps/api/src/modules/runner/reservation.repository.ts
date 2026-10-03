@@ -281,7 +281,9 @@ export const reserveDryRunOrder = async (
     if (decision.status === "REJECTED") {
       const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
       const recentAlerts = await tx
-        .select({ payload: schema.auditEvents.payload })
+        .select({
+          reasonCodes: sql<unknown>`${schema.auditEvents.payload}->'reasonCodes'`,
+        })
         .from(schema.auditEvents)
         .where(
           and(
@@ -293,8 +295,7 @@ export const reserveDryRunOrder = async (
           ),
         );
       const hasRecentSimilarAlert = recentAlerts.some((event) => {
-        const previous = (event.payload as { reasonCodes?: unknown })
-          .reasonCodes;
+        const previous = event.reasonCodes;
         return (
           Array.isArray(previous) &&
           previous.length === decision.reasonCodes.length &&
@@ -318,6 +319,14 @@ export const reserveDryRunOrder = async (
             mode: "DRY_RUN",
             policyVersion: RISK_POLICY_VERSION,
             reasonCodes: decision.reasonCodes,
+            provenance: {
+              evaluationKey,
+              configRevision,
+              strategyConfig,
+              marketSnapshotKey,
+              marketSnapshot,
+              riskSnapshot,
+            },
           },
         }),
       );
