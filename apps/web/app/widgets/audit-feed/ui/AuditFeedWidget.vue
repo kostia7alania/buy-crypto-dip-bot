@@ -73,6 +73,7 @@ const retryAudit = () => emit("refresh");
 
 <style scoped>
 .audit-feed {
+  min-inline-size: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
@@ -124,11 +125,14 @@ const retryAudit = () => emit("refresh");
 
 .audit-feed__item-header {
   display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
   justify-content: space-between;
   align-items: center;
 }
 
 .audit-feed__action {
+  overflow-wrap: anywhere;
   font-size: var(--text-caption);
   font-weight: 700;
   padding: 0.125rem 0.375rem;

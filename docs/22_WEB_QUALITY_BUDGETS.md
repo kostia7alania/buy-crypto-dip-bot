@@ -107,6 +107,41 @@ R121 remains partial until keyboard-only, 200% zoom, forced-colors, reduced
 motion, VoiceOver/Safari, and an accessibility-tree snapshot are captured for
 landing, sign-in, strategy mutation, ledger and audit flows.
 
+## Local accessibility follow-up, 2026-10-03
+
+Source follow-up to `f00334e`, not production acceptance. The actual Nuxt BFF,
+Hono API and disposable PostgreSQL 18 database were used with a synthetic local
+identity; the runner stayed disabled. No real Telegram account was involved.
+
+- Reproduced and fixed Configure removing the focused button and making the
+  next Tab skip all five fields. Opening now focuses the first field; Save and
+  Cancel return focus to that strategy. Accessible action names include its pair.
+- The native strategy checkbox restores focus after its temporary pending
+  disable, unless the user has moved focus elsewhere.
+- Browser keyboard flow covered Enter to add/save/cancel, all five fields in
+  Tab order, Space to activate/pause, skip-link to main, journey links, focusable
+  audit scroller, and Right-arrow horizontal ledger scrolling (0 to 40 px).
+  Saved 40 USDT daily cap was read back and announced in the existing live region.
+- Fixed strategy-grid minimum width and audit-header wrapping. At 320x800 and
+  390x844, document scroll width equals viewport width; table/JSON scrolling
+  remains confined to its own labeled region.
+- Subtle text changed from `#758178` to `#879389`: calculated sRGB contrast
+  against the raised surface improved from 4.196:1 to 5.330:1. Browser computed
+  styles confirmed `rgb(135,147,137)` on `rgb(21,30,25)`. Across the six normal
+  surface tokens this text role is at least 4.767:1. Input boundaries now use
+  this role instead of the decorative low-contrast divider.
+- Chromium forced-colors emulation visibly retained the switch thumb outline
+  in both positions. Reduced-motion emulation reported zero transition duration
+  for shared inputs, buttons and the switch. These are emulation checks, not
+  an audit of every operating-system palette or assistive technology.
+- Web typecheck, existing 43 web tests, scoped lint/format and production build
+  passed. The built server also reproduced correct Configure-to-field focus
+  and 390 px reflow; this does not mean that the build was deployed remotely.
+
+R121 stays PARTIAL: genuine provider sign-in, VoiceOver/Safari and actual 200%
+browser zoom are not proved by the narrow-viewport or accessibility-tree checks.
+The historical performance measurements above are not refreshed by this audit.
+
 ## Release measurement procedure
 
 1. Build the exact release revision with `pnpm --filter

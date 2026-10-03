@@ -50,7 +50,7 @@ const emit = defineEmits<{
   min-block-size: var(--control-height-compact);
   inline-size: 100%;
   padding-inline: var(--space-3);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-text-subtle);
   border-radius: var(--radius-sm);
   color: var(--color-text-primary);
   background: var(--color-canvas-deep);
@@ -63,7 +63,7 @@ const emit = defineEmits<{
 }
 
 .ui-input:hover:not(:disabled) {
-  border-color: var(--color-border-strong);
+  border-color: var(--color-text-muted);
 }
 
 .ui-input:focus-visible {

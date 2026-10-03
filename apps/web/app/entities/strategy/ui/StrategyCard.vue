@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, nextTick, useTemplateRef, watch } from "vue";
 
 interface StrategyConfigData {
   thresholdPercent: number;
@@ -32,6 +32,25 @@ const emit = defineEmits<{
   (e: "save"): void;
   (e: "cancel"): void;
 }>();
+
+const card = useTemplateRef<HTMLDivElement>("card");
+
+watch(
+  () => props.isEditing,
+  async (isEditing, wasEditing) => {
+    const returnFocus =
+      wasEditing && card.value?.contains(document.activeElement);
+    await nextTick();
+    if (props.isEditing !== isEditing || (!isEditing && !returnFocus)) return;
+
+    // The action being replaced must not leave keyboard users beyond the form.
+    card.value
+      ?.querySelector<HTMLElement>(
+        isEditing ? 'input[type="number"]' : ".strategy-card__configure",
+      )
+      ?.focus();
+  },
+);
 
 const projectedMaximum = computed(() => {
   const config = props.editForm ?? props.strategy.config;
@@ -75,7 +94,7 @@ const formatUsdt = (value: number) =>
 </script>
 
 <template>
-  <div class="strategy-card">
+  <div ref="card" class="strategy-card">
     <div class="strategy-card__header">
       <div>
         <h3 class="strategy-card__symbol">{{ props.strategy.symbol }}</h3>
@@ -210,12 +229,28 @@ const formatUsdt = (value: number) =>
     <!-- Edit Actions -->
     <div class="strategy-card__actions">
       <div v-if="props.isEditing" class="strategy-card__edit-buttons">
-        <UiButton variant="primary" size="compact" @click="emit('save')">
+        <UiButton
+          variant="primary"
+          size="compact"
+          :aria-label="`Save ${props.strategy.symbol} strategy settings`"
+          @click="emit('save')"
+        >
           Save
         </UiButton>
-        <UiButton size="compact" @click="emit('cancel')">Cancel</UiButton>
+        <UiButton
+          size="compact"
+          :aria-label="`Cancel ${props.strategy.symbol} strategy changes`"
+          @click="emit('cancel')"
+        >Cancel</UiButton>
       </div>
-      <UiButton v-else size="compact" block @click="emit('edit')">
+      <UiButton
+        v-else
+        class="strategy-card__configure"
+        size="compact"
+        block
+        :aria-label="`Configure ${props.strategy.symbol} strategy`"
+        @click="emit('edit')"
+      >
         Configure
       </UiButton>
     </div>

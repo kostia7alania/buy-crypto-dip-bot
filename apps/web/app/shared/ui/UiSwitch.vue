@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { nextTick, useTemplateRef, watch } from "vue";
+
 const props = defineProps<{
   checked: boolean;
   label: string;
@@ -6,11 +8,34 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<(e: "change", value: boolean) => void>();
+
+const input = useTemplateRef<HTMLInputElement>("input");
+let restoreFocus = false;
+
+watch(
+  () => props.disabled,
+  async (disabled) => {
+    if (disabled) {
+      restoreFocus = document.activeElement === input.value;
+      return;
+    }
+    await nextTick();
+    if (
+      restoreFocus &&
+      !props.disabled &&
+      document.activeElement === document.body
+    ) {
+      input.value?.focus();
+    }
+    restoreFocus = false;
+  },
+);
 </script>
 
 <template>
   <label class="ui-switch">
     <input
+      ref="input"
       type="checkbox"
       class="ui-switch__input"
       :checked="props.checked"
@@ -88,8 +113,15 @@ const emit = defineEmits<(e: "change", value: boolean) => void>();
 }
 
 @media (forced-colors: active) {
-  .ui-switch__slider {
-    border-color: ButtonText;
+  .ui-switch__slider,
+  .ui-switch__input:checked + .ui-switch__slider {
+    border-color: CanvasText;
+    background: Canvas;
+  }
+
+  .ui-switch__slider::before {
+    box-sizing: border-box;
+    border: 1px solid CanvasText;
   }
 
   .ui-switch__input:focus-visible + .ui-switch__slider {

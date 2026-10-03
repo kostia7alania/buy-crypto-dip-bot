@@ -152,3 +152,13 @@ No production rollout follows from this push.
 Destination restore, actual Telegram login/private-start/delivery,
 credential-boundary acceptance and release sign-off remain separate blockers.
 No service, secret or gate setting was purchased or changed.
+
+## Accessibility follow-up
+
+The next goal turn rechecked production variables/secrets: no trusted SSH
+fingerprint or Gate 1 approval exists at repository or production-environment
+scope. Independent R121 work fixed reproduced keyboard-focus losses, subtle
+text/input contrast, forced-colors switch visibility and 320 px overflow.
+Local browser evidence and remaining manual checks are recorded in
+[web quality budgets](../docs/22_WEB_QUALITY_BUDGETS.md#local-accessibility-follow-up-2026-10-03).
+R121 and deployment remain incomplete; no release gate was relaxed.
