@@ -99,7 +99,15 @@ contract is implemented.
   holds a claimed order during SIGTERM; the process waits, settles once and exits
   cleanly. A separate actual API process also waited for a login request blocked
   on the users table, committed its synthetic session and exited 0. This does
-  not establish graceful shutdown of the separate Telegram polling process.
+  not by itself establish the separate Telegram polling lifecycle.
+- Polling bot shutdown: the separate signal owner now drains accepted commands
+  before grammY's final acknowledgement and pool close, aborts heartbeat, and
+  exits 1 on a total 25-second deadline inside Docker's 30-second grace. Native
+  PostgreSQL plus loopback grammY transport proved a locked private `/start`
+  batch, persisted binding/audit, clean drain and unacknowledged timeout rollback.
+  Startup and command-menu cancellation start no heartbeat. Aborted webhook
+  removal during setup is reported as failure, not successful polling. Captured
+  offset replay remains possible; this is local proof, not real provider delivery.
 - Startup cancellation: actual SIGINT during a migration advisory-lock wait
   allowed migration to finish but started no seeding, cleanup, HTTP or scheduler.
   A stalled actual HTTP request hit the 25-second shutdown deadline and exit 1.

@@ -904,35 +904,43 @@ export const createBot = (token: string) => {
     );
   });
 
-  // Register command hints with Telegram
-  bot.api
-    .setMyCommands([
-      { command: "start", description: "Start & set up a dip strategy" },
-      { command: "pnl", description: "Simulated portfolio PnL" },
-      {
-        command: "backtest",
-        description:
-          "Replay strategy over history (e.g. /backtest ETHUSDT 60 2 50)",
-      },
-      { command: "performance", description: "Dip strategy vs benchmarks" },
-      {
-        command: "pause_all",
-        description: "Kill switch: pause all strategies",
-      },
-      { command: "resume_all", description: "Resume all strategies" },
-      {
-        command: "price",
-        description: "Current price & dip % (e.g. /price ETHUSDT)",
-      },
-      { command: "status", description: "Show current trading statistics" },
-      { command: "settings", description: "Show and edit configurations" },
-      { command: "toggle", description: "Enable/disable strategy execution" },
-      { command: "add_pair", description: "Add a custom coin (e.g. LTCUSDT)" },
-    ])
-    .catch((err) => {
-      // Quietly log command registration failure (e.g. in tests or invalid token)
-      logBotError("COMMAND_REGISTRATION_FAILED", err);
-    });
-
   return bot;
+};
+
+export const registerBotCommands = async (bot: Bot, signal: AbortSignal) => {
+  const bounded = AbortSignal.any([signal, AbortSignal.timeout(5_000)]);
+  await bot.api
+    .setMyCommands(
+      [
+        { command: "start", description: "Start & set up a dip strategy" },
+        { command: "pnl", description: "Simulated portfolio PnL" },
+        {
+          command: "backtest",
+          description:
+            "Replay strategy over history (e.g. /backtest ETHUSDT 60 2 50)",
+        },
+        { command: "performance", description: "Dip strategy vs benchmarks" },
+        {
+          command: "pause_all",
+          description: "Kill switch: pause all strategies",
+        },
+        { command: "resume_all", description: "Resume all strategies" },
+        {
+          command: "price",
+          description: "Current price & dip % (e.g. /price ETHUSDT)",
+        },
+        { command: "status", description: "Show current trading statistics" },
+        { command: "settings", description: "Show and edit configurations" },
+        { command: "toggle", description: "Enable/disable strategy execution" },
+        {
+          command: "add_pair",
+          description: "Add a custom coin (e.g. LTCUSDT)",
+        },
+      ],
+      undefined,
+      bounded as unknown as Parameters<typeof bot.init>[0],
+    )
+    .catch((err) => {
+      if (!signal.aborted) logBotError("COMMAND_REGISTRATION_FAILED", err);
+    });
 };

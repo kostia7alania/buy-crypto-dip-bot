@@ -1,10 +1,20 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const fetchBotHeartbeatApi = vi.fn();
 
 vi.mock("./runtime-config.js", () => ({ fetchBotHeartbeatApi }));
 
-const { publishBotHeartbeat } = await import("./heartbeat.js");
+const {
+  BOT_HEARTBEAT_INTERVAL_MS,
+  BOT_HEARTBEAT_TIMEOUT_MS,
+  publishBotHeartbeat,
+  startBotHeartbeat,
+} = await import("./heartbeat.js");
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 describe("bot readiness heartbeat", () => {
   beforeEach(() => {
@@ -26,5 +36,36 @@ describe("bot readiness heartbeat", () => {
   it("reports a rejected heartbeat without throwing into polling", async () => {
     fetchBotHeartbeatApi.mockResolvedValue(new Response(null, { status: 401 }));
     await expect(publishBotHeartbeat()).resolves.toBe(false);
+  });
+
+  it("bounds stalled heartbeat IO and stops without leaving interval work", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const signals: AbortSignal[] = [];
+    fetchBotHeartbeatApi.mockImplementation(
+      ({ signal }: { signal: AbortSignal }) => {
+        signals.push(signal);
+        return new Promise((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(signal.reason), {
+            once: true,
+          });
+        });
+      },
+    );
+    const stop = startBotHeartbeat();
+    expect(fetchBotHeartbeatApi).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(BOT_HEARTBEAT_TIMEOUT_MS);
+    expect(signals[0]?.aborted).toBe(true);
+    await vi.advanceTimersByTimeAsync(
+      BOT_HEARTBEAT_INTERVAL_MS - BOT_HEARTBEAT_TIMEOUT_MS,
+    );
+    expect(fetchBotHeartbeatApi).toHaveBeenCalledTimes(2);
+    const stopped = stop();
+    expect(stop()).toBe(stopped);
+    await stopped;
+    expect(signals[1]?.aborted).toBe(true);
+    await vi.advanceTimersByTimeAsync(BOT_HEARTBEAT_INTERVAL_MS);
+    expect(fetchBotHeartbeatApi).toHaveBeenCalledTimes(2);
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

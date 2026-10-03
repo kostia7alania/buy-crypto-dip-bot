@@ -111,7 +111,7 @@ Index totals: EXTERNAL 4, GATED 36, LATER 1, LOCAL_SOURCE 59, OPEN 3, PARTIAL 15
 | R053 | P1 | GATED | Model countdown scalability independently of execution |
 | R054 | P1 | GATED | Define countdown ownership and restart recovery |
 | R055 | P1 | LOCAL_SOURCE | Stop admission, drain active jobs/HTTP before pools, interrupt cosmetic waits, and enforce 25-second API deadline; actual PG18 claim and HTTP lock proofs pass locally |
-| R056 | P1 | PARTIAL | Current ownership/cadence/restart map published in plan 014; countdown election and separate bot graceful lifecycle remain unproved |
+| R056 | P1 | PARTIAL | Ownership/cadence map and separate bot drain/heartbeat lifecycle proved locally in plan 014; distributed countdown election/recovery remains open |
 | R057 | P1 | LOCAL_SOURCE | Valuation time, stale/error symbols and completeness are explicit; incomplete whole-portfolio totals remain null |
 | R058 | P1 | LOCAL_SOURCE | Benchmark exposes source/window/timestamps/completeness/method and non-comparable state; original acceptance does not require matched cash flows |
 | R059 | P1 | GATED | Freeze digest financial cutoff semantics |

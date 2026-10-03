@@ -232,10 +232,72 @@ Final checks for this follow-up:
 | Daily digest | API runner, check every 10 minutes during 06:00 UTC | Per-process single-flight; stop between recipients; existing enqueue/dedupe retained; reproducible financial cutoff remains R059 |
 | Cosmetic countdown | API runner, per-order 1-second loop | Abort waits at shutdown; never executes orders; distributed ownership/restart display recovery and shared budgets remain R053/R054 |
 | Expired sessions | API runner, every 6 hours | Single-flight cleanup drains before runner pool closes; future interval retries after restart |
-| Telegram polling / heartbeat | Separate bot process; grammY polling, heartbeat every 30 seconds | Heartbeat interval clears when polling returns; coordinated signal drain and in-flight heartbeat completion are not implemented by this API change |
+| Telegram polling / heartbeat | Separate bot process; grammY polling, heartbeat every 30 seconds after polling setup | Bot signal owner stops polling immediately, drains the accepted batch before stop acknowledgement/pool close, and aborts/awaits single-flight heartbeat; total 25-second deadline, Docker grace 30 seconds |
 | Generic outbox / minute-slot scheduler | Preserved schema only; no active second dispatcher | Must not run beside the current runner/outbox during a future cutover |
 | Private exchange reconciliation | None; not implemented | No exchange order execution or reconciliation is enabled |
 
 The deployment runs one API runner and one polling bot. DB atomicity protects
 settlement under overlapping processes, but it does not elect one global owner
 for every cosmetic/notification job. No horizontal-scaling claim follows.
+
+## Polling bot shutdown follow-up
+
+The 05:30 MSK heartbeat resumed independent R056 work with clean main at
+`3c8175dc782a36d41de316f707ceb7e6e8a1136f`. Existing API changes are not repeated.
+That baseline bot had no signal drain, never closed its DB pool, and cleared the
+heartbeat interval without aborting or awaiting its current request.
+
+Installed grammY 1.44 source confirms `stop()` does not wait for middleware and
+sends a final update acknowledgement using its captured offset. The new runtime
+stops polling immediately but defers this signal-less acknowledgement until the
+accepted batch successfully drains. Polling failure or the total 25-second
+deadline refuses the acknowledgement; the deadline exits 1. Successful drain
+aborts/awaits heartbeat and closes the pool before exit 0. Docker grants 30 seconds.
+The captured offset is intentionally unchanged: already-drained batch-tail
+updates can replay. This is not exactly-once processing or provider delivery.
+
+Initialization is explicitly abortable. Command-hint registration moved out of
+the factory's detached request into an awaited, cancellable five-second startup
+step; failures remain nonfatal. Heartbeat starts only after polling setup and
+has a five-second request deadline, single-flight guard and abortable stop.
+The original polling promise is drained directly, without a shutdown/finally
+cycle. Independent read-only review found no blocking lifecycle defect.
+
+Concrete local evidence, October 3 around 05:53 MSK:
+
+- Five runtime regressions cover accepted-batch ordering, a stalled handler,
+  polling failure, setup interruption and initialization cancellation. The
+  heartbeat regression covers stalled IO, retry cadence and idempotent stop.
+- A real child process used production command handlers, runtime and DB helpers,
+  installed grammY HTTP transport redirected to loopback, and disposable native
+  PostgreSQL 18. A private `/start` upsert waited on a real users-row lock when
+  SIGTERM arrived. No reply, acknowledgement or early exit occurred while held.
+  Unlocking completed both batch commands, two security audit events, replies,
+  final acknowledgement, pool close and exit 0 (336 ms including 300 ms hold).
+- Keeping that lock held produced `BOT_SHUTDOWN_TIMED_OUT`, exit 1 at 25,020 ms,
+  no reply or final acknowledgement and no graceful-pool-close claim. PostgreSQL
+  rolled back the interrupted transaction; the two earlier audit events remained
+  unchanged. No bot connections remained after each child exited.
+- SIGINT during stalled `getMe` exited 0 in 9 ms with no polling/heartbeat.
+  SIGTERM during command registration exited 0 in 7 ms. SIGTERM during grammY's
+  `deleteWebhook` setup aborts its retry wait and deliberately reports exit 1
+  (9 ms); no polling/heartbeat or update acknowledgement started.
+- Earlier probe errors were fixture-specific: native fetch rejects grammY's
+  polyfill signal, and raw `getMe` takes a signal without a payload. Those probes
+  were corrected before the final real-transport run. The first probe also
+  exposed the pre-existing detached command registration using a synthetic
+  invalid token; it was removed from construction before the final loopback run.
+  No real identity or Telegram delivery is established by these checks.
+- Local proof scripts are `/tmp/dipbot-pilot-proof-20261003/bot-drain-child.mjs`
+  and `bot-drain-proof.mjs`; they require their disposable fixture database.
+- Final `pnpm check` passed: Gate 1 boundary/release checks and lint reran, bot
+  typecheck and all 73 bot tests reran; unchanged package checks reused Turbo
+  cache. `pnpm build` passed 12/12 tasks with the changed bot freshly bundled.
+  Existing lint/build warnings remain; no new dependency or warning was added.
+
+No dependencies, command semantics, exchange path or release authorization changed.
+R056 remains PARTIAL because distributed countdown ownership/recovery is separate.
+Production variables were refreshed: only `DEPLOY_ENABLED=true`, production
+environment variables empty. Trusted SSH identity, destination restore rehearsal,
+actual provider flow and Gate 1 acceptance remain open. Stop autonomous edits at
+07:00 MSK.

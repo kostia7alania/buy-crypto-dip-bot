@@ -619,3 +619,29 @@ supporting packages), production build passed 12/12 tasks, DB PG18 passed 20/20
 and API PG18 passed 3/3. Repository deployment variables still contain only
 `DEPLOY_ENABLED=true`; neither trusted SSH identity nor Gate 1 approval was
 created. No new hosting expense or production deployment follows from this proof.
+
+## 2026-10-03: polling bot shutdown
+
+The separate bot now owns SIGTERM/SIGINT, abortable initialization and command
+registration, single-flight bounded heartbeat, accepted-command drain, delayed
+grammY stop acknowledgement and DB pool close. A 25-second total deadline exits
+nonzero before Docker's 30-second grace. Failure or timeout cannot authorize the
+deferred acknowledgement. The captured offset is retained, so completed tail
+commands can replay; exactly-once processing is not claimed.
+
+Actual child-process proof used the existing private `/start` handler, a real
+PostgreSQL 18 row lock and installed grammY HTTP transport on loopback. Clean
+drain persisted both batch commands and audit events before replies/acknowledgement
+and exit 0. The stalled variant exited 1 at 25,020 ms without reply/acknowledgement;
+the transaction rolled back. Initialization/command-registration cancellation
+exited 0 without heartbeat. Webhook-removal cancellation during setup reports
+exit 1, also without polling or heartbeat. Proof boundaries and corrected fixture
+failures are recorded in [plan 014](../plans/014-low-cost-pilot-delivery.md#polling-bot-shutdown-follow-up).
+
+Independent read-only lifecycle review found no blocking defect. Actual provider
+authentication/delivery, destination backup restoration and Gate 1 approval
+remain unverified. No production change or new hosting service is implied.
+`pnpm check` passed with fresh bot typecheck/73 tests and cached unchanged packages;
+build passed 12/12 tasks with a fresh bot bundle. The full native DB/API lanes
+were not repeated for this bot-only change; the targeted native process proof
+above was executed separately.

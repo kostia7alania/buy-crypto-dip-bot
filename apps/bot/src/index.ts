@@ -1,6 +1,8 @@
-import { createBot } from "./bot.js";
+import { createBot, registerBotCommands } from "./bot.js";
+import { closeDb } from "./db.js";
 import { startBotHeartbeat } from "./heartbeat.js";
 import { logBotError, logBotEvent } from "./operational-log.js";
+import { startBotRuntime } from "./runtime.js";
 import { resolveBotRuntimeConfig } from "./runtime-config.js";
 
 const config = resolveBotRuntimeConfig();
@@ -12,12 +14,19 @@ if (!token) {
 }
 
 logBotEvent("BOT_STARTING");
-const stopHeartbeat = startBotHeartbeat();
+const bot = createBot(token);
+const runtime = startBotRuntime(bot, {
+  prepare: (signal) => registerBotCommands(bot, signal),
+  startHeartbeat: startBotHeartbeat,
+  closeDatabase: closeDb,
+});
+process.on("SIGTERM", runtime.stop);
+process.on("SIGINT", runtime.stop);
 try {
-  await createBot(token).start();
+  await runtime.polling;
 } catch (error) {
   logBotError("BOT_STARTUP_FAILED", error);
   process.exitCode = 1;
 } finally {
-  stopHeartbeat();
+  await runtime.stop();
 }
