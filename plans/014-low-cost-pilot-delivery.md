@@ -28,16 +28,17 @@ Russian audience availability needs real network evidence, not a CDN promise.
 1. [complete] Inspect the existing destination without reading user rows or
    exposing credentials. Identify source/image, capacity, schema lineage and
    readiness. GitHub already has VPS SSH secrets; local SSH target is absent.
-2. [in progress] Independent bounded reviews identify remaining Gate 1 proof
+2. [complete] Independent bounded reviews identify remaining Gate 1 proof
    and the smallest working web/auth/onboarding flow.
-3. [in progress] Implement truthful partial/unavailable portfolio reporting
+3. [complete] Implement truthful partial/unavailable portfolio reporting
    and a real runner process-restart proof identified by those observations.
    Use focused checks for security, data preservation and user-visible flow.
-4. [in progress] Rehearse migration and recovery on an isolated restored database.
-   Never migrate the actual database merely to discover whether it works.
-5. [pending] Review evidence. Deploy only when applicable release conditions
-   are satisfied; otherwise leave them closed and report the exact blocker.
-6. [pending] Publish source, read back Actions and actual hosted state, then
+4. [blocked on trusted host identity] Local restore fixture passes; fresh
+   destination backup rehearsal is prepared but not run. Never migrate the
+   actual database merely to discover whether it works.
+5. [complete: NO-GO retained] Review evidence. Destination restore and provider
+   conditions remain unproved; release gates are closed, not bypassed.
+6. [in progress] Publish source, read back Actions and actual hosted state, then
    report URL, commit and remaining limitations separately.
 
 ## Initial observations
@@ -95,3 +96,59 @@ it cannot replace a pending production deployment. No gate was opened.
 - The new runner process regression passes on PostgreSQL 18.6: committed hold,
   SIGKILL, two fresh competing scheduler processes, one atomic settlement, then
   another cold start without duplication. Parent rerun passed 2/2 API PG cases.
+
+## Source checkpoint and user-flow evidence, 2026-10-03
+
+Published source: `8c2de0fb8d3499ff52f63dec71dff6131f992a8e`.
+[CI 37083581968](https://github.com/kostia7alania/buy-crypto-dip-bot/actions/runs/37083581968)
+passed, including native PostgreSQL lanes.
+[Release 37083582029](https://github.com/kostia7alania/buy-crypto-dip-bot/actions/runs/37083582029)
+verified source and published the image; the deploy job was skipped.
+No production rollout follows from this push.
+
+- Independent reviews covered report uncertainty/freshness, rejected-decision
+  provenance, auth retry/privacy and the process-restart proof. A confirmed
+  report freshness race was fixed: delayed later responses now invalidate
+  earlier expired quotes at final assembly, with one shared dashboard cutoff.
+- New rejections retain immutable effective config, market, risk and evaluation
+  identifiers; old audit rows remain unchanged. Missing/partial valuations stay
+  null; web, bot and digest label DRY_RUN and unmodelled fees/slippage.
+- Uncached `pnpm check` passed: all package typechecks, lint and suites.
+  Ordinary tests: API 170, bot 67, web 43, DB 68; shared/supporting suites passed.
+  Native PostgreSQL-only cases are separate. `pnpm build` passed all 12 tasks.
+- DB native PostgreSQL 18 lane passed 20/20. Release control-flow checks passed
+  4/4. The release workflow now also runs the API PG lane after build and
+  refuses SSH deployment without an independently verified host fingerprint.
+- Real local BFF/API/PostgreSQL requests exercised two synthetic signed users:
+  separate owners, public Bybit-backed pair creation, foreign 404, own config
+  updates, cross-origin 403, private/no-store snapshot, logout and revoked-cookie
+  refusal. This is not genuine Telegram provider authentication.
+- Local browser at 390x844 and 1440x1000: create paused ETHUSDT, save/read back
+  caps, see audit records, run a public-history backtest, then sign out. Mobile
+  document width equals viewport width. API stop hid all private panels with an
+  unavailable state; restart plus retry restored the same account and settings.
+  Temporary synthetic browser cookies were removed through normal logout.
+- Browser control stalled once before resuming; no success was inferred from
+  the stalled call. Later visible DOM and screenshots confirmed the flow.
+
+## Final runtime hardening
+
+- Telegram send/edit requests have a five-second deadline including body reads.
+  Finalizers abort unread bodies before clearing timers. Independent native-fetch
+  loopback replay observed all six stalled 200/503 edit streams close, with no
+  open streams/sockets after 5.2 seconds; no real Telegram request was involved.
+- A stalled recipient retains retry/backoff while the next recipient is served.
+  The bounded dispatcher now claims one row immediately before sending: a
+  backlog no longer sits in SENDING until its lease expires. Telegram timeout
+  ambiguity remains at-least-once delivery; duplicates are not claimed impossible.
+- Real PostgreSQL contention now includes the bot cancel repository versus
+  executor on one pending hold. Both wait on the actual order lock; exactly one
+  state/hold/event wins, replay is inert and the other tenant stays unchanged.
+  Parent reran the combined API PostgreSQL lane: 3/3 passed.
+- Final uncached `pnpm check` passed again after transport fixes (API 176,
+  bot 67, web 43, DB 68 ordinary tests plus supporting packages). Build passed
+  all 12 tasks, rebuilding the changed API; final API PostgreSQL lane passed 3/3.
+
+Destination restore, actual Telegram login/private-start/delivery,
+credential-boundary acceptance and release sign-off remain separate blockers.
+No service, secret or gate setting was purchased or changed.

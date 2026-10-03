@@ -53,6 +53,8 @@ const COUNTDOWN_TICK_MS = 1000; // Telegram's documented per-chat limit is 1 mes
 const DIGEST_UTC_HOUR = 6; // daily digest ~06:00 UTC (morning in EU/Asia)
 const DIGEST_CHECK_MS = 10 * 60 * 1000;
 const NOTIFICATION_OUTBOX_POLL_MS = 5_000;
+const NOTIFICATION_OUTBOX_BATCH_LIMIT = 20;
+const TELEGRAM_REQUEST_TIMEOUT_MS = 5_000;
 const SESSION_CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -716,6 +718,12 @@ const deliverOutboxRecord = async (
     return null;
   }
 
+  const controller = new AbortController();
+  // Keep the same deadline through response body consumption, not just headers.
+  const timeout = setTimeout(
+    () => controller.abort(),
+    TELEGRAM_REQUEST_TIMEOUT_MS,
+  );
   try {
     let rendered: ReturnType<typeof renderTelegramTemplate>;
     try {
@@ -738,6 +746,7 @@ const deliverOutboxRecord = async (
       `https://api.telegram.org/bot${token}/sendMessage`,
       {
         method: "POST",
+        signal: controller.signal,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chat_id: record.chatId,
@@ -757,6 +766,7 @@ const deliverOutboxRecord = async (
     const data = (await response.json()) as {
       result?: { message_id?: number };
     };
+    clearTimeout(timeout);
     const messageId = data.result?.message_id;
     if (!messageId) {
       await recordFailure("INVALID_RESPONSE");
@@ -782,20 +792,32 @@ const deliverOutboxRecord = async (
     }
     return { messageId };
   } catch {
-    await recordFailure("TRANSPORT_ERROR");
+    // Telegram may have accepted a timed-out send; retries remain at-least-once.
+    await recordFailure(
+      controller.signal.aborted ? "DELIVERY_TIMEOUT" : "TRANSPORT_ERROR",
+    );
     return null;
+  } finally {
+    controller.abort();
+    clearTimeout(timeout);
   }
 };
 
-async function processNotificationOutbox(db: Db): Promise<void> {
+export async function processNotificationOutbox(db: Db): Promise<void> {
   await recoverStaleSendingNotifications(db);
-  const records = await claimDueNotifications(db);
-  for (const record of records) {
+  for (
+    let attempt = 0;
+    attempt < NOTIFICATION_OUTBOX_BATCH_LIMIT;
+    attempt += 1
+  ) {
+    // Lease only the next send so queued rows cannot expire while waiting.
+    const [record] = await claimDueNotifications(db, new Date(), 1);
+    if (!record) return;
     await deliverOutboxRecord(db, record);
   }
 }
 
-async function editTelegramMessage(
+export async function editTelegramMessage(
   messageId: number,
   newText: string,
   chatId: string | null,
@@ -807,9 +829,15 @@ async function editTelegramMessage(
   if (!token || !chatId || !messageId) return null;
 
   const url = `https://api.telegram.org/bot${token}/editMessageText`;
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    TELEGRAM_REQUEST_TIMEOUT_MS,
+  );
   try {
     const response = await fetch(url, {
       method: "POST",
+      signal: controller.signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         chat_id: chatId,
@@ -827,6 +855,7 @@ async function editTelegramMessage(
       const payload = (await response.json().catch(() => null)) as {
         parameters?: { retry_after?: number };
       } | null;
+      controller.signal.throwIfAborted();
       const retryAfterSeconds = payload?.parameters?.retry_after ?? 1;
       logApiEvent("TELEGRAM_COUNTDOWN_RATE_LIMITED", "WARN");
       return retryAfterSeconds;
@@ -834,7 +863,14 @@ async function editTelegramMessage(
 
     logApiEvent("TELEGRAM_MESSAGE_EDIT_REJECTED", "WARN");
   } catch (error) {
-    logApiError("TELEGRAM_MESSAGE_EDIT_FAILED", error);
+    if (controller.signal.aborted) {
+      logApiEvent("TELEGRAM_MESSAGE_EDIT_TIMED_OUT", "WARN");
+    } else {
+      logApiError("TELEGRAM_MESSAGE_EDIT_FAILED", error);
+    }
+  } finally {
+    controller.abort();
+    clearTimeout(timeout);
   }
   return null;
 }

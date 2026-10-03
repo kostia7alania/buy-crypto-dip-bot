@@ -551,3 +551,43 @@ Gate 1 remains NO-GO. `DEPLOY_ENABLED` exists, but `GATE1_APPROVED` was absent
 at review; no production permission or provider setting was changed. Remote
 publication and CI outcomes are evidenced by the resulting GitHub history and
 Actions runs, separately from these local results.
+
+## 2026-10-03: low-cost pilot source checkpoint
+
+Implementation: `8c2de0fb8d3499ff52f63dec71dff6131f992a8e`, published on main.
+[Plan 014](../plans/014-low-cost-pilot-delivery.md) records destination inventory,
+the restored-fixture proof, reviews and exact local user-flow boundaries.
+
+This checkpoint adds immutable provenance for new rejected risk decisions,
+truthful null/partial/stale reports, one dashboard market/freshness cutoff,
+auth configuration/outage/retry states and actual child-process crash recovery.
+The existing-VPS pilot avoids a new hosting subscription; Cloudflare/Supabase
+remain optional future targets, not implemented migration claims.
+
+Uncached `pnpm check` passed, including API 170, bot 67, web 43 and DB 68 ordinary
+tests plus supporting packages. Native DB PostgreSQL 18 passed 20/20; API process
+and reservation proofs passed 2/2 in the earlier parent rerun. Build passed 12/12
+tasks. Independent source reviews closed a reproduced stale-quote assembly race.
+
+Local HTTP and browser checks used synthetic Telegram signatures against real
+BFF/API/PostgreSQL routes, not provider identities. Owner isolation, cap edits,
+audit visibility, logout, API outage/retry, public Bybit data and 390/1440 px
+layouts were exercised. No live order or real Telegram delivery was attempted.
+
+Destination inventory still identifies August source `becc46b`, not this main
+revision. Fresh production-backup restoration is blocked by independently
+trusted SSH identity. `GATE1_APPROVED` remains absent; no deployment is claimed.
+
+The following hardening checkpoint closes a confirmed unbounded Telegram
+request/idle-lease gap: five-second request/body deadlines, final abort of unread
+bodies, and one just-in-time claim per send within a bounded batch. Existing
+retry/backoff is retained; external delivery is still at-least-once. Independent
+native-fetch loopback replay confirms stalled response streams/sockets close.
+The new PostgreSQL bot-cancel-repository versus executor case proves real lock
+contention, one terminal state/hold/event, inert replay and untouched foreign rows.
+
+Final uncached `pnpm check` passed after these changes: API 176, bot 67, web 43,
+DB 68 ordinary tests and supporting packages. API native PostgreSQL passed 3/3;
+DB native PostgreSQL remained 20/20 on the unchanged schema. Build passed 12/12
+tasks. Actual Telegram provider authentication/delivery and restored destination
+backup acceptance remain open, as does release approval.

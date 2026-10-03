@@ -4,9 +4,11 @@ import {
   runMigrations,
   schema,
 } from "@buy-crypto-dip-bot/db";
+import { seedTwoTenants } from "@buy-crypto-dip-bot/db/testing";
 import type { MarketTicker } from "@buy-crypto-dip-bot/exchange-core";
 import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { claimOwnedPendingOrder } from "../../../../bot/src/order.repository.js";
 import { claimDueDryRunOrder } from "./order.repository.js";
 import { reserveDryRunOrder } from "./reservation.repository.js";
 
@@ -99,9 +101,18 @@ describePostgres18("PostgreSQL 18 reservation connections", () => {
       if (connection !== admin) await close(connection);
     }
     if (admin) {
-      await admin.pool.query(
-        `DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`,
+      // Pool.end can return before the server processes every socket close.
+      await vi.waitFor(
+        async () => {
+          const result = await admin.pool.query<{ connections: number }>(
+            "SELECT count(*)::int AS connections FROM pg_stat_activity WHERE datname = $1",
+            [databaseName],
+          );
+          expect(result.rows[0]?.connections).toBe(0);
+        },
+        { timeout: 5_000, interval: 25 },
       );
+      await admin.pool.query(`DROP DATABASE IF EXISTS "${databaseName}"`);
       await close(admin);
     }
   });
@@ -169,5 +180,140 @@ describePostgres18("PostgreSQL 18 reservation connections", () => {
         ),
       );
     expect(completionEvidence).toHaveLength(1);
+  }, 60_000);
+
+  it("lets the real Telegram cancel callback and executor settle one owned hold exactly once", async () => {
+    const observer = connect(databaseUrl);
+    // The shared seed uses the same Drizzle operations on PGlite and node-postgres.
+    const world = await seedTwoTenants(
+      observer.db as unknown as Parameters<typeof seedTwoTenants>[0],
+    );
+    const actorConnection = (name: string) => {
+      const url = new URL(databaseUrl);
+      url.searchParams.set("application_name", name);
+      return connect(url.toString());
+    };
+    const callbackName = "pg18_callback_race";
+    const executorName = "pg18_executor_race";
+    const callbackDb = actorConnection(callbackName).db;
+    const executorDb = actorConnection(executorName).db;
+    const orderId = world.alice.pendingOrderId;
+    const readLedger = async (id: string) => {
+      // One SQL snapshot observes state, hold and financial evidence together.
+      const result = await observer.pool.query<{
+        order: Record<string, unknown>;
+        reservation: Record<string, unknown>;
+        events: Record<string, unknown>[];
+      }>(
+        `SELECT to_jsonb(o) AS "order", to_jsonb(r) AS reservation,
+           COALESCE((SELECT jsonb_agg(to_jsonb(e) ORDER BY e.id)
+             FROM audit_events e WHERE e.entity_id = o.id::text),
+             '[]'::jsonb) AS events
+         FROM orders o JOIN order_reservations r ON r.order_id = o.id
+         WHERE o.id = $1`,
+        [id],
+      );
+      const row = result.rows[0];
+      if (!row) throw new Error("PG18_RACE_LEDGER_MISSING");
+      return row;
+    };
+    const before = await readLedger(orderId);
+    const foreignBefore = await readLedger(world.bob.pendingOrderId);
+    expect(before).toMatchObject({
+      order: { user_id: world.alice.userId, status: "PENDING" },
+      reservation: { status: "ACTIVE", resolved_at: null },
+      events: [],
+    });
+    const dueAt = new Date(Date.now() + 120_000);
+    const callback = () =>
+      claimOwnedPendingOrder(
+        callbackDb,
+        orderId,
+        world.alice.userId,
+        "CANCELLED",
+        "pg18_callback_cancel_1234",
+      );
+    const executor = () =>
+      claimDueDryRunOrder(executorDb, orderId, "pg18_executor_due_1234", dueAt);
+    const lock = await observer.pool.connect();
+    let race:
+      | Promise<
+          [
+            PromiseSettledResult<Awaited<ReturnType<typeof callback>>>,
+            PromiseSettledResult<Awaited<ReturnType<typeof executor>>>,
+          ]
+        >
+      | undefined;
+    try {
+      await lock.query("BEGIN");
+      await lock.query("SELECT id FROM orders WHERE id = $1 FOR UPDATE", [
+        orderId,
+      ]);
+      race = Promise.allSettled([callback(), executor()]);
+      await vi.waitFor(
+        async () => {
+          const result = await observer.pool.query<{ waiting: number }>(
+            `SELECT count(DISTINCT application_name)::int AS waiting
+             FROM pg_stat_activity
+             WHERE datname = $1 AND application_name = ANY($2::text[])
+               AND wait_event_type = 'Lock'
+               AND lower(query) LIKE 'update "orders"%'
+               AND cardinality(pg_blocking_pids(pid)) > 0`,
+            [databaseName, [callbackName, executorName]],
+          );
+          expect(result.rows[0]?.waiting).toBe(2);
+        },
+        { timeout: 15_000, interval: 25 },
+      );
+      expect(await readLedger(orderId)).toEqual(before);
+      expect(await readLedger(world.bob.pendingOrderId)).toEqual(foreignBefore);
+      await lock.query("COMMIT");
+
+      const [cancelled, executed] = await race;
+      if (cancelled.status === "rejected") throw cancelled.reason;
+      if (executed.status === "rejected") throw executed.reason;
+      const callbackWon = cancelled.value.outcome === "CLAIMED";
+      expect(Number(callbackWon) + Number(executed.value !== null)).toBe(1);
+      const terminalStatus = callbackWon ? "CANCELLED" : "COMPLETED";
+      if (callbackWon) {
+        expect(cancelled.value).toMatchObject({
+          order: { status: terminalStatus },
+        });
+        expect(executed.value).toBeNull();
+      } else {
+        expect(cancelled.value.outcome).toBe("ALREADY_SETTLED");
+        expect(executed.value?.status).toBe(terminalStatus);
+      }
+      const settled = await readLedger(orderId);
+      expect(settled.order).toEqual({
+        ...before.order,
+        status: terminalStatus,
+      });
+      expect(settled.reservation).toEqual({
+        ...before.reservation,
+        status: callbackWon ? "RELEASED" : "CONSUMED",
+        resolved_at: expect.any(String),
+      });
+      expect(settled.events).toEqual([
+        expect.objectContaining({
+          user_id: world.alice.userId,
+          entity_id: orderId,
+          action: `DRY_RUN_ORDER_${terminalStatus}`,
+          actor_channel: callbackWon ? "TELEGRAM" : "RUNNER",
+          correlation_id: callbackWon
+            ? "pg18_callback_cancel_1234"
+            : "pg18_executor_due_1234",
+          payload: { from: "PENDING", to: terminalStatus, mode: "DRY_RUN" },
+        }),
+      ]);
+      expect((await callback()).outcome).toBe("ALREADY_SETTLED");
+      expect(await executor()).toBeNull();
+      expect(await readLedger(orderId)).toEqual(settled);
+      expect(await readLedger(world.bob.pendingOrderId)).toEqual(foreignBefore);
+    } finally {
+      await lock.query("ROLLBACK");
+      lock.release();
+      await race;
+    }
   }, 60_000);
 });

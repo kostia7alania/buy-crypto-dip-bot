@@ -53,7 +53,7 @@ from inventory or local source integration. Exact source/check identities are re
 | Tenant access | Personal tenants, memberships, owner constraints, forced RLS and restricted transactions for owned API routes and bot/runner mutations | Full integrated matrix, independent review and service-credential separation |
 | Login | Recovery opaque sessions, replay/abuse, CSRF, revocation and authoritative BFF retained | Real Telegram login/private start/provider smoke; OIDC later |
 | Dashboard | One private snapshot, account invalidation and 401 pause; missing login config and API outages are distinct; local mobile/desktop setup and outage recovery checked | Full accessibility/provider checks in N09 |
-| Audit, reservation and Telegram | Immutable approved and new rejected decision evidence; atomic dry-run hold lifecycle; true process-restart proof; shared report quotes, explicit missing/stale values and simulation assumptions | Full integrated delivery matrix, fairness and remaining benchmark contracts; historical rejection evidence is not backfilled |
+| Audit, reservation and Telegram | Immutable approved and new rejected decision evidence; atomic dry-run holds; process restart and callback/executor contention proof; bounded Telegram requests and just-in-time outbox claims; truthful shared reports | Actual provider delivery, broader fairness and benchmark contracts; historical rejection evidence is not backfilled |
 | Release | Immutable digest, commit-pinned files, separate migration service, writer quiescence, backup and readiness ordering; no automatic old-image restart after attempted DDL | Restore/incident rehearsal and production approval |
 | Public web | Public prerender; private CSR/noindex/no-store; truthful signed-out backtest copy | Published revision and claims/analytics QA |
 | Platform | Cloudflare/Supabase remain targets | OIDC/JWT, edge entries, webhook, Cron/Queues and cutover proof |
@@ -81,6 +81,14 @@ contract is implemented.
   SIGKILL after committed reservation, two fresh competing scheduler processes,
   one settlement/consumed hold/completion event, and another cold start without
   duplication. This does not prove a PostgreSQL crash or live exchange recovery.
+- PostgreSQL callback/executor contention: the real bot cancellation repository
+  and runner claim wait on the same row, then produce one terminal state/hold/event;
+  replay adds nothing and another tenant's ledger remains unchanged.
+- Telegram transport: five-second deadline covers response headers and body;
+  cleanup aborts unread bodies. A stalled recipient is retried with existing
+  backoff while the next recipient proceeds. Rows are claimed just before send,
+  not held idle in an expiring batch lease. Timeouts can still mean Telegram
+  accepted a message, so external delivery remains at-least-once, not exactly-once.
 - API snapshot A/B isolation and anonymous refusal; BFF session forwarding,
   private caching headers and upstream outage behavior.
 - Browser with fixtures: immediate first A snapshot, logout/re-login, one
