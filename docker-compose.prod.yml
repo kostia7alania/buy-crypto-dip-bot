@@ -90,7 +90,7 @@ services:
       API_URL: http://api:8787
       API_KEY: ${API_KEY:?set in .env}
       SESSION_SECRET: ${SESSION_SECRET:?set in .env}
-      NUXT_PUBLIC_TELEGRAM_BOT_USERNAME: ${NUXT_PUBLIC_TELEGRAM_BOT_USERNAME:-}
+      NUXT_PUBLIC_TELEGRAM_BOT_USERNAME: ${NUXT_PUBLIC_TELEGRAM_BOT_USERNAME:?set the bot username for dashboard login in .env}
       NUXT_PUBLIC_SITE_URL: ${NUXT_PUBLIC_SITE_URL:-https://buy-crypto-dip-bot.com}
       NUXT_PUBLIC_GA_ID: ${NUXT_PUBLIC_GA_ID:-}
       NITRO_PORT: "3000"

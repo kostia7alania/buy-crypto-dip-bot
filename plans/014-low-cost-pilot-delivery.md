@@ -346,3 +346,34 @@ This proves recent connectivity/queryability only, not shared application-pool
 health, current schema integrity, writability or runner progress. Five-second
 cached observations plus probe latency are intentional; event-loop stalls can
 delay any JavaScript deadline. Gate 1 remains NO-GO and no deployment is claimed.
+
+## Owner-authorized continuation after the overnight deadline
+
+On 2026-10-03 the owner explicitly asked to continue despite the elapsed
+overnight deadline. This renews implementation/deployment work, not permission
+for paid services, real trades, deleting data or bypassing authentication.
+
+Fresh remote fetch still matches clean main `1b71c66`. The published website
+returns 200, `/api/auth/me` returns an unauthenticated user, and private snapshot,
+strategies, orders and risk endpoints return 401 with `private, no-store`.
+The old dashboard labels that missing snapshot `API Offline`; this is not
+evidence of an API outage. Its public runtime configuration has an empty
+`telegramBotUsername`, so no login widget appears. Production Compose now
+requires that value during the existing pre-stop config validation. The correct
+username/token pairing and BotFather domain still need destination verification.
+
+The saved GitHub CLI credential is invalid, but authenticated browser and GitHub
+connector access work. Kamatera currently presents its login page; the owner was
+asked to sign in there, not to transmit a password. Available local trusted SSH
+records still do not establish the destination identity. No server or release
+gate was changed while that access remains unresolved.
+
+Targeted verification: existing release control-flow checks passed 4/4, lint
+passed with existing warnings, and the DRY_RUN boundary check passed. Real
+Docker Compose v5.1.4 in the existing default Colima profile rejected unset and
+empty usernames and accepted a fixture username, without creating app services.
+The temporarily started profile was stopped afterwards; neighboring profiles
+were not changed. Independent read-only review found no new source-level P0/P1
+for this bounded single-runner pilot. The privileged pool is not a demonstrated
+tenant bypass in the inspected owner-qualified paths; ADR 009's credential
+separation acceptance remains open, not silently waived.

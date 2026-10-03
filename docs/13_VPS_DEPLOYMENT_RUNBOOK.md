@@ -27,6 +27,11 @@ command to run during local source validation.
    tenant ownership. A readable pg_restore list is not this rehearsal.
 3. Verify source checks, A/B and restart/delivery proof, proxy/header trust,
    service secrets, bot heartbeat and exact DRY_RUN allowlist on both services.
+   Set `NUXT_PUBLIC_TELEGRAM_BOT_USERNAME` to the username of the configured
+   Telegram bot, without `@`, and configure this site's domain through BotFather.
+   Production Compose rejects a missing/empty username before stopping writers;
+   it does not verify that the username matches the token or that BotFather's
+   domain setting is correct. Verify the real login flow after rollout.
 4. Review the maintenance window, backup retention/off-host accessibility and
    forward-repair/restore decision with the actual destination inventory.
 
