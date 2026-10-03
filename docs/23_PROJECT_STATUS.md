@@ -75,6 +75,12 @@ contract is implemented.
 
 ## Verified locally
 
+- Readiness now probes current PostgreSQL connectivity/queryability before a
+  successful response, instead of treating startup migration success as a live
+  DB check. Probes share one in-flight operation, cache outcomes for five seconds
+  and own a two-second transport/cleanup deadline. Actual DB stop/start changed
+  the same API process from 200 to 503 and back; liveness/auth stayed unchanged.
+  This is not proof of application-pool health, current schema or writability.
 - PostgreSQL 18 contract lane: clean install, both known upgrades, catalog
   equivalence, audit/numeric preservation, quarantine refusal, concurrent and
   repeat execution, modified history refusal, critical RLS drift refusal and

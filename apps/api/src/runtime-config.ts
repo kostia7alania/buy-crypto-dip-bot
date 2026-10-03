@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-const LOCAL_POSTGRES_URL =
+export const LOCAL_POSTGRES_URL =
   "postgresql://postgres:local_password@localhost:5432/dipbot";
 
 const runtimeEnvSchema = v.object({

@@ -301,3 +301,48 @@ Production variables were refreshed: only `DEPLOY_ENABLED=true`, production
 environment variables empty. Trusted SSH identity, destination restore rehearsal,
 actual provider flow and Gate 1 acceptance remain open. Stop autonomous edits at
 07:00 MSK.
+
+## Final readiness follow-up
+
+At 06:35 MSK, clean main `9872498` was reproduced against a disposable PostgreSQL
+18 and the actual API bundle with runner disabled: after stopping PostgreSQL,
+`/health/ready` still returned 200 with `database: ready`. The migration success
+flag is not current connectivity evidence. Add a bounded, shared on-demand DB
+probe before successful readiness, retain process-only liveness and all auth
+guards, and re-read lifecycle state after awaiting the probe. Short caching must
+bound connection churn without claiming instantaneous outage detection. Verify
+outage/recovery and blocked network behavior, then publish before 07:00 MSK.
+No production access, migration, runner schedule or release approval changes.
+
+Implemented an ephemeral PostgreSQL connectivity/query probe with one-second
+connect/query limits and a two-second total deadline that destroys its owned
+socket, including stalled cleanup. Success is decided after cleanup and error
+events cannot terminate the process. No app pool or permanent connection is
+added. The API shares an in-flight probe and caches either outcome for five
+seconds; checks are request-driven, not another background scheduler. Readiness
+is `no-store`, and a completed probe cannot restore readiness after shutdown.
+
+Verified at about 06:43 MSK:
+
+- The same real production-build API process and disposable PG18 changed
+  `200 -> 503 -> 200` through actual DB stop/start after cache expiry. Liveness
+  stayed 200, and unauthenticated `/strategies` stayed 401.
+- Loopback PostgreSQL wire fixtures held connect, query and connection cleanup.
+  They returned false after 1,003 ms, 1,004 ms and 2,001 ms respectively. The
+  cleanup case reaches the query and succeeds there, then withholds socket
+  closure, proving the total deadline includes cleanup.
+- The first fixture incorrectly expected the global two-second deadline for
+  connection setup; the earlier one-second connect deadline correctly won.
+  The expectation was fixed before the final successful run. An initial API
+  launch also failed while PG was not yet accepting connections; it was retried
+  only after `pg_isready` succeeded. Neither failure is counted as passing proof.
+- Three focused regressions cover single-flight/cache recovery, outage/liveness
+  separation and shutdown during a successful probe. `pnpm check` and the full
+  build passed. Changed API/DB tests reran; unchanged tests used Turbo cache.
+- Independent read-only review found no concrete safety regression. Local manual
+  script: `/tmp/dipbot-pilot-proof-20261003/readiness-proof.mjs`.
+
+This proves recent connectivity/queryability only, not shared application-pool
+health, current schema integrity, writability or runner progress. Five-second
+cached observations plus probe latency are intentional; event-loop stalls can
+delay any JavaScript deadline. Gate 1 remains NO-GO and no deployment is claimed.

@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import { prepareApi } from "./bootstrap.js";
 import { getRuntimeReadiness, markStopping } from "./runtime-readiness.js";
 
+vi.mock("./modules/health/database-readiness.js", () => ({
+  createDatabaseReadinessProbe: () => async () => true,
+}));
+
 const env = (): NodeJS.ProcessEnv => ({
   APP_RUNTIME: "non-local",
   API_KEY: "service-key-for-a-non-local-deployment",

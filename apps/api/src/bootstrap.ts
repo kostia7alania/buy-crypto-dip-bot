@@ -52,6 +52,7 @@ export const prepareApi = async (
       apiKey: config.apiKey,
       botHeartbeatSecret: config.botHeartbeatSecret,
       runtime: config.runtime,
+      postgresConnectionString: config.postgresConnectionString,
     }),
     config,
     runner,

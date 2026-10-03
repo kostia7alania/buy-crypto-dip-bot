@@ -76,7 +76,7 @@ Index totals: EXTERNAL 4, GATED 36, LATER 1, LOCAL_SOURCE 59, OPEN 3, PARTIAL 15
 | R018 | P0 | LOCAL_SOURCE | Define non-local deployment classification |
 | R019 | P0 | LOCAL_SOURCE | Validate required configuration before service work |
 | R020 | P0 | LOCAL_SOURCE | Gate traffic and runner on successful migration |
-| R021 | P0 | LOCAL_SOURCE | Publish dependency-aware readiness |
+| R021 | P0 | LOCAL_SOURCE | Readiness includes bounded, shared recent DB connectivity; real same-process outage/recovery proved locally, without claiming app-pool/schema health |
 | R022 | P0 | LOCAL_SOURCE | Fail closed for BFF and bot service authentication |
 | R023 | P1 | LOCAL_SOURCE | Make `/api/auth/me` server-authoritative |
 | R024 | P1 | LOCAL_SOURCE | Make logout revocation outcome truthful |

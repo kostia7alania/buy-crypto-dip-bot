@@ -645,3 +645,19 @@ remain unverified. No production change or new hosting service is implied.
 build passed 12/12 tasks with a fresh bot bundle. The full native DB/API lanes
 were not repeated for this bot-only change; the targeted native process proof
 above was executed separately.
+
+## 2026-10-03: current database readiness
+
+Reproduced `/health/ready` returning 200 after stopping PostgreSQL. The endpoint
+now checks recent connectivity/queryability using a single-flight, five-second
+cached probe. An owned short-lived socket and two-second total budget also bound
+cleanup; connect and query have one-second limits. Startup state and auth are
+unchanged; a late successful probe cannot undo shutdown.
+
+The actual API bundle with disposable PG18 showed `200 -> 503 -> 200` without
+restarting the API. Liveness stayed 200 and anonymous strategies stayed 401.
+Local wire fixtures measured failed connect/query/cleanup at 1,003/1,004/2,001 ms.
+`pnpm check` and build passed; three targeted regressions protect this reproduced
+false-readiness risk. Source review found no blocking defect. This does not prove
+application-pool health, schema integrity or write capability. Full evidence and
+corrected probe assumptions are in plan 014; production approval is unchanged.

@@ -23,13 +23,27 @@ const heartbeatSecretMatches = (
 interface HealthRoutesOptions {
   botHeartbeatSecret?: string | undefined;
   allowUncredentialedLocalHeartbeat: boolean;
+  checkDatabase: () => Promise<boolean>;
 }
 
 export const createHealthRoutes = (options: HealthRoutesOptions) =>
   new Hono<AppEnv>()
     .get("/", (c) => c.json({ ok: true, service: "api" }))
-    .get("/ready", (c) => {
-      const readiness = getRuntimeReadiness();
+    .get("/ready", async (c) => {
+      c.header("Cache-Control", "no-store");
+      let readiness = getRuntimeReadiness();
+      if (readiness.state === "ready") {
+        const available = await options.checkDatabase();
+        // A completed probe must not undo concurrent shutdown or stale heartbeat.
+        readiness = getRuntimeReadiness();
+        if (!available && readiness.state === "ready") {
+          readiness = {
+            ...readiness,
+            database: "failed",
+            state: "failed",
+          };
+        }
+      }
       return c.json(readiness, readiness.state === "ready" ? 200 : 503);
     })
     .post("/bot-heartbeat", (c) => {

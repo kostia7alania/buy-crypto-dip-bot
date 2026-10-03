@@ -12,6 +12,7 @@ import {
 } from "./modules/auth/principal.middleware.js";
 import { backtestRoutes } from "./modules/backtest/backtest.route.js";
 import { dashboardRoutes } from "./modules/dashboard/dashboard.route.js";
+import { createDatabaseReadinessProbe } from "./modules/health/database-readiness.js";
 import { createHealthRoutes } from "./modules/health/health.route.js";
 import { marketDataRoutes } from "./modules/market-data/market-data.route.js";
 import { ordersRoutes } from "./modules/orders/orders.route.js";
@@ -21,12 +22,17 @@ import { riskRoutes } from "./modules/risk/risk.route.js";
 import { strategiesRoutes } from "./modules/strategies/strategies.route.js";
 import { versionRoutes } from "./modules/version/version.route.js";
 import { logApiError } from "./operational-log.js";
-import { type ApiRuntime, classifyApiRuntime } from "./runtime-config.js";
+import {
+  type ApiRuntime,
+  classifyApiRuntime,
+  LOCAL_POSTGRES_URL,
+} from "./runtime-config.js";
 
 interface CreateAppOptions {
   apiKey?: string | undefined;
   botHeartbeatSecret?: string | undefined;
   runtime?: ApiRuntime;
+  postgresConnectionString?: string;
 }
 
 export const createApp = (options: CreateAppOptions = {}) => {
@@ -94,6 +100,11 @@ export const createApp = (options: CreateAppOptions = {}) => {
   app.route(
     "/health",
     createHealthRoutes({
+      checkDatabase: createDatabaseReadinessProbe(
+        options.postgresConnectionString ??
+          process.env.POSTGRES_CONNECTION_STRING ??
+          LOCAL_POSTGRES_URL,
+      ),
       botHeartbeatSecret,
       allowUncredentialedLocalHeartbeat:
         runtime === "local" && !botHeartbeatSecret,
