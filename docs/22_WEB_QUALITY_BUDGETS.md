@@ -137,6 +137,10 @@ identity; the runner stayed disabled. No real Telegram account was involved.
 - Web typecheck, existing 43 web tests, scoped lint/format and production build
   passed. The built server also reproduced correct Configure-to-field focus
   and 390 px reflow; this does not mean that the build was deployed remotely.
+- Final logout replay found public `risk-status` incorrectly included in private
+  cache cleanup. Excluding that public-only key preserves the operating summary;
+  private panels disappear and remain absent after reload. The local fixture
+  cookie was explicitly removed after the completed logout checks.
 
 R121 stays PARTIAL: genuine provider sign-in, VoiceOver/Safari and actual 200%
 browser zoom are not proved by the narrow-viewport or accessibility-tree checks.

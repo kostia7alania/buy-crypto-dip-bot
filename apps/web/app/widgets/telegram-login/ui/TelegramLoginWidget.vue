@@ -43,14 +43,7 @@ const changingSession = ref(false);
 // The dashboard refresh owner cancels and clears its snapshot on identity changes.
 // Clearing that key here would cancel the new account's initial request.
 const clearPrivateData = () => {
-  clearNuxtData([
-    "strategies",
-    "audit",
-    "orders",
-    "pnl",
-    "performance",
-    "risk-status",
-  ]);
+  clearNuxtData(["strategies", "audit", "orders", "pnl", "performance"]);
 };
 
 // Invalidate successful entries and pending writes before the next account
