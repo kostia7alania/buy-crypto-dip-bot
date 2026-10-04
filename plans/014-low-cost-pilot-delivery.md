@@ -377,3 +377,69 @@ were not changed. Independent read-only review found no new source-level P0/P1
 for this bounded single-runner pilot. The privileged pool is not a demonstrated
 tenant bypass in the inspected owner-qualified paths; ADR 009's credential
 separation acceptance remains open, not silently waived.
+
+## Runtime credential separation, 2026-10-04
+
+The owner renewed continuation with "Go further". Kamatera panel login works,
+but a verified root login in its remote console rejected the supplied panel
+password. No server settings were changed. OS access remains requested; do not
+guess passwords, reset credentials or trust the scanned SSH key by itself.
+
+Independent work closes ADR 009's credential boundary without deploying:
+
+1. [complete] Add a forward migration for a non-owner, non-superuser runtime
+   login and explicit trusted-service privileges. Keep tenant operations under
+   the existing transaction-local `dipbot_app` role and forced RLS.
+2. [complete] Provision its password only in the administrator migration command.
+   Non-local API/bot startup must verify the expected migration history and
+   runtime role instead of executing DDL. Preserve startup cancellation/drain.
+3. [complete] Wire separate production credentials into Compose/bootstrap and
+   document the safe rollout. Never write credentials into tracked files/logs.
+4. [complete: bounded local proof] Prove native PG18 auth provisioning, runner/outbox operations,
+   role switching, denied DDL/admin escalation and startup rejection. Reuse
+   existing concrete checks; no coverage expansion or release-gate bypass.
+5. [in progress] Publish reviewed source and read back CI. Destination restore,
+   genuine Telegram flow and deployment remain separate acceptance steps.
+
+Evidence: both native PG18 migration histories/contract lanes passed 20/20;
+the existing API reservation/process recovery lane passed 3/3. A disposable
+database and actual built API proved separate SCRAM runtime login, user/tenant
+provisioning, A/rollback/B and missing-context isolation, trusted discovery,
+outbox claim/delivery metadata, denied DDL/admin role/TRUNCATE/journal mutation,
+synthetic signed HTTP login, private read, runner readiness and clean SIGTERM.
+Modified forward hashes and administrator startup DSN were rejected without
+DDL, including with the runner disabled. This is not Telegram provider proof.
+Manual script: `/private/tmp/dipbot-runtime-proof-20261004.mjs` (synthetic only).
+
+Review found a P2 availability risk: malformed/reused passwords originally
+failed after writers stopped. The target image now runs `--check-config` with
+`--no-deps` before stopping writers, without opening a DB connection. Existing
+release regression covers this ordering; review confirms the source fix.
+No new dependency or general test suite was added. Full check's first run hit
+the existing 10-second PGlite creation hook timeout; the separate diagnostic
+rerun passed. A second standard run reproduced the same hook timeout in three
+API files during parallel fixture construction, while their other assertions
+passed. API/bot test commands now cap workers at two and DB at one; no timeout,
+assertion or production concurrency limit changed. The two-worker DB run also
+hit the existing five-second timeout during cold legacy fixture seeding; this
+is independent of runtime credential acceptance. Final check is tracked below.
+
+Final local result: API passed 195 assertions, bot passed 73, and DB passed 67
+with 18 native checks skipped in the default lane (the dedicated native lane
+passed separately). `pnpm check` did not pass: the unchanged legacy notification
+privacy upgrade test exceeded its five-second limit, including an isolated
+standard-timeout rerun (6.68 seconds). That test uses the frozen old migrations,
+not the new runtime migration. No timeout or security assertion was relaxed.
+CI for the published revision must be read separately; local native acceptance
+is not a substitute for CI or destination acceptance.
+
+The final build passed all 12 packages (10 cached). Typecheck, lint with existing
+warnings, DRY_RUN boundary and release control checks passed; release checks are
+5/5 including invalid-credential preflight before any writer stop. The disposable
+PG18 container was removed and the temporarily started default Colima profile
+was stopped. No neighboring profile or production service was changed.
+
+Access remains blocked: the SSH agent has no identities, the destination has
+no locally trusted host-key entry, and the supplied panel password was rejected
+by the OS root login. The open provider console is left for owner login. No
+password reset, host-key trust, release approval or deployment was performed.

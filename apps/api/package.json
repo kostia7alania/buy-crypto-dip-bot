@@ -6,7 +6,7 @@
     "dev": "node --import tsx --env-file=../../.env --watch src/server.ts",
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run --passWithNoTests --maxWorkers=2",
     "test:postgres18": "REQUIRE_POSTGRES18_TEST=1 vitest run --no-file-parallelism src/modules/runner/reservation.postgres18.test.ts src/modules/runner/runner-process.postgres18.test.ts"
   },
   "dependencies": {

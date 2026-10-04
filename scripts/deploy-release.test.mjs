@@ -46,7 +46,8 @@ if(name==='curl') {
     if(process.env.RELEASE_FAILURE==='backup')process.exit(23);
     process.stdout.write('fixture-dump');
   }
-  if(args.includes('run') && args.includes('migrate') && process.env.RELEASE_FAILURE==='migration')process.exit(23);
+  if(args.includes('--check-config') && process.env.RELEASE_FAILURE==='configuration')process.exit(23);
+  if(args.includes('run') && args.includes('migrate') && !args.includes('--check-config') && process.env.RELEASE_FAILURE==='migration')process.exit(23);
   if(args.includes('up') && !args.includes('db') && process.env.RELEASE_FAILURE==='startup')process.exit(23);
   if(args.includes('ps') && args.includes('-aq'))process.stdout.write('fixture-'+args.at(-1));
   if(args.includes('inspect'))process.stdout.write('sha256:fixture-previous-image');
@@ -75,7 +76,13 @@ if(name==='curl') {
   return { root, result, calls };
 };
 
-for (const failure of ["none", "backup", "migration", "startup"]) {
+for (const failure of [
+  "none",
+  "configuration",
+  "backup",
+  "migration",
+  "startup",
+]) {
   test(`release control flow: ${failure}`, () => {
     const { root, result, calls } = fixture(failure);
     try {
@@ -83,8 +90,28 @@ for (const failure of ["none", "backup", "migration", "startup"]) {
       const at = (predicate) => calls.findIndex(predicate);
       const stop = at((c) => c.includes("stop"));
       const dump = at((c) => c.includes("pg_dump"));
-      const migrate = at((c) => c.includes("run") && c.includes("migrate"));
+      const preflight = at((c) => c.includes("--check-config"));
+      const migrate = at(
+        (c) =>
+          c.includes("run") &&
+          c.includes("migrate") &&
+          !c.includes("--check-config"),
+      );
       const appUp = at((c) => c.includes("up") && !c.includes("db"));
+      assert.ok(preflight >= 0, "credentials checked without DB dependencies");
+      if (failure === "configuration") {
+        assert.notEqual(result.status, 0);
+        assert.equal(stop, -1);
+        assert.equal(dump, -1);
+        assert.equal(migrate, -1);
+        assert.equal(appUp, -1);
+        assert.equal(
+          calls.some((c) => c.includes("start")),
+          false,
+        );
+        return;
+      }
+      assert.ok(preflight < stop, "credential errors precede stopping writers");
       assert.ok(stop >= 0 && dump > stop, "writers stop before backup");
       if (failure === "backup") {
         assert.notEqual(result.status, 0);

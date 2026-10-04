@@ -41,14 +41,15 @@ never edit hashes or assign rows to the deploying user to make a migration pass.
 
 ## Implemented sequence
 
-1. Validate the target SHA/digest and compose, then pull the image.
+1. Validate the target SHA/digest and compose, then pull the image. Run the target
+   migrator's `--check-config` with `--no-deps` before stopping any writers.
 2. Save previous compose, private environment and actual container image IDs
    under .deploy. These files contain sensitive deployment configuration and
    retain restrictive permissions.
 3. Stop API, bot and web writers. Start/check only PostgreSQL and create a
    custom-format backup. Check archive readability and retain it.
-4. Run the one-shot migrate service. It uses the same guarded runner as API
-   startup and the documented database CLI.
+4. Run the one-shot migrate service with the administrator credential. It applies
+   guarded migrations and provisions the separate runtime login with SCRAM.
 5. Install the target compose/digest and start services. API liveness allows
    bot startup; final /health/ready also checks the bot heartbeat.
 6. Check the web root and HTTP-to-HTTPS redirect. Record successful release
@@ -57,6 +58,35 @@ never edit hashes or assign rows to the deploying user to make a migration pass.
 API and bot share the reviewed symbol policy. An explicitly empty allowlist
 remains empty. Compose fixes execution to DRY_RUN. The web service receives
 neither the bot heartbeat secret nor the Telegram bot token.
+
+## Separate database credentials
+
+`POSTGRES_PASSWORD` is only passed to PostgreSQL and the one-shot migrator.
+`POSTGRES_RUNTIME_PASSWORD` is a separate random hex secret (48-128 lowercase
+hex characters; bootstrap generates 64). Set it privately in the server `.env`
+before release; do not reuse the administrator password. Existing installations
+need this new value explicitly. Missing values fail Compose validation before
+writers stop; malformed or reused values fail the no-DB preflight before writers
+stop too. The real migrator repeats validation before DDL.
+
+The migration creates `dipbot_runtime` without LOGIN; the administrator CLI
+enables LOGIN and sets the configured password after successful convergence.
+API and bot receive only that runtime DSN. Non-local startup performs read-only
+exact-journal/catalog/credential verification, never migration or repair. An old
+catalog, a modified journal or administrator DSN prevents startup, including
+when the runner is disabled. Local development retains automatic migration.
+
+The runtime owns no application objects and cannot create schema/tables, bypass
+RLS, truncate tables or update migration journals. Its explicit trusted-service
+policies support auth, user provisioning, scheduler discovery and notification
+delivery. These are cross-user capabilities inside a trusted service, not a
+claim of tenant isolation against arbitrary SQL through the runtime connection.
+Owned transactions still switch to `dipbot_app`, whose forced-RLS policies do
+not inherit the runtime's trusted policies. No second scheduler is introduced.
+
+Runtime passwords are cluster-wide role credentials. Use this single-app role
+only in the isolated app PostgreSQL cluster; do not point bootstrap/migrations
+at a shared cluster used by another project's `dipbot_runtime` role.
 
 ## Failure behavior
 

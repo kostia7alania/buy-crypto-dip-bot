@@ -9,6 +9,7 @@ import {
   createPostgresConnection,
   runMigrations,
   schema,
+  verifyRuntimeDatabase,
   withPersonalTenant,
 } from "@buy-crypto-dip-bot/db";
 import { createBybitPublicClient } from "@buy-crypto-dip-bot/exchange-bybit";
@@ -395,7 +396,8 @@ async function runCountdownEdits(
 interface StartRunnerOptions {
   connectionString: string;
   enabled: boolean;
-  onMigrationsComplete?: () => void;
+  databaseInitialization: "migrate" | "verify";
+  onDatabaseReady?: () => void;
   signal?: AbortSignal;
 }
 
@@ -410,10 +412,16 @@ export async function startRunner(
   const { db, pool } = createPostgresConnection(options.connectionString);
 
   try {
-    logApiEvent("DATABASE_MIGRATION_STARTED");
-    await runMigrations(db);
-    logApiEvent("DATABASE_MIGRATION_COMPLETED");
-    options.onMigrationsComplete?.();
+    if (options.databaseInitialization === "migrate") {
+      logApiEvent("DATABASE_MIGRATION_STARTED");
+      await runMigrations(db);
+      logApiEvent("DATABASE_MIGRATION_COMPLETED");
+    } else {
+      logApiEvent("DATABASE_VERIFICATION_STARTED");
+      await verifyRuntimeDatabase(db);
+      logApiEvent("DATABASE_VERIFICATION_COMPLETED");
+    }
+    options.onDatabaseReady?.();
 
     if (!options.enabled || options.signal?.aborted) {
       logApiEvent(
@@ -439,7 +447,7 @@ export async function startRunner(
       }
     }
   } catch (error) {
-    logApiError("DATABASE_MIGRATION_FAILED", error);
+    logApiError("DATABASE_INITIALIZATION_FAILED", error);
     await pool.end();
     throw error;
   }

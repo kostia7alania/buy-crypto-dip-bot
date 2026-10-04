@@ -6,7 +6,7 @@
     "dev": "node --import tsx --env-file=../../.env --watch src/index.ts",
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests --maxWorkers=2"
   },
   "dependencies": {
     "grammy": "catalog:",

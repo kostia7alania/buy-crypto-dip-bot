@@ -142,9 +142,10 @@ contract is implemented.
 
 1. The complete integrated API/BFF/bot/runner, aggregate, restart/concurrency,
    outbox and configuration matrix and independent review remain incomplete.
-2. The privileged connection still supports trusted auth, discovery, delivery
-   and some owner-qualified bot reads. RLS is proved in designated restricted
-   transactions, not as containment of arbitrary SQL through the privileged pool.
+2. Runtime/migrator separation is implemented in source, pending acceptance and
+   deployment. Trusted runtime policies support auth, discovery, delivery and
+   some owner-qualified bot reads. RLS remains designated-transaction isolation,
+   not containment of arbitrary SQL through that cross-user service connection.
 3. Destination source/lineage inventory is complete, but SSH identity trust,
    service secrets, forwarding trust, fresh-backup restore/incident procedure
    and current dependency-aware readiness still need a destination rehearsal.

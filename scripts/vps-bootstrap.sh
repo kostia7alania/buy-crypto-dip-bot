@@ -68,9 +68,11 @@ if [ ! -f "$APP_DIR/.env" ]; then
   API_KEY=$(openssl rand -hex 32)
   BOT_HEARTBEAT_SECRET=$(openssl rand -hex 32)
   PG_PASS=$(openssl rand -hex 24)
+  PG_RUNTIME_PASS=$(openssl rand -hex 32)
   SESSION_SECRET=$(openssl rand -hex 32)
   cat > "$APP_DIR/.env" <<EOF
 POSTGRES_PASSWORD=${PG_PASS}
+POSTGRES_RUNTIME_PASSWORD=${PG_RUNTIME_PASS}
 API_KEY=${API_KEY}
 SESSION_SECRET=${SESSION_SECRET}
 BOT_HEARTBEAT_SECRET=${BOT_HEARTBEAT_SECRET}

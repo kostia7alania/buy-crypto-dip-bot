@@ -3,7 +3,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import { migrateKnownHistory } from "./migration-history.js";
+import {
+  migrateKnownHistory,
+  verifyKnownHistory,
+} from "./migration-history.js";
 import { schema } from "./schema.js";
 
 export type DatabaseRuntime = "production" | "local" | "test";
@@ -69,15 +72,21 @@ export const probePostgresConnection = async (
   return available && !failed;
 };
 
-export const runMigrations = async (
-  db: ReturnType<typeof drizzle<typeof schema>>,
-): Promise<void> => {
+const resolveMigrationsFolder = () => {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
   // In production the app is bundled, so the relative path from this file no
   // longer points at packages/db/migrations — the image sets
   // DB_MIGRATIONS_DIR to the copied migrations folder instead.
-  const migrationsFolder =
-    process.env.DB_MIGRATIONS_DIR ?? path.resolve(__dirname, "../migrations");
-  await migrateKnownHistory(db, migrationsFolder);
+  return (
+    process.env.DB_MIGRATIONS_DIR ?? path.resolve(__dirname, "../migrations")
+  );
 };
+
+export const runMigrations = async (
+  db: DatabaseConnection["db"],
+): Promise<void> => migrateKnownHistory(db, resolveMigrationsFolder());
+
+export const verifyRuntimeDatabase = async (
+  db: DatabaseConnection["db"],
+): Promise<void> => verifyKnownHistory(db, resolveMigrationsFolder());

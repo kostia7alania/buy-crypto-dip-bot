@@ -72,7 +72,11 @@ if (process.argv[2] === "reserve") {
   setInterval(() => {}, 60_000);
 } else if (process.argv[2] === "runner") {
   // No order ID or in-memory reservation is supplied to the restarted runner.
-  const runner = await startRunner({ connectionString, enabled: true });
+  const runner = await startRunner({
+    connectionString,
+    enabled: true,
+    databaseInitialization: "migrate",
+  });
   process.once("SIGTERM", () => {
     void runner.stop().then(
       () => process.disconnect?.(),

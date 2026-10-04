@@ -156,10 +156,11 @@ The helper additionally protects bot strategy/configuration and order mutations,
 runner default insertion, order reservation and due completion. Existing
 conditional claims and atomic audit writes remain. Auth/bootstrap, session
 lookup, scheduler discovery, delivery processing and some owner-qualified bot
-reads still use the trusted privileged connection. Thus this proves RLS inside
+reads use the trusted cross-user runtime connection. Thus this proves RLS inside
 designated transactions, not containment of arbitrary SQL through that pool.
-Separate service credentials and the full integrated security matrix remain
-part of release proof.
+The October 4 source follow-up separates this non-owner runtime from the
+administrator migrator and verifies startup read-only. Destination acceptance
+and the full integrated security matrix remain part of release proof.
 
 Supabase documents service-role RLS bypass and different direct/pooling modes.
 Hyperdrive documents transaction pooling. Transaction-local context is a useful

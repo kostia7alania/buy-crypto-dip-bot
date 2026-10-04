@@ -25,13 +25,13 @@ describe("API bootstrap ordering", () => {
     const startBackgroundRunner = vi.fn(
       async (options: {
         signal?: AbortSignal;
-        onMigrationsComplete?: () => void;
+        onDatabaseReady?: () => void;
       }) => {
         expect(options.signal).toBe(controller.signal);
         expect(options.signal?.aborted).toBe(false);
         await initialization.promise;
         expect(options.signal?.aborted).toBe(true);
-        options.onMigrationsComplete?.();
+        options.onDatabaseReady?.();
         return runnerHandle;
       },
     );
@@ -53,16 +53,16 @@ describe("API bootstrap ordering", () => {
     expect((await app.request("/health/ready")).status).toBe(503);
   });
 
-  it("becomes ready only after migration and runner initialization finish", async () => {
+  it("becomes ready only after schema verification and runner initialization finish", async () => {
     const events: string[] = [];
     const runnerHandle = { stop: vi.fn(async () => {}) };
     const startBackgroundRunner = vi.fn(
       async (options: {
         connectionString: string;
-        onMigrationsComplete?: () => void;
+        onDatabaseReady?: () => void;
       }) => {
-        events.push("migration");
-        options.onMigrationsComplete?.();
+        events.push("verification");
+        options.onDatabaseReady?.();
         events.push("runner");
         return runnerHandle;
       },
@@ -77,9 +77,12 @@ describe("API bootstrap ordering", () => {
     expect(runner).toBe(runnerHandle);
     expect(runner.stop).not.toHaveBeenCalled();
     expect(startBackgroundRunner).toHaveBeenCalledWith(
-      expect.objectContaining({ enabled: true }),
+      expect.objectContaining({
+        enabled: true,
+        databaseInitialization: "verify",
+      }),
     );
-    expect(events).toEqual(["migration", "runner", "prepared"]);
+    expect(events).toEqual(["verification", "runner", "prepared"]);
     expect(getRuntimeReadiness()).toMatchObject({
       state: "starting",
       database: "ready",
@@ -111,9 +114,9 @@ describe("API bootstrap ordering", () => {
   it("keeps the migrated API ready when the runner is explicitly disabled", async () => {
     const runnerHandle = { stop: vi.fn(async () => {}) };
     const startBackgroundRunner = vi.fn(
-      async (options: { onMigrationsComplete?: () => void }) => {
+      async (options: { onDatabaseReady?: () => void }) => {
         expect(getRuntimeReadiness().state).toBe("starting");
-        options.onMigrationsComplete?.();
+        options.onDatabaseReady?.();
         return runnerHandle;
       },
     );
@@ -125,7 +128,10 @@ describe("API bootstrap ordering", () => {
     expect(runner).toBe(runnerHandle);
     expect(runner.stop).not.toHaveBeenCalled();
     expect(startBackgroundRunner).toHaveBeenCalledWith(
-      expect.objectContaining({ enabled: false }),
+      expect.objectContaining({
+        enabled: false,
+        databaseInitialization: "migrate",
+      }),
     );
     const response = await app.request("/health/ready");
     expect(response.status).toBe(200);

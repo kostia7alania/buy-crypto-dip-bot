@@ -37,7 +37,8 @@ export const prepareApi = async (
     runner = await startBackgroundRunner({
       connectionString: config.postgresConnectionString,
       enabled: config.runnerEnabled,
-      onMigrationsComplete: markDatabaseReady,
+      databaseInitialization: config.runtime === "local" ? "migrate" : "verify",
+      onDatabaseReady: markDatabaseReady,
       ...(options.signal ? { signal: options.signal } : {}),
     });
     if (config.runnerEnabled) markRunnerReady();

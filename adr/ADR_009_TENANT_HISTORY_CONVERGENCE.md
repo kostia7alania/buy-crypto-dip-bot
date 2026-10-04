@@ -13,11 +13,14 @@ membership from that user, then use SET LOCAL identity/tenant and SET LOCAL ROLE
 dipbot_app on the same connection for designated owned operations. Preserve
 owner constraints and immutable audit in addition to forced RLS.
 
-This is defense in depth for restricted transactions. The privileged pool
-still supports trusted bootstrap, auth, discovery, delivery and some bot reads.
-Separate migrator/runtime credentials, complete A/B/restart proof and restore
-rehearsal remain pre-GO work. No claim of protection from arbitrary SQL through
-that privileged pool is made.
+This is defense in depth for restricted transactions. The trusted runtime pool
+supports auth, discovery, delivery and some bot reads through explicit grants
+and role-specific policies; it is not an object owner or RLS-bypass role.
+The administrator credential is confined to the one-shot migration service.
+Non-local API/bot startup verifies journals/catalog/credentials read-only.
+Credential-boundary acceptance, complete A/B/restart proof and destination
+restore rehearsal remain pre-GO work until verified. No claim of protection
+from arbitrary SQL through that trusted cross-user pool is made.
 
 Reuse main's dashboard snapshot and immutable release design while retaining
 recovery's stronger session, symbol and notification controls. Freeze generic

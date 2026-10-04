@@ -24,7 +24,9 @@ services:
     command: ["node", "packages/db/scripts/migrate.mjs"]
     restart: "no"
     environment:
+      APP_RUNTIME: non-local
       POSTGRES_CONNECTION_STRING: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/dipbot
+      POSTGRES_RUNTIME_PASSWORD: ${POSTGRES_RUNTIME_PASSWORD:?set a separate hex runtime password in .env}
     depends_on:
       db:
         condition: service_healthy
@@ -36,7 +38,7 @@ services:
     stop_grace_period: 30s
     environment:
       APP_RUNTIME: non-local
-      POSTGRES_CONNECTION_STRING: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/dipbot
+      POSTGRES_CONNECTION_STRING: postgresql://dipbot_runtime:${POSTGRES_RUNTIME_PASSWORD:?set a separate hex runtime password in .env}@db:5432/dipbot
       API_KEY: ${API_KEY:?set in .env}
       BOT_HEARTBEAT_SECRET: ${BOT_HEARTBEAT_SECRET:?set in .env}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?set in .env}
@@ -67,7 +69,7 @@ services:
     stop_grace_period: 30s
     environment:
       APP_RUNTIME: non-local
-      POSTGRES_CONNECTION_STRING: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/dipbot
+      POSTGRES_CONNECTION_STRING: postgresql://dipbot_runtime:${POSTGRES_RUNTIME_PASSWORD:?set a separate hex runtime password in .env}@db:5432/dipbot
       API_URL: http://api:8787
       ALLOWLIST_SYMBOLS: *symbol-policy
       API_KEY: ${API_KEY:?set in .env}

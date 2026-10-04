@@ -118,12 +118,7 @@ const applyForwardMigrations = async (tx: Tx, history: Migration[]) => {
   }
 };
 
-/**
- * A checked, append-only bridge between two released migration lineages.
- * One connection and transaction hold the lock, execute DDL and record hashes.
- * The original Drizzle journal is never relabelled as the other lineage.
- */
-export const migrateKnownHistory = async (db: Db, folder: string) => {
+const readExpectedHistory = (folder: string) => {
   const recovery = readMigrationFiles({ migrationsFolder: folder });
   const costFirst = readMigrationFiles({
     migrationsFolder: path.join(folder, "histories/cost-first"),
@@ -142,6 +137,115 @@ export const migrateKnownHistory = async (db: Db, folder: string) => {
   const forward = readMigrationFiles({
     migrationsFolder: path.join(folder, "forward"),
   });
+  return { recovery, costFirst, bridge, foundation, targetHash, forward };
+};
+
+export const verifyKnownHistory = async (db: Db, folder: string) => {
+  const { recovery, costFirst, targetHash, forward } =
+    readExpectedHistory(folder);
+  await db.transaction(
+    async (tx) => {
+      await tx.execute(sql`set local statement_timeout = '10s'`);
+      const catalog = await tx.execute<{ ready: boolean }>(sql`
+      select to_regclass('drizzle.__drizzle_migrations') is not null
+        and to_regclass('drizzle.__dipbot_convergence') is not null
+        and to_regclass('drizzle.__dipbot_forward_migrations') is not null as ready
+    `);
+      if (!catalog.rows[0]?.ready)
+        throw new Error("DATABASE_MIGRATION_REQUIRED");
+      const rows = (
+        await tx.execute<Applied>(sql`
+      select hash,created_at from drizzle.__drizzle_migrations order by id
+    `)
+      ).rows;
+      const lineage = recognizeMigrationHistory(rows, recovery, costFirst);
+      const history = lineage === "recovery" ? recovery : costFirst;
+      const marker = await tx.execute<{
+        source_history: string;
+        target: string;
+        target_hash: string;
+      }>(
+        sql`select source_history,target,target_hash from drizzle.__dipbot_convergence`,
+      );
+      if (
+        rows.length !== history.length ||
+        marker.rows.length !== 1 ||
+        marker.rows[0]?.source_history !== lineage ||
+        marker.rows[0]?.target !== CONVERGED_CATALOG ||
+        marker.rows[0]?.target_hash !== targetHash
+      ) {
+        throw new Error("MIGRATION_CONVERGENCE_RECORD_MISMATCH");
+      }
+      const applied = (
+        await tx.execute<Applied>(sql`
+      select hash,created_at from drizzle.__dipbot_forward_migrations order by id
+    `)
+      ).rows;
+      if (
+        applied.length !== forward.length ||
+        applied.some(
+          (row, index) =>
+            row.hash !== forward[index]?.hash ||
+            Number(row.created_at) !== forward[index]?.folderMillis,
+        )
+      ) {
+        throw new Error("DATABASE_FORWARD_MIGRATION_REQUIRED_OR_MODIFIED");
+      }
+      await assertTenantCatalog(tx);
+      await assertReservationCatalog(tx);
+      await assertRuntimeCredentials(tx);
+    },
+    { isolationLevel: "repeatable read", accessMode: "read only" },
+  );
+};
+
+const assertRuntimeCredentials = async (tx: Tx) => {
+  const result = await tx.execute<{ ready: boolean }>(sql`
+    select (
+      session_user = 'dipbot_runtime' and current_user = session_user
+      and exists(select 1 from pg_roles where rolname=current_user
+        and rolcanlogin and not rolsuper and not rolbypassrls and not rolcreatedb
+        and not rolcreaterole and not rolreplication and not rolinherit)
+      and (select count(*)=1 from pg_auth_members m
+        where m.member=(select oid from pg_roles where rolname=current_user))
+      and exists(select 1 from pg_auth_members m join pg_roles r on r.oid=m.roleid
+        where m.member=(select oid from pg_roles where rolname=current_user)
+          and r.rolname='dipbot_app' and m.set_option
+          and not m.inherit_option and not m.admin_option)
+      and not exists(select 1 from pg_auth_members
+        where member=(select oid from pg_roles where rolname='dipbot_app'))
+      and not exists(select 1 from pg_roles where rolname='dipbot_app'
+        and (rolsuper or rolbypassrls or rolcreatedb or rolcreaterole or rolreplication))
+      and has_database_privilege(current_user,current_database(),'CONNECT')
+      and not has_database_privilege(current_user,current_database(),'CREATE')
+      and not has_database_privilege(current_user,current_database(),'TEMP')
+      and not exists(select 1 from pg_database where datname=current_database()
+        and pg_has_role(current_user,datdba,'USAGE'))
+      and not has_schema_privilege(current_user,'public','CREATE')
+      and not has_schema_privilege(current_user,'drizzle','CREATE')
+      and not exists(select 1 from pg_namespace where nspname in ('public','drizzle')
+        and pg_has_role(current_user,nspowner,'USAGE'))
+      and not exists(select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace
+        where n.nspname in ('public','drizzle') and pg_has_role(current_user,c.relowner,'USAGE'))
+      and not exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+        where n.nspname in ('public','drizzle') and pg_has_role(current_user,p.proowner,'USAGE'))
+      and not exists(select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace
+        where n.nspname in ('public','drizzle') and c.relkind in ('r','p')
+          and (has_table_privilege(current_user,c.oid,'TRUNCATE')
+            or (n.nspname='drizzle' and
+              (has_table_privilege(current_user,c.oid,'INSERT')
+               or has_table_privilege(current_user,c.oid,'UPDATE')
+               or has_table_privilege(current_user,c.oid,'DELETE')))))
+    ) as ready
+  `);
+  if (!result.rows[0]?.ready)
+    throw new Error("DATABASE_RUNTIME_CREDENTIALS_INVALID");
+};
+
+/** Hash-checked, append-only convergence under one transaction/advisory lock. */
+export const migrateKnownHistory = async (db: Db, folder: string) => {
+  const { recovery, costFirst, bridge, foundation, targetHash, forward } =
+    readExpectedHistory(folder);
 
   await db.transaction(async (tx) => {
     await tx.execute(sql`set local lock_timeout = '5s'`);

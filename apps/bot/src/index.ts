@@ -1,5 +1,6 @@
+import { verifyRuntimeDatabase } from "@buy-crypto-dip-bot/db";
 import { createBot, registerBotCommands } from "./bot.js";
-import { closeDb } from "./db.js";
+import { closeDb, getDb } from "./db.js";
 import { startBotHeartbeat } from "./heartbeat.js";
 import { logBotError, logBotEvent } from "./operational-log.js";
 import { startBotRuntime } from "./runtime.js";
@@ -16,7 +17,11 @@ if (!token) {
 logBotEvent("BOT_STARTING");
 const bot = createBot(token);
 const runtime = startBotRuntime(bot, {
-  prepare: (signal) => registerBotCommands(bot, signal),
+  prepare: async (signal) => {
+    if (signal.aborted) return;
+    if (config.runtime === "non-local") await verifyRuntimeDatabase(getDb());
+    if (!signal.aborted) await registerBotCommands(bot, signal);
+  },
   startHeartbeat: startBotHeartbeat,
   closeDatabase: closeDb,
 });

@@ -31,3 +31,12 @@ rolls back its catalog and journal changes. Reserved order identity, economics
 and decision evidence stay immutable after settlement too. Status transitions,
 execution scheduling and Telegram delivery metadata retain their existing
 contracts. Startup also checks the reservation RLS, constraints and triggers.
+
+Forward `0002_runtime_credentials` creates a non-owner NOLOGIN service role
+with explicit trusted-service grants and role-specific policies. The migration
+CLI provisions its separate SCRAM password after convergence; production needs
+`POSTGRES_RUNTIME_PASSWORD` before any DDL. Non-local API/bot startup verifies
+the exact full histories and runtime credential read-only, without migration.
+Owned operations still use `SET LOCAL ROLE dipbot_app`. Cross-user auth and
+delivery access is trusted-service authority, not arbitrary-SQL tenant isolation.
+See the [production credential rollout](../../../docs/13_VPS_DEPLOYMENT_RUNBOOK.md#separate-database-credentials).

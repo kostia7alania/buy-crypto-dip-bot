@@ -40,6 +40,11 @@ curl --fail --silent --show-error --location --retry 3 \
 DIPBOT_IMAGE="$TARGET_IMAGE" docker compose --env-file "$APP_DIR/.env" \
   --project-directory "$APP_DIR" -f "$NEXT_COMPOSE" config --quiet
 docker pull "$TARGET_IMAGE"
+# Validate credentials in the target image without connecting to the database.
+# Configuration errors must not take healthy application writers offline.
+DIPBOT_IMAGE="$TARGET_IMAGE" docker compose --env-file "$APP_DIR/.env" \
+  --project-directory "$APP_DIR" -f "$NEXT_COMPOSE" run --rm --no-deps migrate \
+  node packages/db/scripts/migrate.mjs --check-config
 cp docker-compose.yml ".deploy/$RELEASE_ID.before.yml"
 cp .env ".deploy/$RELEASE_ID.before.env"
 # Preserve the actual local image IDs, even if an older compose used latest.
