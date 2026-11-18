@@ -13,6 +13,7 @@ import type {
   PerformanceReport,
   PnlReport,
 } from "@buy-crypto-dip-bot/shared-types";
+import { sql } from "drizzle-orm";
 import {
   afterAll,
   beforeAll,
@@ -23,6 +24,7 @@ import {
   vi,
 } from "vitest";
 import type { getDb } from "../../db.js";
+import * as budgets from "../strategies/budget.repository.js";
 
 const market = vi.hoisted(() => ({ ticker: vi.fn(), klines: vi.fn() }));
 vi.mock("@buy-crypto-dip-bot/exchange-bybit", () => ({
@@ -108,6 +110,25 @@ beforeEach(() => {
 });
 
 describe("truthful incomplete reports", () => {
+  it("retains the dashboard's owned records when the budget query fails", async () => {
+    const reader = vi
+      .spyOn(budgets, "readStrategyBudget")
+      .mockImplementationOnce(async (db) => {
+        await db.execute(sql`select 1 / 0`);
+        throw new Error("test query should have failed");
+      });
+    try {
+      const response = await request("/dashboard/snapshot");
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body).not.toHaveProperty("budget");
+      expect(body.strategies).toHaveLength(2);
+      expect(body.orders.length).toBeGreaterThan(0);
+    } finally {
+      reader.mockRestore();
+    }
+  });
+
   it("retains an unavailable position and all owned spend, sharing each quote once per dashboard request", async () => {
     market.ticker.mockImplementation(async (symbol: string) => {
       if (symbol === "BTCUSDT") throw new Error("provider unavailable");

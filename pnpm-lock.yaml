@@ -162,6 +162,9 @@ importers:
       grammy:
         specifier: 'catalog:'
         version: 1.44.0
+      valibot:
+        specifier: 'catalog:'
+        version: 1.4.2(typescript@6.0.3)
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

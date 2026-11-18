@@ -8,6 +8,10 @@ Current priorities: [master backlog](tasks/00_MASTER_PLAN.md).
 
 ## Current work
 
+- [016: Telegram-first MVP delivery](plans/016-telegram-mvp-delivery.md),
+  execution backlog, owners, acceptance and work evidence.
+- [015: Telegram-first spot MVP](plans/015-telegram-mvp-product-research.md),
+  product discovery, market-data validation and a narrow pilot.
 - [014: Low-cost pilot delivery](plans/014-low-cost-pilot-delivery.md),
   destination inventory, minimal-cost hosting and verified DRY_RUN delivery.
 - [013: Cost-first architecture and merge review](plans/013-cost-first-merge-review.md),

@@ -34,3 +34,20 @@ jobs:
       - run: pnpm exec turbo build --filter=@buy-crypto-dip-bot/api...
       - run: pnpm --filter @buy-crypto-dip-bot/db test:postgres18
       - run: pnpm --filter @buy-crypto-dip-bot/api test:postgres18
+  production-image:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build production image locally
+        run: docker build --tag dipbot:release-candidate .
+      - name: Check packaged migrator without network or secrets
+        run: |
+          docker run --rm --network none \
+            -e APP_RUNTIME=non-local \
+            -e POSTGRES_CONNECTION_STRING=postgresql://postgres:fixture@db:5432/dipbot \
+            -e POSTGRES_RUNTIME_PASSWORD=0123456789abcdef0123456789abcdef0123456789abcdef \
+            --entrypoint node dipbot:release-candidate packages/db/scripts/migrate.mjs --check-config

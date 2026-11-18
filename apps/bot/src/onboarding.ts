@@ -115,7 +115,7 @@ export const buildConfirmKeyboard = (
   amount: number,
 ) =>
   new InlineKeyboard()
-    .text("✅ Start dry-run", `wiz:apply:${symbol}:${threshold}:${amount}`)
+    .text("✅ Save strategy", `wiz:apply:${symbol}:${threshold}:${amount}`)
     .row()
     .text("↩️ Start over", "wiz:coin")
     .text("✖️ Cancel", "wiz:cancel");
@@ -144,8 +144,8 @@ export const registerOnboardingWizard = (bot: Bot) => {
       case "threshold":
         return ctx.editMessageText(
           `🧭 *Step 2 of 3 — dip threshold for ${coinLabel(parsed.symbol)}*\n\n` +
-            `Buy when the price drops this far below the recent high. ` +
-            `Smaller = more frequent buys, larger = only real dips.`,
+            `A dip reaches this threshold when the price is this far below its 24h high. ` +
+            `Budget limits and cooldown still apply.`,
           {
             parse_mode: "Markdown",
             reply_markup: buildThresholdKeyboard(parsed.symbol),
@@ -155,8 +155,7 @@ export const registerOnboardingWizard = (bot: Bot) => {
       case "amount":
         return ctx.editMessageText(
           `🧭 *Step 3 of 3 — buy amount*\n\n` +
-            `How much USDT should each simulated ${coinLabel(parsed.symbol)} ` +
-            `dip buy spend?`,
+            `Choose the amount in USDT for each approved simulated ${coinLabel(parsed.symbol)} buy.`,
           {
             parse_mode: "Markdown",
             reply_markup: buildAmountKeyboard(
@@ -170,11 +169,14 @@ export const registerOnboardingWizard = (bot: Bot) => {
         return ctx.editMessageText(
           `🔎 *Review your dip strategy*\n\n` +
             `• *Coin:* \`${parsed.symbol}\`\n` +
-            `• *Dip threshold:* \`-${parsed.thresholdPercent}%\`\n` +
+            `• *Dip threshold:* \`${parsed.thresholdPercent}%\` below the 24h high\n` +
             `• *Buy amount:* \`${parsed.amountUsdt} USDT\`\n` +
-            `• *Daily limit:* \`${strategyDefaults.maxDailySpendUsdt} USDT\`\n` +
             `• *Mode:* \`DRY_RUN\` (simulated, no real money)\n\n` +
-            `Start watching for dips?`,
+            `*A new strategy starts paused with these defaults*\n` +
+            `• Rolling 24h limit — ${strategyDefaults.maxDailySpendUsdt} USDT\n` +
+            `• Rolling 7d limit — ${strategyDefaults.maxWeeklySpendUsdt} USDT\n` +
+            `• Cooldown — ${strategyDefaults.cooldownMinutes} minutes\n\n` +
+            `Saving an existing strategy keeps its limits and cooldown and enables it.`,
           {
             parse_mode: "Markdown",
             reply_markup: buildConfirmKeyboard(
@@ -197,7 +199,7 @@ export const registerOnboardingWizard = (bot: Bot) => {
 
           // Wizard coins come from the risk allowlist, so no exchange
           // validation round-trip is needed here (unlike /add_pair).
-          await applyOwnedOnboardingStrategy(
+          const result = await applyOwnedOnboardingStrategy(
             db,
             caller.id,
             {
@@ -208,15 +210,22 @@ export const registerOnboardingWizard = (bot: Bot) => {
             correlationId,
           );
 
+          const saved =
+            result.outcome === "CREATED"
+              ? `*${parsed.symbol} strategy saved and paused*\nEnable it with \`/toggle ${parsed.symbol}\`.`
+              : `*${parsed.symbol} strategy updated and enabled*`;
+
           return ctx.editMessageText(
-            `🎉 *You're set — watching ${parsed.symbol} for dips*\n\n` +
-              `• Buys \`${parsed.amountUsdt} USDT\` on every \`-${parsed.thresholdPercent}%\` dip\n` +
-              `• \`DRY_RUN\` mode: every buy is simulated and cancellable\n\n` +
+            `✅ ${saved}\n\n` +
+              `The strategy considers simulated buys of \`${parsed.amountUsdt} USDT\` when the price is at least ` +
+              `\`${parsed.thresholdPercent}%\` below its 24h high. Budget limits and cooldown apply.\n\n` +
               `*Useful next:*\n` +
-              `• /status — what the bot is doing right now\n` +
+              `• /status — see your simulated activity\n` +
+              `• /decision — see your last recorded risk decision\n` +
+              `• /budget — see your remaining simulated budget\n` +
               `• /pnl — simulated portfolio result\n` +
               `• /backtest — replay this strategy over real history\n` +
-              `• /pause\\_all — kill switch, stops everything`,
+              `• /pause\\_all — pause your strategies`,
             { parse_mode: "Markdown" },
           );
         } catch (error) {

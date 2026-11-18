@@ -7,6 +7,10 @@ integration and September 16 reservation extension are recorded in
 
 ## Next delivery sequence
 
+The product work and owners are tracked in
+[plan 016](../plans/016-telegram-mvp-delivery.md). The release checks below
+remain applicable to the pilot.
+
 | ID | Priority / owner | State | Outcome and acceptance |
 | --- | --- | --- | --- |
 | N01 | P0, API/Risk/Bot | LOCAL_DONE | Close the allowlist bypass (R070 DRY_RUN portion): one reviewed config policy, narrower deployment subset, rejected unsupported creation/input/completion, cancellable legacy records. Regression cases pass. |

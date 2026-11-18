@@ -32,7 +32,7 @@ const steps = [
   },
   {
     title: "Review and adjust",
-    body: "See how flash-crash buys performed and tune your threshold.",
+    body: "See how simulated flash-crash buys performed and tune your threshold.",
   },
 ];
 const faqs = [
@@ -59,7 +59,7 @@ const faqs = [
   <LandingPage
     eyebrow="Flash Crash Crypto Bot"
     title="Flash Crash Crypto Bot"
-    description="A risk-first flash-crash bot that buys sharp crypto drops on Bybit spot within strict spend limits, with a dry-run mode, cancel window and kill switch."
+    description="Simulate sharp-drop buys using Bybit spot data, configured spend limits, a cancel window and a pause control."
     headline="Be ready for the flash crash"
     subheadline="Evaluate sharp-drop rules on reviewed public Bybit data with configured limits, dry-run evidence and an audited pause control."
     :features="features"

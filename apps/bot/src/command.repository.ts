@@ -8,10 +8,68 @@ import {
   AUDIT_SCHEMA_VERSION,
   createCorrelationId,
 } from "@buy-crypto-dip-bot/shared-types";
-import { and, eq, sql } from "drizzle-orm";
+import { and, count, eq, gte, lte, sql } from "drizzle-orm";
 import type { getDb } from "./db.js";
 
 type Db = ReturnType<typeof getDb>;
+
+export const getOwnedSimulationStatus = async (
+  db: Db,
+  callerId: string,
+  now = new Date(),
+) => {
+  const cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  // Match the runner's completion timestamp and its fallback for legacy buys.
+  const completedAt = sql`coalesce(${schema.orderReservations.resolvedAt}, ${schema.orders.createdAt})`;
+  return withPersonalTenant(
+    db,
+    callerId,
+    async (tx) => {
+      const [strategies] = await tx
+        .select({ enabled: count() })
+        .from(schema.strategies)
+        .where(
+          and(
+            eq(schema.strategies.userId, callerId),
+            eq(schema.strategies.enabled, true),
+          ),
+        );
+      const [orders] = await tx
+        .select({
+          completed: count(),
+          amountUsdt: sql<
+            string | null
+          >`case when bool_or(${schema.orders.quoteAmount} <= 0) then null else round(coalesce(sum(${schema.orders.quoteAmount}), 0), 2) end`,
+        })
+        .from(schema.orders)
+        .leftJoin(
+          schema.orderReservations,
+          and(
+            eq(schema.orderReservations.orderId, schema.orders.id),
+            eq(schema.orderReservations.userId, schema.orders.userId),
+            eq(schema.orderReservations.status, "CONSUMED"),
+          ),
+        )
+        .where(
+          and(
+            eq(schema.orders.userId, callerId),
+            eq(schema.orders.status, "COMPLETED"),
+            eq(schema.orders.mode, "DRY_RUN"),
+            eq(schema.orders.side, "BUY"),
+            gte(completedAt, cutoff.toISOString()),
+            lte(completedAt, now.toISOString()),
+          ),
+        );
+      if (!strategies || !orders) throw new Error("STATUS_AGGREGATE_MISSING");
+      return {
+        enabledStrategies: strategies.enabled,
+        completedBuys: orders.completed,
+        amountUsdt: orders.amountUsdt,
+      };
+    },
+    { isolationLevel: "repeatable read", accessMode: "read only" },
+  );
+};
 
 export interface PrivateNotificationBinding {
   telegramUserId: string;

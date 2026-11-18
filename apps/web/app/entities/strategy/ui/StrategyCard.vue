@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { StrategyBudget } from "@buy-crypto-dip-bot/shared-types";
 import { computed, nextTick, useTemplateRef, watch } from "vue";
 
 interface StrategyConfigData {
@@ -20,6 +21,7 @@ interface Strategy {
 
 const props = defineProps<{
   strategy: Strategy;
+  budget?: StrategyBudget;
   isEditing: boolean;
   editForm: StrategyConfigData | null;
   isToggling: boolean;
@@ -91,6 +93,11 @@ const projectedMaximum = computed(() => {
 
 const formatUsdt = (value: number) =>
   new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);
+
+const budgetAmount = (value: number | null) =>
+  value === null
+    ? "Unavailable"
+    : `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 8 }).format(value)} USDT`;
 </script>
 
 <template>
@@ -116,6 +123,21 @@ const formatUsdt = (value: number) =>
     <p class="strategy-card__mode">
       Mode <strong>{{ props.strategy.mode }}</strong> · No exchange order
     </p>
+
+    <dl v-if="props.budget" class="strategy-card__budget">
+      <div>
+        <dt>Remaining · 24h</dt>
+        <dd>{{ budgetAmount(props.budget.dailyRemainingUsdt) }}</dd>
+      </div>
+      <div>
+        <dt>Remaining · 7 days</dt>
+        <dd>{{ budgetAmount(props.budget.weeklyRemainingUsdt) }}</dd>
+      </div>
+      <div>
+        <dt>Reserved within both limits</dt>
+        <dd>{{ budgetAmount(props.budget.activeReservedUsdt) }}</dd>
+      </div>
+    </dl>
 
     <p
       v-if="props.toggleStatus"
@@ -301,6 +323,33 @@ const formatUsdt = (value: number) =>
 
 .strategy-card__mode strong {
   color: var(--color-simulation);
+}
+
+.strategy-card__budget {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  background: var(--color-simulation-soft);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-caption);
+}
+
+.strategy-card__budget div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+}
+
+.strategy-card__budget dt {
+  color: var(--color-text-secondary);
+}
+
+.strategy-card__budget dd {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
 }
 
 .strategy-card__toggle-status {

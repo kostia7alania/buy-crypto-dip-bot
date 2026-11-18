@@ -1,56 +1,80 @@
-# Product model and delivery strategy
+# Product direction: Telegram-first spot buying
 
-Reviewed: 2026-09-14. Source scope: [project status](23_PROJECT_STATUS.md).
+Updated: 2026-11-16. This document describes the intended product and research
+priorities, not a claim that the product is ready for public or live use.
+[Project status](23_PROJECT_STATUS.md) owns the implementation and release
+verdict; `DRY_RUN` remains the default and live trading is not yet implemented.
 
-## Product today
+## Customer problem and product hypothesis
 
-A self-hosted spot dip simulator for people who want to inspect automation
-before considering real exchange execution. Telegram is the interaction and
-notification surface; the Safety Ledger explains configured limits, decisions
-and local outcomes. `DRY_RUN`, backtest, benchmark context and auditability
-are the current product. No hosted tariff, SLA or private exchange execution
-is offered by this record.
+A person who accumulates crypto wants to set a buying plan, understand what it
+can spend, and avoid watching the market all day. The proposed product is a
+Telegram-first assistant that applies the customer's chosen spot-buying rules,
+explains decisions, and lets them pause. Web is a second view of the same
+account for configuration, history, and research. The intended destination is
+real-money spot buying, subject to explicit activation and release readiness.
 
-## Recorded direction
+This is a hypothesis: demand, willingness to pay, retention, ease of use and
+superiority over existing alternatives are not established. Do not market a
+predictive edge, future returns or live execution as accomplished facts.
 
-The approved 2026-08-20 cost-first decision keeps one Nuxt application:
-prerender public pages, render the private dashboard in the browser, and keep
-a dynamic server-only BFF. The target uses Hono Workers, Supabase PostgreSQL
-and Auth, Telegram webhook/OIDC, and bounded Cron/Queue work.
+## Smallest target product
 
-A small MVP may fit provider free allowances, but domain-only running cost is
-a hypothesis. Database capacity/egress, CPU, queue retries, backups and
-availability can require paid infrastructure. The dated assumptions are in
-[the cost-first source document](15_COST_FIRST_SAAS_STRATEGY.md); verify vendor
-limits before sizing or cutover.
+1. One account using Telegram identity across the bot and web. A private bot
+   `/start` is separately needed for messages; identity is not notification
+   consent or exchange authorization.
+2. One exchange, Bybit spot, and the reviewed symbols in shared configuration.
+   No derivatives, leverage, withdrawals, transfers or meme coins.
+3. One understandable buying rule with amount, explicit spending limits,
+   cooldown, an activation preview, pause, status, and decision history.
+4. Telegram for onboarding, status, notifications and pause; web for larger
+   configuration and history views. Both use the same tenant and strategy.
+5. A separately authorized exchange connection before live use. Investigate
+   Bybit's AI Subaccount and Broker OAuth eligibility as well as scoped API
+   keys. Never solicit secrets through ordinary Telegram messages; isolate
+   credentials per tenant, protect encryption keys separately, and verify the
+   actual permissions. An exchange connection is not implemented today.
+6. Before any real order, implement and independently verify durable order
+   identity, bounded budgets, state reconciliation after ambiguous responses,
+   security, and recovery. Keep automatic live trading disabled by default.
 
-## Monetization hypothesis
+Do not block customer discovery on a platform migration. Defer additional
+exchanges, speculative SEO expansion, cloud rewrites, a strategy marketplace,
+and ML-driven live execution until there is a specific validated need. Retain
+existing code and audit history until removal is scoped and dependencies are
+checked; deferral is not a deletion instruction.
 
-First validate whether people return to inspect their simulated decisions.
-A future hosted subscription would charge for managed operation, useful
-history/export and reliable notification/recovery, subject to measured
-support and infrastructure costs. Pricing interviews and packaging tests are
-open work. No price, conversion result, user count or revenue is established
-by repository implementation.
+## Historical research and prediction
 
-Do not monetize bypassing risk controls or add custody, performance fees,
-leverage, meme coins or a strategy marketplace to this MVP.
+Research runs separately from the trading executor. Start with Bybit spot
+historical candles and compare the current dip rule to a simple DCA baseline.
+Document the instrument, data source, coverage, missing data, identical capital
+and contribution schedule, execution assumptions, fees and slippage scenarios.
+Measure total portfolio value including remaining cash and drawdown, not just
+the average purchase price.
 
-## Delivery order
+Use chronological train/validation windows and a final untouched holdout; never
+train on later observations or use an unfinished candle as settled history.
+Record the number of parameter and model trials to expose selection bias.
+First assess price/volume features; evaluate timestamped news as an incremental
+feature against the same baseline. Article availability and model training
+cutoff matter. Correlation does not establish causation, and a historical
+result does not prove future profitability. A model may be informative without
+being suitable for live execution.
 
-1. Completed locally: recovered safety fixes and preserved their evidence.
-2. Completed locally: converge personal tenants/RLS with recovery sessions,
-   immutable audit, market policy, notification hardening and dashboard snapshot.
-3. Prove the resulting revision and catalog, browser identity transitions,
-   operations and deployment readiness. Gate 1 must have one explicit verdict.
-4. Implement the cost-first runtime in bounded slices and verify a single
-   scheduler/bot delivery mode during cutover.
-5. Run customer discovery and measure healthy dry-run use with actual evidence
-   viewing. Hosted pricing remains unannounced until supported by evidence.
-6. Consider Bybit Demo, then any closed live pilot, only through their separate
-   safety and external approval gates. Live execution stays unavailable.
+Sources: [Bybit spot candles](https://bybit-exchange.github.io/docs/v5/market/kline),
+[GDELT data](https://www.gdeltproject.org/data.html), and
+[time-ordered validation](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.TimeSeriesSplit.html).
 
-The [backlog](../tasks/00_MASTER_PLAN.md) owns priorities. The old single-user
-"next three months" timeline and competitor price claims are historical
-research, not today's plan. Weeks of healthy use and returning evidence
-viewers are proposed success metrics; first-party reporting is still pending.
+## Positioning and competition
+
+Candidate promise, to validate with actual users: "Set a spot buying plan and
+see what the bot did, why, and how much of your budget remains." Bybit already
+offers [AI-assisted trading](https://www.bybit.com/en/help-center/article/Introduction-to-Bybit-AI)
+and a [Telegram market assistant](https://www.bybit.com/en/help-center/article/Introduction-to-Bybit-TradeGPT-Telegram-Bot).
+Telegram, AI, and historical optimization alone are not a proven advantage.
+Compare the actual experience and coverage before claiming differentiation.
+
+No price, conversion result, user count, revenue, SLA, or hosted launch is
+established. Current capability and public claims must follow the reviewed
+revision and [claims registry](21_CLAIMS_REGISTRY.md).

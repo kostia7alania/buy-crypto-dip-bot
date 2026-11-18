@@ -10,11 +10,11 @@ const features = [
   },
   {
     title: "Cooldown between buys",
-    body: "A configurable cooldown stops the bot from firing repeatedly during the same dip.",
+    body: "A configurable cooldown sets a minimum interval between simulated buys; a continuing dip can trigger another buy later.",
   },
   {
-    title: "Dry-run proof",
-    body: "Validate the dip-buying edge on live prices with simulated orders — the only kind the bot places today.",
+    title: "Test the rule",
+    body: "Inspect dip-buying decisions on observed prices with simulated orders.",
   },
 ];
 const steps = [
@@ -38,7 +38,7 @@ const steps = [
 const faqs = [
   {
     q: "What is a dip-buying bot?",
-    a: "A bot that automatically buys an asset when its price drops by a set amount from a recent high, removing hesitation and emotion from the decision.",
+    a: "A dip-buying bot acts when an asset falls by a set amount from a recent high. This product currently simulates those buys.",
   },
   {
     q: "How is this different from a grid bot?",

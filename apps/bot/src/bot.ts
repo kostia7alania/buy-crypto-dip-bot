@@ -5,8 +5,9 @@ import type {
   PerformanceReport,
   PnlReport,
 } from "@buy-crypto-dip-bot/shared-types";
-import { and, eq, gte, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { Bot } from "grammy";
+import * as v from "valibot";
 import {
   type BotCaller,
   getSessionTokenFor,
@@ -15,6 +16,7 @@ import {
 } from "./caller.js";
 import {
   bindPrivateNotificationTarget,
+  getOwnedSimulationStatus,
   toggleOwnedStrategy,
   updateOwnedStrategyConfig,
 } from "./command.repository.js";
@@ -29,12 +31,22 @@ import {
   claimOwnedPendingOrder,
   setEnabledForCaller,
 } from "./order.repository.js";
-import { renderPerformanceReport, renderPnlReport } from "./reports.js";
+import {
+  isBudgetReportStale,
+  latestRiskDecisionReportSchema,
+  renderLatestRiskDecision,
+  renderPerformanceReport,
+  renderPnlReport,
+  renderStrategyBudgetReport,
+  strategyBudgetReportSchema,
+} from "./reports.js";
 import { fetchServiceApi } from "./runtime-config.js";
 import {
   escapeTelegramHtml,
   escapeTelegramMarkdown,
 } from "./telegram-format.js";
+
+const USER_API_TIMEOUT_MS = 5_000;
 
 // Calls a user-scoped API route as the given caller. The service key proves
 // the request came from the bot; the session token names the human it is for.
@@ -48,6 +60,7 @@ const fetchAsUser = async (
   const token = await getSessionTokenFor(caller, correlationId);
   try {
     return await fetchServiceApi(path, {
+      signal: AbortSignal.timeout(USER_API_TIMEOUT_MS),
       ...init,
       headers: {
         ...init.headers,
@@ -62,6 +75,7 @@ const fetchAsUser = async (
     try {
       const revocation = await fetchServiceApi("/auth/logout", {
         method: "POST",
+        signal: AbortSignal.timeout(USER_API_TIMEOUT_MS),
         headers: {
           "x-user-session": token,
           "x-request-id": correlationId,
@@ -138,64 +152,80 @@ export const createBot = (token: string) => {
   });
 
   bot.command("status", async (ctx) => {
-    const caller = await requireCaller(ctx);
-    if (!caller) return;
-
     try {
-      const db = getDb();
-
-      // 1. This caller's active strategies
-      const activeStrategies = await db
-        .select()
-        .from(schema.strategies)
-        .where(
-          and(
-            eq(schema.strategies.userId, caller.id),
-            eq(schema.strategies.enabled, true),
-          ),
-        );
-
-      // 2. This caller's orders & spend in the last 24h
-      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      const ordersToday = await db
-        .select()
-        .from(schema.orders)
-        .where(
-          and(
-            eq(schema.orders.userId, caller.id),
-            eq(schema.orders.status, "COMPLETED"),
-            gte(schema.orders.createdAt, oneDayAgo),
-          ),
-        );
-
-      const dailySpentResult = await db
-        .select({
-          sum: sql<string>`sum(cast(${schema.orders.quoteAmount} as numeric))`,
-        })
-        .from(schema.orders)
-        .where(
-          and(
-            eq(schema.orders.userId, caller.id),
-            eq(schema.orders.status, "COMPLETED"),
-            gte(schema.orders.createdAt, oneDayAgo),
-          ),
-        );
-
-      const spentToday = Number(dailySpentResult[0]?.sum ?? "0");
+      const caller = await requireCaller(ctx);
+      if (!caller) return;
+      const status = await getOwnedSimulationStatus(getDb(), caller.id);
+      const amount =
+        status.amountUsdt === null
+          ? "Unavailable"
+          : `${status.amountUsdt} USDT`;
 
       const msg =
-        `📊 *Buy Crypto Dip Bot Status (Last 24h)*\n\n` +
-        `• *Mode:* \`DRY_RUN\`\n` +
-        `• *Live Trading:* \`Disabled\`\n` +
-        `• *Active Strategies:* \`${activeStrategies.length}\`\n` +
-        `• *Orders Executed (24h):* \`${ordersToday.length}\`\n` +
-        `• *USDT Spent (24h):* \`${spentToday.toFixed(2)} USDT\``;
+        `📊 *Simulation status* (\`DRY_RUN\`)\n\n` +
+        `• Enabled strategies — ${status.enabledStrategies}\n` +
+        `• Simulated buys completed (past 24h) — ${status.completedBuys}\n` +
+        `• Simulated buy amount (past 24h) — ${amount}\n\n` +
+        `_Older records use order creation time._`;
 
       return ctx.reply(msg, { parse_mode: "Markdown" });
     } catch (error) {
       logBotError("STATUS_COMMAND_FAILED", error, ctx.update.update_id);
       return ctx.reply(
-        "❌ Failed to query database status. Is Postgres running?",
+        "❌ Simulation status is unavailable. Try /status again.",
+      );
+    }
+  });
+
+  bot.command("budget", async (ctx) => {
+    try {
+      const caller = await requireCaller(ctx);
+      if (!caller) return;
+      const response = await fetchAsUser(
+        caller,
+        "/strategies/budget",
+        ctx.update.update_id,
+      );
+      if (!response.ok) throw new Error(`API ${response.status}`);
+      const budget = v.parse(strategyBudgetReportSchema, await response.json());
+      if (isBudgetReportStale(budget, Date.now())) {
+        logBotEvent("STRATEGY_BUDGET_STALE", "WARN", ctx.update.update_id);
+        return ctx.reply(
+          "⚠️ Simulation budget is out of date. Try /budget again.",
+        );
+      }
+      for (const message of renderStrategyBudgetReport(budget)) {
+        await ctx.reply(message, { parse_mode: "HTML" });
+      }
+    } catch (error) {
+      logBotError("BUDGET_COMMAND_FAILED", error, ctx.update.update_id);
+      return ctx.reply(
+        "❌ Simulation budget is unavailable. Try /budget again.",
+      );
+    }
+  });
+
+  bot.command("decision", async (ctx) => {
+    try {
+      const caller = await requireCaller(ctx);
+      if (!caller) return;
+      const response = await fetchAsUser(
+        caller,
+        "/audit/decisions/latest",
+        ctx.update.update_id,
+      );
+      if (!response.ok) throw new Error(`API ${response.status}`);
+      const report = v.parse(
+        latestRiskDecisionReportSchema,
+        await response.json(),
+      );
+      return ctx.reply(renderLatestRiskDecision(report), {
+        parse_mode: "HTML",
+      });
+    } catch (error) {
+      logBotError("DECISION_COMMAND_FAILED", error, ctx.update.update_id);
+      return ctx.reply(
+        "❌ Latest risk decision is unavailable. Try /decision again.",
       );
     }
   });
@@ -351,9 +381,7 @@ export const createBot = (token: string) => {
     }
   });
 
-  // Kill switch: instantly pause the caller's own strategies (audited).
-  // Scoped to one user on purpose — a kill switch that stops other people's
-  // bots would be a denial-of-service button, not a safety feature.
+  // Pause and audit only the caller's strategies. Pending buys settle separately.
   bot.command("pause_all", async (ctx) => {
     const caller = await requireCaller(ctx);
     if (!caller) return;
@@ -366,7 +394,9 @@ export const createBot = (token: string) => {
         botCorrelationId(ctx.update.update_id),
       );
       return ctx.reply(
-        `⏸ *Your strategies are paused* (${count}).\nNo new orders will be created. Resume with /resume_all`,
+        `⏸ *Your strategies are paused* (${count}).\n` +
+          `Pending simulated buys can still complete. To stop one, use Cancel on its alert.\n` +
+          `Resume with \`/resume_all\`.`,
         { parse_mode: "Markdown" },
       );
     } catch (error) {
@@ -898,7 +928,9 @@ export const createBot = (token: string) => {
       `👋 Hello! I am the Buy Crypto Dip Bot.\n\n` +
         `I only respond to commands. Please use:\n` +
         `• /start - Get your Chat ID and start instructions\n` +
-        `• /status - View real-time DCA trading stats\n` +
+        `• /status - View your simulated activity\n` +
+        `• /decision - View your last recorded risk decision\n` +
+        `• /budget - View your simulated budget\n` +
         `• /settings - Show and edit configurations\n` +
         `• /add_pair - Add a custom coin (e.g. LTCUSDT)`,
     );
@@ -922,14 +954,22 @@ export const registerBotCommands = async (bot: Bot, signal: AbortSignal) => {
         { command: "performance", description: "Dip strategy vs benchmarks" },
         {
           command: "pause_all",
-          description: "Kill switch: pause all strategies",
+          description: "Pause all your strategies",
         },
         { command: "resume_all", description: "Resume all strategies" },
         {
           command: "price",
           description: "Current price & dip % (e.g. /price ETHUSDT)",
         },
-        { command: "status", description: "Show current trading statistics" },
+        { command: "status", description: "Show your simulated activity" },
+        {
+          command: "decision",
+          description: "Show your last recorded risk decision",
+        },
+        {
+          command: "budget",
+          description: "Show your simulated strategy budget",
+        },
         { command: "settings", description: "Show and edit configurations" },
         { command: "toggle", description: "Enable/disable strategy execution" },
         {

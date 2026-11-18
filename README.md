@@ -12,7 +12,7 @@ exchange credentials.
 - [Product model](docs/14_PRODUCT_STRATEGY.md) and [architecture](docs/02_ARCHITECTURE.md).
 - [Cost-first target from main](docs/15_COST_FIRST_SAAS_STRATEGY.md).
 - [Plans and historical evidence](PLANS.md).
-- [Краткое введение на русском](README_FIRST_RU.md).
+- [Краткое введение на русском](docs/README_RU.md).
 
 The recovery and cost-first histories now have guarded forward convergence.
 Personal tenants/RLS, the private dashboard snapshot and immutable release

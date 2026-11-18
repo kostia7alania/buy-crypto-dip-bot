@@ -1,5 +1,12 @@
 # AGENTS.md
 
+## Project context
+
+Read `docs/00_CONTEXT.md`, `docs/01_PRODUCT_SPEC.md`, `docs/02_ARCHITECTURE.md`,
+`docs/04_RISK_POLICY.md`, `docs/09_AGENT_WORKFLOW.md`, and `PLANS.md` for
+project context and the relevant workflow. Use `.codex/skills/*` when a task
+matches a project skill.
+
 ## Non-negotiable rules
 
 - Risk-first crypto automation SaaS.

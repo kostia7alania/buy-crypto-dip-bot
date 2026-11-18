@@ -248,7 +248,7 @@ const announceJourney = async (message: string) => {
             a forecast.
           </p>
         </header>
-        <StrategyListWidget :strategies="snapshot?.strategies ?? []" :error="error" :status="status" @announce="announceJourney" @mutated="refreshDashboard" />
+        <StrategyListWidget :strategies="snapshot?.strategies ?? []" :budget="snapshot?.budget" :error="error" :status="status" @announce="announceJourney" @mutated="refreshDashboard" />
       </section>
 
       <section
@@ -266,7 +266,14 @@ const announceJourney = async (message: string) => {
             not treated as either outcome.
           </p>
         </header>
-        <AuditFeedWidget :audit="snapshot?.audit" :error="error" :status="status" :updated-at="snapshot?.generatedAt" @refresh="refreshDashboard" />
+        <AuditFeedWidget
+          :audit="snapshot?.audit"
+          :omitted="snapshot?.auditOmitted"
+          :error="error"
+          :status="status"
+          :updated-at="snapshot?.generatedAt"
+          @refresh="refreshDashboard"
+        />
       </section>
 
       <section

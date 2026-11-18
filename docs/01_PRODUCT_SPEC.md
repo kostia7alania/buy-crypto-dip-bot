@@ -24,6 +24,24 @@ The product does not promise profit, exchange fills or loss prevention.
 
 ## Constraints and honest limitations
 
+The newer [MVP delivery](../plans/016-telegram-mvp-delivery.md) adds a
+read-only per-strategy budget to the dashboard and Telegram `/budget`.
+The report shows remaining allowance for rolling 24-hour and 7-day windows
+and the active reservation amount. Completed simulations count at the time
+their hold was consumed, with the stored creation time used for legacy
+orders without a hold. Active holds count against each window. Lowered limits
+can leave zero allowance. A missing cap or report is shown as unavailable.
+The report is timestamped and a nonzero amount does not approve a buy.
+
+The dashboard decision history summarizes recorded risk approvals and
+rejections and simulated completions. The underlying audit record remains
+inspectable. Telegram `/decision` shows the latest recorded risk approval
+or rejection. Pausing stops new signals. A pending simulation can still
+complete unless canceled separately.
+
+The bullets below describe the original September recovery scope.
+[Project status](23_PROJECT_STATUS.md) records the later reservation lifecycle.
+
 - Reviewed symbols are BTCUSDT, ETHUSDT and SOLUSDT. Environment configuration
   can narrow the list. Unsupported historical orders cannot complete, but can
   still be cancelled without erasing history.

@@ -116,7 +116,8 @@ export const tenantDatabaseMiddleware =
         await next();
         if (c.error) throw c.error;
       },
-      c.req.path === "/dashboard/snapshot"
+      c.req.path === "/dashboard/snapshot" ||
+        c.req.path === "/strategies/budget"
         ? { isolationLevel: "repeatable read", accessMode: "read only" }
         : undefined,
     );

@@ -2,7 +2,7 @@
 const features = [
   {
     title: "Built for Bitcoin",
-    body: "Accumulate BTC on dips with a rule you control — threshold, size and limits — instead of guessing the bottom.",
+    body: "Simulate accumulating BTC on dips with a rule you control — threshold, size and limits.",
   },
   {
     title: "Spot only, no leverage",
@@ -32,7 +32,7 @@ const steps = [
   },
   {
     title: "Watch it stack",
-    body: "Track average cost basis and unrealized PnL on your BTC position.",
+    body: "Track the average cost basis and unrealized PnL of your simulated BTC position.",
   },
 ];
 const faqs = [
@@ -65,7 +65,7 @@ const faqs = [
     title="Bitcoin DCA Bot — Simulate BTC Dip Rules"
     description="A dry-run Bitcoin DCA bot for simulating BTCUSDT dip rules using public Bybit prices, configured spend caps and optional Telegram delivery. No leverage or live orders."
     headline="Inspect a Bitcoin dip rule before trusting it"
-    subheadline="Automate BTC dollar-cost averaging with strict limits and a simulation-first workflow — spot only, no leverage, no drama."
+    subheadline="Explore BTC dip averaging with configured limits and simulated orders — spot only, no leverage."
     :features="features"
     :steps="steps"
     :faqs="faqs"
