@@ -56,6 +56,18 @@ jobs:
           RESTORE_CONTAINER: ${{ job.services.restore.id }}
         run: |
           set -Eeuo pipefail
+          docker exec -i "$SOURCE_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d dipbot_rehearsal_source <<'SQL'
+          INSERT INTO users (telegram_user_id) VALUES ('roundtrip-fixture') RETURNING id AS owner \gset
+          INSERT INTO strategies (user_id, name, symbol, config)
+            VALUES (:'owner', 'Round trip', 'BTCUSDT', '{}') RETURNING id AS strategy \gset
+          INSERT INTO orders (user_id, strategy_id, symbol, side, quote_amount, price, status)
+            VALUES (:'owner', :'strategy', 'BTCUSDT', 'BUY', 12.345, 12345, 'COMPLETED');
+          INSERT INTO audit_events (schema_version, scope, actor_kind, actor_channel, user_id,
+            entity_type, entity_id, action, reason_code, correlation_id, payload_class, payload)
+            VALUES (1, 'USER', 'SYSTEM', 'RUNNER', :'owner', 'STRATEGY', :'strategy', 'RISK_DECISION_REJECTED',
+              'RISK_POLICY_REJECTED', 'roundtrip_fixture', 'TENANT_FINANCIAL',
+              '{"mode":"DRY_RUN","policyVersion":"RISK_V1","reasonCodes":["DAILY_LIMIT_EXCEEDED"]}');
+          SQL
           docker exec "$SOURCE_CONTAINER" pg_dump -U postgres -d dipbot_rehearsal_source --format=custom --no-owner |
             docker exec -i "$RESTORE_CONTAINER" pg_restore --exit-on-error --no-owner -U postgres -d dipbot_rehearsal_restore
       - run: node packages/db/scripts/rehearse-restore.mjs

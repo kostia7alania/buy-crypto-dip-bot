@@ -52,8 +52,8 @@ only after its work and verification are recorded in the log below.
 | MVP-13 | P1 | Support/SRE and project owner | MVP-08, before MVP-11 | Name a human support owner, rehearse first response and incident stop, document how a pilot user reports a disputed decision | Procedure drafted. Rehearsal pending |
 | MVP-14 | P1 | Product analytics/GTM | MVP-11 | Review completed setup, observed repeat use in closed 14-day cohorts, support load and reasons to continue or cut scope | Gated |
 | MVP-15 | P0 | API, Telegram | MVP-04 | `/decision` shows the most recently recorded owned risk decision, reason and time. Empty and unavailable states are distinct | Local API and bot checks pass |
-| MVP-16 | P0 | QA/SRE, integration | MVP-07 | Draft release PR passes source and native PostgreSQL 18 contracts on the exact candidate | In progress |
-| MVP-17 | P0 | QA/SRE, security | MVP-07 | Rehearsal restores the supported destination lineages in isolation, including the runtime role and its restricted access | In progress |
+| MVP-16 | P0 | QA/SRE, integration | MVP-07 | Draft release PR passes source and native PostgreSQL 18 contracts on the exact candidate | [PR #4](https://github.com/kostia7alania/buy-crypto-dip-bot/pull/4) |
+| MVP-17 | P0 | QA/SRE, security | MVP-07 | Rehearsal restores the supported destination lineages in isolation, including the runtime role and its restricted access | Synthetic restore contract added. Destination rehearsal pending |
 
 MVP-04 and MVP-05 can ship as local, reversible improvements while source
 validation and customer discovery proceed. MVP-06 must use the runner's
@@ -111,6 +111,8 @@ establish whether the runner skipped an evaluation.
   command behavior. Fixed negative legacy commitments, future-dated status
   counts and omitted audit disclosure before the final check.
 - 2026-11-18: release work started from main at `5316cea`. A pinned SSH probe
-  was blocked before reaching the VPS. Review identified a restore gap for
-  dumps that already reference the restricted runtime role. Native contracts
-  and the synthetic restore are candidates for private-data-free PR checks.
+  from the workspace was blocked before reaching the VPS. Review identified a
+  restore gap for dumps that already reference the restricted runtime role.
+  The restore now creates non-login roles in a fresh cluster, preserves ACLs,
+  verifies the guarded migrator with a temporary credential and checks tenant
+  visibility. The synthetic PR job uses two disposable PostgreSQL 18 clusters.
