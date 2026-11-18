@@ -1,3 +1,4 @@
+import type { StrategyBudgetReport } from "@buy-crypto-dip-bot/shared-types";
 import type { AuditLog } from "../audit/index.js";
 import type { Order } from "../order/index.js";
 import type { PerformanceReport } from "../performance/index.js";
@@ -20,8 +21,10 @@ export interface DashboardSnapshot {
   generatedAt: string;
   risk: DashboardRiskStatus;
   strategies: Strategy[];
+  budget?: StrategyBudgetReport;
   orders: DashboardOrder[];
   audit: AuditLog[];
+  auditOmitted?: number;
   pnl: PnlReport;
   performance: PerformanceReport;
 }

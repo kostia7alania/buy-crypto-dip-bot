@@ -1,5 +1,9 @@
 # Codex Task 0 — Production-first scaffold completion
 
+> Historical task, retained for context only. This is not current project
+> guidance. Its SQLite instructions were superseded: use PostgreSQL everywhere
+> as required by [AGENTS.md](../../AGENTS.md) and ADR 002.
+
 ## Goal
 
 Inspect this repository and complete the production-first scaffold without breaking architecture rules.

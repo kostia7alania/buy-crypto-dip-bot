@@ -3,6 +3,7 @@ import type {
   TwoTenantWorld,
 } from "@buy-crypto-dip-bot/db/testing";
 import { createTestDb, seedTwoTenants } from "@buy-crypto-dip-bot/db/testing";
+import type { StrategyBudgetReport } from "@buy-crypto-dip-bot/shared-types";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { getDb } from "../../db.js";
@@ -122,6 +123,39 @@ describe("read isolation", () => {
     );
   });
 
+  it("reports only the session owner's strategy budgets and never caches the read", async () => {
+    for (const [token, tenant, daily, weekly, held] of [
+      [aliceToken, world.alice, 100, 800, 100],
+      [bobToken, world.bob, 0, 0, 700],
+    ] as const) {
+      const response = await createApp().request(
+        "/strategies/budget",
+        asUser(token, { headers: { "x-dipbot-user-id": world.bob.userId } }),
+      );
+      expect(response.status).toBe(200);
+      expect(response.headers.get("cache-control")).toBe("private, no-store");
+      const body = await json<StrategyBudgetReport>(response);
+      expect(Number.isFinite(Date.parse(body.asOf))).toBe(true);
+      expect(body.strategies).toEqual([
+        {
+          strategyId: tenant.sharedSymbolStrategyId,
+          symbol: "BTCUSDT",
+          dailyRemainingUsdt: daily,
+          weeklyRemainingUsdt: weekly,
+          activeReservedUsdt: held,
+        },
+        {
+          strategyId: tenant.ownSymbolStrategyId,
+          symbol: tenant === world.alice ? "ETHUSDT" : "SOLUSDT",
+          dailyRemainingUsdt: 300,
+          weeklyRemainingUsdt: 1000,
+          activeReservedUsdt: 0,
+        },
+      ]);
+    }
+    expect((await createApp().request("/strategies/budget")).status).toBe(401);
+  });
+
   it("lists only the caller's own orders", async () => {
     const res = await createApp().request("/orders", asUser(aliceToken));
     const rows = await json<OwnedRow[]>(res);
@@ -170,11 +204,15 @@ describe("dashboard snapshot isolation", () => {
       expect(response.headers.get("cache-control")).toBe("private, no-store");
       const body = await json<{
         schemaVersion: number;
+        budget: StrategyBudgetReport;
         strategies: OwnedRow[];
         orders: OwnedRow[];
         audit: OwnedRow[];
       }>(response);
       expect(body.schemaVersion).toBe(1);
+      expect(body.budget.strategies.map((s) => s.strategyId)).toEqual(
+        body.strategies.map((s) => s.id),
+      );
       expect(body.strategies.length).toBeGreaterThan(0);
       for (const rows of [body.strategies, body.orders, body.audit]) {
         expect(rows.every((row) => row.userId === ownId)).toBe(true);
@@ -838,5 +876,114 @@ describe("Telegram Login presentation lifecycle", () => {
       if (previousBotToken === undefined) delete process.env.TELEGRAM_BOT_TOKEN;
       else process.env.TELEGRAM_BOT_TOKEN = previousBotToken;
     }
+  });
+});
+
+describe("last recorded risk decision", () => {
+  const path = "/audit/decisions/latest";
+  it("keeps the latest typed record owned, including pre-provenance rejections", async () => {
+    const { auditEventRow, schema } = await import("@buy-crypto-dip-bot/db");
+    const [user] = await harness.db
+      .insert(schema.users)
+      .values({ telegramUserId: "decision-test" })
+      .returning();
+    if (!user) throw new Error("test user missing");
+    const { token } = await issueSession(appDb(), user.id);
+    const app = createApp();
+    const read = () =>
+      app.request(
+        path,
+        asUser(token, { headers: { "x-dipbot-user-id": world.bob.userId } }),
+      );
+    expect((await app.request(path)).status).toBe(401);
+    const empty = await read();
+    expect(empty.status).toBe(200);
+    expect(await empty.json()).toEqual({ decision: null });
+
+    const recorded = new Date(Date.now() - 3600_000);
+    const rejected = auditEventRow({
+      schemaVersion: 1,
+      type: "RISK_DECISION_REJECTED",
+      scope: "USER",
+      userId: user.id,
+      actor: { kind: "SYSTEM", channel: "RUNNER" },
+      reasonCode: "RISK_POLICY_REJECTED",
+      correlationId: "latest_rejected_test",
+      subject: { type: "STRATEGY", id: world.alice.ownSymbolStrategyId },
+      payloadClass: "TENANT_FINANCIAL",
+      payload: {
+        mode: "DRY_RUN",
+        policyVersion: "RISK_V1",
+        reasonCodes: ["DAILY_LIMIT_EXCEEDED"],
+      },
+    });
+    await harness.db
+      .insert(schema.auditEvents)
+      .values({ ...rejected, createdAt: recorded });
+    // The ordinary chronological feed is bounded to 100. Unrelated activity
+    // cannot displace the most recent recorded decision from this endpoint.
+    const updated = auditEventRow({
+      schemaVersion: 1,
+      type: "STRATEGY_UPDATED",
+      scope: "USER",
+      userId: user.id,
+      actor: { kind: "USER", channel: "WEB", userId: user.id },
+      reasonCode: "USER_REQUESTED",
+      correlationId: "latest_unrelated_test",
+      subject: { type: "STRATEGY", id: world.alice.ownSymbolStrategyId },
+      payloadClass: "TENANT_CONFIGURATION",
+      payload: { fields: ["enabled"] },
+    });
+    await harness.db
+      .insert(schema.auditEvents)
+      .values(Array.from({ length: 101 }, () => updated));
+    const response = await read();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(await response.json()).toEqual({
+      decision: {
+        type: "RISK_DECISION_REJECTED",
+        createdAt: recorded.toISOString(),
+        symbol: null,
+        reasonCodes: ["DAILY_LIMIT_EXCEEDED"],
+      },
+    });
+
+    const bobSession = await issueSession(appDb(), world.bob.userId);
+    const approval = await app.request(path, asUser(bobSession.token));
+    expect(await approval.json()).toEqual({
+      decision: {
+        type: "RISK_DECISION_APPROVED",
+        createdAt: expect.any(String),
+        symbol: "BTCUSDT",
+        reasonCodes: [],
+      },
+    });
+    // A malformed newest decision must not produce a stale approval or "no record".
+    await harness.db.insert(schema.auditEvents).values({
+      ...rejected,
+      payload: { mode: "DRY_RUN", reasonCodes: ["UNVERIFIED"] },
+    });
+    const invalid = await read();
+    expect(invalid.status).toBe(503);
+    expect(await invalid.json()).toEqual({
+      error: "RISK_DECISION_UNAVAILABLE",
+    });
+
+    const snapshot = await app.request("/dashboard/snapshot", asUser(token));
+    expect(snapshot.status).toBe(200);
+    const history = await json<{ auditOmitted: number; audit: OwnedRow[] }>(
+      snapshot,
+    );
+    expect(history.auditOmitted).toBe(1);
+    expect(history.audit).toHaveLength(99);
+    expect(JSON.stringify(history)).not.toContain("UNVERIFIED");
+    const feed = await app.request("/audit", asUser(token));
+    expect(await feed.json()).toEqual(history.audit);
+    const other = await app.request(
+      "/dashboard/snapshot",
+      asUser(bobSession.token),
+    );
+    expect((await json<{ auditOmitted: number }>(other)).auditOmitted).toBe(0);
   });
 });

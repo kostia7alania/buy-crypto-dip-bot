@@ -40,9 +40,23 @@ describe("dashboard BFF contract", () => {
   });
   it("forwards the opaque session and prevents caching the private response", async () => {
     mocks.caller.mockResolvedValue({ apiSessionToken: "opaque-test-session" });
+    const budget = {
+      asOf: "2026-11-18T10:00:00.000Z",
+      strategies: [
+        {
+          strategyId: "owned",
+          symbol: "BTCUSDT",
+          dailyRemainingUsdt: 0,
+          weeklyRemainingUsdt: null,
+          activeReservedUsdt: 10,
+        },
+      ],
+    };
     mocks.fetch.mockResolvedValue({
       schemaVersion: 1,
       strategies: [{ id: "owned" }],
+      budget,
+      auditOmitted: 1,
       risk: { mode: "DRY_RUN" },
     });
     const request = event();
@@ -59,6 +73,8 @@ describe("dashboard BFF contract", () => {
     expect(request.node.res.setHeader).toHaveBeenCalledWith("vary", "Cookie");
     expect(result).toMatchObject({
       strategies: [{ id: "owned" }],
+      budget,
+      auditOmitted: 1,
       risk: { mode: "DRY_RUN", apiReachable: true },
     });
   });

@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import type { StrategyBudgetReport } from "@buy-crypto-dip-bot/shared-types";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import {
   createStrategy,
+  getBudgetReadState,
   type Strategy,
   type StrategyConfigData,
   updateStrategy,
@@ -14,9 +16,33 @@ const emit = defineEmits<{
 
 const props = defineProps<{
   strategies: readonly Strategy[];
+  budget?: StrategyBudgetReport;
   error?: unknown;
   status?: string;
 }>();
+
+const now = ref(Date.now());
+const updateClock = () => {
+  now.value = Date.now();
+};
+let clock: ReturnType<typeof setInterval> | undefined;
+onMounted(() => {
+  clock = setInterval(updateClock, 5_000);
+  document.addEventListener("visibilitychange", updateClock);
+});
+onUnmounted(() => {
+  clearInterval(clock);
+  document.removeEventListener("visibilitychange", updateClock);
+});
+const budgetState = computed(() =>
+  getBudgetReadState(props.budget, now.value, Boolean(props.error)),
+);
+const budgetByStrategy = computed(
+  () =>
+    new Map(
+      props.budget?.strategies.map((budget) => [budget.strategyId, budget]),
+    ),
+);
 
 // Editing state for strategy config
 const editingId = ref<string | null>(null);
@@ -148,7 +174,7 @@ const addCustomPair = async () => {
     <p v-if="props.error" role="alert">Strategies could not be refreshed. Retry before changing limits.</p>
     <p v-else-if="props.status === 'pending' && !props.strategies.length" role="status">Loading strategies...</p>
     <div class="strategy-list__header-actions">
-      <h2 class="strategy-list__title">Active Trading Strategies</h2>
+      <h2 class="strategy-list__title">Strategies</h2>
       <!-- Add Custom Pair Form inline -->
       <form @submit.prevent="addCustomPair" class="strategy-list__add-form">
         <label class="strategy-list__field">
@@ -156,7 +182,7 @@ const addCustomPair = async () => {
           <UiInput
             v-model="newSymbol"
             type="text"
-            placeholder="e.g. LTCUSDT"
+            placeholder="e.g. BTCUSDT"
             class="strategy-list__add-input"
             aria-label="Trading pair symbol"
             required
@@ -178,11 +204,21 @@ const addCustomPair = async () => {
       {{ mutationStatus.message }}
     </p>
 
+    <p v-if="props.strategies.length" class="strategy-list__budget-note">
+      <template v-if="budgetState === 'current' && props.budget">
+        Simulated budget as of
+        <NuxtTime :datetime="props.budget.asOf" hour="2-digit" minute="2-digit" second="2-digit" />
+      </template>
+      <template v-else-if="budgetState === 'stale'">Budget snapshot expired. Waiting for a refresh.</template>
+      <template v-else>Current simulated budget is unavailable.</template>
+    </p>
+
     <div class="strategy-list__grid">
       <StrategyCard
         v-for="strategy in props.strategies"
         :key="strategy.id"
         :strategy="strategy"
+        :budget="budgetState === 'current' ? budgetByStrategy.get(strategy.id) : undefined"
         :is-editing="editingId === strategy.id"
         :edit-form="editForm"
         :is-toggling="togglingId === strategy.id"
@@ -219,6 +255,12 @@ const addCustomPair = async () => {
   font-size: 1.25rem;
   font-weight: 700;
   color: var(--color-text-primary);
+}
+
+.strategy-list__budget-note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
 }
 
 .strategy-list__add-form {

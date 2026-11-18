@@ -1,28 +1,45 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { AuditLog } from "~/entities/audit";
+import { type AuditLog, describeAuditLog } from "~/entities/audit";
 import { isUnauthenticated } from "~/shared/lib/http-error";
 
 const props = defineProps<{
   audit?: readonly AuditLog[];
+  omitted?: number;
   error?: unknown;
   status: "idle" | "pending" | "success" | "error";
   updatedAt?: string;
 }>();
 const emit = defineEmits<{ refresh: [] }>();
 
+const auditUnavailable = computed(
+  () =>
+    props.status === "error" ||
+    Boolean(props.error) ||
+    (props.status === "success" && !props.audit),
+);
+const auditLoading = computed(
+  () =>
+    props.status === "idle" ||
+    (props.status === "pending" &&
+      (auditUnavailable.value || !props.audit?.length)),
+);
 const errorMessage = computed(() =>
   isUnauthenticated(props.error)
     ? "Your session is no longer authorized. Sign in again before loading private decision evidence."
-    : "Decision evidence could not be loaded. No empty or successful state is inferred.",
+    : "Decision history is unavailable. Try again to load the records.",
 );
-const visibleAudit = computed(() => (props.error ? [] : (props.audit ?? [])));
-const retryAudit = () => emit("refresh");
+const records = computed(() =>
+  (props.audit ?? []).map((log) => ({ log, ...describeAuditLog(log) })),
+);
 </script>
 
 <template>
   <section class="audit-feed">
-    <h2 id="audit-feed-title" class="audit-feed__title">Audit Engine Feed</h2>
+    <h2 id="audit-feed-title" class="audit-feed__title">Decision history</h2>
+    <p v-if="!auditUnavailable && (props.omitted ?? 0) > 0" class="audit-feed__notice" role="status">
+      Some records could not be verified. The decision history may be incomplete.
+    </p>
     <div
       class="audit-feed__scroller"
       role="region"
@@ -30,30 +47,40 @@ const retryAudit = () => emit("refresh");
       :aria-busy="props.status === 'pending'"
       tabindex="0"
     >
-      <p v-if="props.status === 'pending' && !props.audit" class="audit-feed__empty">
-        Loading decision evidence…
-      </p>
-      <div v-else-if="props.error" class="audit-feed__empty audit-feed__error">
-        <p>{{ errorMessage }}</p>
-        <UiButton size="compact" @click="retryAudit">Retry decisions</UiButton>
+      <p v-if="auditLoading" class="audit-feed__empty">Loading decision evidence…</p>
+      <div v-else-if="auditUnavailable" class="audit-feed__empty audit-feed__error">
+        <p role="alert">{{ errorMessage }}</p>
+        <UiButton size="compact" @click="emit('refresh')">Retry decisions</UiButton>
       </div>
-      <p v-else-if="!props.audit || props.audit.length === 0" class="audit-feed__empty">
-        No decision records exist for this account yet.
+      <p v-else-if="records.length === 0" class="audit-feed__empty">
+        No verified decision records to show for this account.
       </p>
       <ol v-else class="audit-feed__list" role="list">
-        <li v-for="log in visibleAudit" :key="log.id" class="audit-feed__item">
+        <li v-for="{ log, label, explanation } in records" :key="log.id" class="audit-feed__item">
           <header class="audit-feed__item-header">
-            <span class="audit-feed__action" :class="`audit-feed__action--${log.type.toLowerCase()}`">
-              {{ log.type }}
+            <span
+              :id="`audit-event-${log.id}`"
+              class="audit-feed__action"
+              :class="`audit-feed__action--${log.type.toLowerCase()}`"
+            >
+              {{ label }}
             </span>
-            <span class="audit-feed__time">
-              <NuxtTime :datetime="log.createdAt" hour="2-digit" minute="2-digit" second="2-digit" />
-            </span>
+            <NuxtTime
+              class="audit-feed__time"
+              :datetime="log.createdAt"
+              year="numeric"
+              month="short"
+              day="numeric"
+              hour="2-digit"
+              minute="2-digit"
+              second="2-digit"
+            />
           </header>
-          <div class="audit-feed__payload">
-            <span class="audit-feed__payload-text">Subject: {{ log.subject.type }} ({{ log.subject.id.slice(0, 8) }}...)</span>
-            <pre class="audit-feed__json">{{ JSON.stringify(log.payload, null, 2) }}</pre>
-          </div>
+          <p v-if="explanation" class="audit-feed__explanation">{{ explanation }}</p>
+          <details class="audit-feed__evidence">
+            <summary :aria-describedby="`audit-event-${log.id}`">View audit record</summary>
+            <pre class="audit-feed__json">{{ JSON.stringify(log, null, 2) }}</pre>
+          </details>
         </li>
       </ol>
     </div>
@@ -62,6 +89,9 @@ const retryAudit = () => emit("refresh");
       <NuxtTime
         v-if="props.updatedAt"
         :datetime="props.updatedAt"
+        year="numeric"
+        month="short"
+        day="numeric"
         hour="2-digit"
         minute="2-digit"
         second="2-digit"
@@ -90,6 +120,12 @@ const retryAudit = () => emit("refresh");
   color: var(--color-text-primary);
 }
 
+.audit-feed__notice {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-caption);
+}
+
 .audit-feed__scroller {
   max-block-size: 32rem;
   overflow-y: auto;
@@ -98,7 +134,8 @@ const retryAudit = () => emit("refresh");
   overscroll-behavior: contain;
 }
 
-.audit-feed__scroller:focus-visible {
+.audit-feed__scroller:focus-visible,
+.audit-feed__evidence summary:focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 3px;
   box-shadow: var(--focus-ring);
@@ -138,10 +175,9 @@ const retryAudit = () => emit("refresh");
   padding: 0.125rem 0.375rem;
   border: 1px solid currentColor;
   border-radius: var(--radius-xs);
-  text-transform: uppercase;
 }
 
-.audit-feed__action--signal_approved {
+.audit-feed__action--risk_decision_approved {
   background: var(--color-success-soft);
   color: var(--color-success);
 }
@@ -151,7 +187,7 @@ const retryAudit = () => emit("refresh");
   color: var(--color-simulation);
 }
 
-.audit-feed__action--signal_rejected {
+.audit-feed__action--risk_decision_rejected {
   background: var(--color-danger-soft);
   color: var(--color-danger);
 }
@@ -162,9 +198,17 @@ const retryAudit = () => emit("refresh");
   font-family: var(--font-mono);
 }
 
-.audit-feed__payload-text {
-  font-size: 0.8125rem;
+.audit-feed__explanation {
+  margin: 0;
   color: var(--color-text-secondary);
+}
+
+.audit-feed__evidence summary {
+  padding-block: var(--space-2);
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  font-weight: 600;
 }
 
 .audit-feed__json {
@@ -176,8 +220,8 @@ const retryAudit = () => emit("refresh");
   font-family: var(--font-mono);
   font-size: var(--text-caption);
   color: var(--color-text-secondary);
-  overflow-x: auto;
-  max-block-size: 8rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .audit-feed__empty {
@@ -211,7 +255,8 @@ const retryAudit = () => emit("refresh");
 }
 
 @media (forced-colors: active) {
-  .audit-feed__scroller:focus-visible {
+  .audit-feed__scroller:focus-visible,
+  .audit-feed__evidence summary:focus-visible {
     outline: 3px solid Highlight;
     box-shadow: none;
   }

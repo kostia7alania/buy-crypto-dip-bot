@@ -2,7 +2,7 @@
 const features = [
   {
     title: "Automated dollar-cost averaging",
-    body: "Set a threshold and an amount, and the bot averages into dips for you — no manual timing, no emotional buys.",
+    body: "Set a threshold and an amount to simulate averaging into dips without timing each purchase manually.",
   },
   {
     title: "Simulation before real money",

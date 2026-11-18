@@ -1,8 +1,8 @@
 <script setup lang="ts">
 const features = [
   {
-    title: "Buys dips automatically",
-    body: "The bot measures the drop from the 24-hour high and buys when your threshold is hit — no staring at charts.",
+    title: "Detects dips automatically",
+    body: "The bot measures the drop from the 24-hour high and simulates a buy when your threshold and risk checks are met.",
   },
   {
     title: "Optional pending-order controls",
@@ -31,14 +31,14 @@ const steps = [
     body: "RiskGuard checks limits and cooldown, then a dry-run order is scheduled with a cancel window.",
   },
   {
-    title: "Measure the edge",
-    body: "Compare your average buy price to the market and watch unrealized PnL on the dashboard.",
+    title: "Review the results",
+    body: "Compare your simulated average buy price to the market and watch unrealized PnL on the dashboard.",
   },
 ];
 const faqs = [
   {
     q: "How does the bot decide when to buy the dip?",
-    a: "It tracks the 24-hour high and buys when the current price has dropped by at least your configured threshold percentage.",
+    a: "It tracks the 24-hour high and schedules a simulated buy when the drop meets your threshold and risk checks pass.",
   },
   {
     q: "Can I stop a buy I don't like?",
@@ -50,7 +50,7 @@ const faqs = [
   },
   {
     q: "Is my money at risk while testing?",
-    a: "No. Dry-run mode is the default and simulates buys against live prices without touching funds.",
+    a: "No exchange funds are used. The current build only simulates buys against observed prices.",
   },
 ];
 </script>
@@ -59,7 +59,7 @@ const faqs = [
   <LandingPage
     eyebrow="Buy Crypto Dip Bot"
     title="Buy Crypto Dip Bot"
-    description="Automatically buy crypto dips on Bybit spot with a risk-first bot: 24h-high dip detection, spend caps, dry-run mode and Telegram alerts."
+    description="Simulate crypto dip buys on Bybit spot data with 24h-high dip detection, spend caps and optional Telegram alerts."
     headline="Inspect a rule for buying crypto dips"
     subheadline="Dry-run dip decisions with configured limits, optional notification controls and evidence you can review before trusting the automation."
     :features="features"

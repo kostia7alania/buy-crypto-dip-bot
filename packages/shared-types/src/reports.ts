@@ -79,3 +79,25 @@ export interface PerformanceReport extends ReportMetadata {
   method: "DAILY_CLOSE_EQUAL_CAPITAL_V1";
   positions: PerformancePosition[];
 }
+
+export interface StrategyBudget {
+  strategyId: string;
+  symbol: string;
+  dailyRemainingUsdt: number | null;
+  weeklyRemainingUsdt: number | null;
+  activeReservedUsdt: number;
+}
+
+export interface StrategyBudgetReport {
+  asOf: string;
+  strategies: StrategyBudget[];
+}
+
+export interface LatestRiskDecisionReport {
+  decision: {
+    type: "RISK_DECISION_APPROVED" | "RISK_DECISION_REJECTED";
+    createdAt: string;
+    symbol: string | null;
+    reasonCodes: string[];
+  } | null;
+}

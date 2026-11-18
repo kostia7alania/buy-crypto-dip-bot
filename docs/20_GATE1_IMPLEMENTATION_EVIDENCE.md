@@ -104,7 +104,7 @@ checkpoint preserve the pre-existing work without additional recovery edits.
 
 - [PLANS.md](../PLANS.md)
 - [README.md](../README.md)
-- [README_FIRST_RU.md](../README_FIRST_RU.md)
+- README_FIRST_RU.md (now [docs/README_RU.md](README_RU.md))
 - [adr/ADR_008_COST_FIRST_HYBRID_EDGE.md](../adr/ADR_008_COST_FIRST_HYBRID_EDGE.md)
 - [adr/ADR_008_POST_GATE_RLS.md](../adr/ADR_008_POST_GATE_RLS.md)
 - [docs/00_CONTEXT.md](../docs/00_CONTEXT.md)

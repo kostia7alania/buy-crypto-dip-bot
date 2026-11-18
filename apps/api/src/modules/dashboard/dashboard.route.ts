@@ -1,7 +1,8 @@
 import { getAllowedSymbols } from "@buy-crypto-dip-bot/config";
 import { createDefaultRiskGuard } from "@buy-crypto-dip-bot/risk-engine";
 import { Hono } from "hono";
-import { listAuditEvents } from "../audit/audit.route.js";
+import { logApiError } from "../../operational-log.js";
+import { listAuditHistory } from "../audit/audit.route.js";
 import {
   type AppEnv,
   requireTenantDb,
@@ -15,6 +16,7 @@ import {
 } from "../performance/performance.route.js";
 import { computePnlReport, finalizePnlReport } from "../pnl/pnl.route.js";
 import { getRunnerStatus } from "../runner/runner.service.js";
+import { readStrategyBudget } from "../strategies/budget.repository.js";
 import { listStrategies } from "../strategies/strategies.route.js";
 
 export const dashboardRoutes = new Hono<AppEnv>().get(
@@ -25,8 +27,19 @@ export const dashboardRoutes = new Hono<AppEnv>().get(
     c.header("cache-control", "private, no-store");
     // One tenant transaction and the same readers as the individual endpoints.
     const strategies = await listStrategies(db, userId);
+    // A savepoint lets the other dashboard sections survive a budget query failure.
+    const budget = await db
+      .transaction((tx) => readStrategyBudget(tx, userId))
+      .catch((error: unknown) => {
+        logApiError(
+          "STRATEGY_BUDGET_UNAVAILABLE",
+          error,
+          c.get("correlationId"),
+        );
+        return undefined;
+      });
     const orders = await listOrders(db, userId);
-    const audit = await listAuditEvents(db, userId);
+    const { audit, auditOmitted } = await listAuditHistory(db, userId);
     const market = createReportMarketSnapshot();
     const pnl = await computePnlReport(db, userId, market);
     const performance = await computePerformanceReport(db, userId, market);
@@ -42,8 +55,10 @@ export const dashboardRoutes = new Hono<AppEnv>().get(
         runner: getRunnerStatus(),
       },
       strategies,
+      budget,
       orders,
       audit,
+      auditOmitted,
       pnl: finalizePnlReport(pnl.positions, asOf),
       performance: finalizePerformanceReport(performance.positions, asOf),
     });

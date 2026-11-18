@@ -2,7 +2,8 @@
 
 ## Goal
 
-Complete the production-first scaffold described in `CODEX_TASK_0.md` while
+Complete the production-first scaffold described in the historical
+[CODEX_TASK_0.md](../docs/archive/CODEX_TASK_0.md) while
 preserving the repository safety rules: `DRY_RUN` by default, no private
 exchange trading, no secrets, and auditable risk decisions.
 

@@ -11,6 +11,7 @@ import {
   requireTenantDb,
   requireUser,
 } from "../auth/principal.middleware.js";
+import { readStrategyBudget } from "./budget.repository.js";
 
 const addStrategySchema = v.object({
   symbol: v.pipe(v.string(), v.regex(/^[A-Z0-9]{3,20}$/)),
@@ -50,6 +51,10 @@ export const strategiesRoutes = new Hono<AppEnv>()
       logApiError("STRATEGY_LIST_FAILED", error, c.get("correlationId"));
       return c.json({ error: "INTERNAL_SERVER_ERROR" }, 500);
     }
+  })
+  .get("/budget", async (c) => {
+    const user = requireUser(c);
+    return c.json(await readStrategyBudget(requireTenantDb(c), user.userId));
   })
   .post("/", async (c) => {
     const user = requireUser(c);
